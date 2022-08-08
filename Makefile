@@ -111,8 +111,6 @@ clean:
 	$(MAKE) -C $(NASM_TEST_DIR) clean
 
 
-
-
 tests: all-debug build/integration-test-fs/fs.json
 	./tests/full/run.js
 
