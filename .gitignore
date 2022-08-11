@@ -4,6 +4,7 @@
 *.o
 *.bin
 build/
+target/
 *.img
 *.fixture
 *.fuse_hidden*
