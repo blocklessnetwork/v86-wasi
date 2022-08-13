@@ -1,7 +1,57 @@
 use lazy_static::lazy_static;
-use std::collections::HashMap;
+use wasmtime::{Memory, AsContextMut, AsContext};
+use std::{collections::HashMap, ops::Add, marker::PhantomData};
 
 use crate::Dev;
+
+trait MemAccessTrait<T> {
+    fn read(&self, store: impl AsContext, idx: u32) -> T;
+    fn write(&mut self, store: impl AsContextMut, idx: u32, v: T);
+}
+
+pub struct MemAccess<T> {
+    offset: usize,
+    len: u32,
+    mem: Memory,
+    phantom: PhantomData<T>,
+}
+
+impl<T> MemAccess<T> {
+    pub fn new(offset: usize, len: u32, mem: Memory) -> Self {
+        Self {
+            offset,
+            mem,
+            len,
+            phantom: PhantomData,
+        }
+    }
+}
+
+macro_rules! impl_mem_access {
+    ($t:ty, $s:literal) => {
+        impl MemAccessTrait<$t> for MemAccess<$t> {
+            fn read(&self,store: impl AsContext, idx: u32) -> $t {
+                let mut d = [0u8; $s];
+                self.mem.read(store, self.offset.add(idx as usize), &mut d).unwrap();
+                let rs: $t = <$t>::from_le_bytes(d);
+                return rs;
+            }
+        
+            fn write(&mut self, store: impl AsContextMut, idx: u32, v: $t) {
+                let d = v.to_le_bytes();
+                self.mem.write(store, self.offset.add(idx as usize), &d).unwrap();
+            }
+        }
+    };
+}
+
+impl_mem_access!(u8, 1);
+impl_mem_access!(u16, 2);
+impl_mem_access!(u32, 4);
+impl_mem_access!(i8, 1);
+impl_mem_access!(i16, 2);
+impl_mem_access!(i32, 4);
+
 
 const PORTS_SIZE: usize = 0x10000;
 
