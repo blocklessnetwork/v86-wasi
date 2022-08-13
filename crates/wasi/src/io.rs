@@ -5,13 +5,12 @@ use crate::Dev;
 
 const PORTS_SIZE: usize = 0x10000;
 
-type RD8_FN  = fn(&Dev, u32) -> u8;
-type RD16_FN  = fn(&Dev, u32) -> u16;
-type RD32_FN  = fn(&Dev, u32) -> u32;
-type WR8_FN  = fn(&Dev, u32, u8);
-type WR16_FN  = fn(&Dev, u32, u16);
-type WR32_FN  = fn(&Dev, u32, u32);
-
+type RD8_FN = fn(&Dev, u32) -> u8;
+type RD16_FN = fn(&Dev, u32) -> u16;
+type RD32_FN = fn(&Dev, u32) -> u32;
+type WR8_FN = fn(&Dev, u32, u8);
+type WR16_FN = fn(&Dev, u32, u16);
+type WR32_FN = fn(&Dev, u32, u32);
 
 struct IOps {
     read8: RD8_FN,
@@ -30,26 +29,23 @@ pub struct IO {
 }
 
 impl IO {
-    fn empty_read8(_:&Dev, _:u32) -> u8 {
+    fn empty_read8(_: &Dev, _: u32) -> u8 {
         0xFF
     }
 
-    fn empty_read16(_:&Dev, _:u32) -> u16 {
+    fn empty_read16(_: &Dev, _: u32) -> u16 {
         0xFFFF
     }
 
-    fn empty_read32(_:&Dev, _:u32) -> u32 {
+    fn empty_read32(_: &Dev, _: u32) -> u32 {
         0xFFFF_FFFF
     }
 
-    fn empty_write8(_:&Dev, _:u32, _: u8) {
-    }
+    fn empty_write8(_: &Dev, _: u32, _: u8) {}
 
-    fn empty_write16(_:&Dev, _:u32, _: u16) {
-    }
+    fn empty_write16(_: &Dev, _: u32, _: u16) {}
 
-    fn empty_write32(_:&Dev, _:u32, _: u32) {
-    }
+    fn empty_write32(_: &Dev, _: u32, _: u32) {}
 
     fn default_iops() -> IOps {
         IOps {
@@ -68,9 +64,7 @@ impl IO {
         for _ in 0..PORTS_SIZE {
             v.push(IO::default_iops());
         }
-        IO {
-            ports:v
-        }
+        IO { ports: v }
     }
 
     pub fn register_read(&mut self, port: u32, dev: Dev, r8: RD8_FN, r16: RD16_FN, r32: RD32_FN) {
@@ -91,8 +85,12 @@ impl IO {
 
     pub fn io_port_read8(&self, port: u32) -> u8 {
         let iops = &self.ports[port as usize];
-        if iops.read8 as *const() == Self::empty_read8 as *const() {
-            debug!("read8 port  #{:02x} {}", port, self.get_port_description(port));
+        if iops.read8 as *const () == Self::empty_read8 as *const () {
+            debug!(
+                "read8 port  #{:02x} {}",
+                port,
+                self.get_port_description(port)
+            );
         }
         let v = (iops.read8)(&iops.dev, port);
         v
@@ -100,8 +98,12 @@ impl IO {
 
     pub fn io_port_read16(&self, port: u32) -> u16 {
         let iops = &self.ports[port as usize];
-        if iops.read16 as *const() == Self::empty_read16 as *const() {
-            debug!("read16 port  #{:02x} {}", port, self.get_port_description(port));
+        if iops.read16 as *const () == Self::empty_read16 as *const () {
+            debug!(
+                "read16 port  #{:02x} {}",
+                port,
+                self.get_port_description(port)
+            );
         }
         let v = (iops.read16)(&iops.dev, port);
         v
@@ -109,8 +111,12 @@ impl IO {
 
     pub fn io_port_read32(&self, port: u32) -> u32 {
         let iops = &self.ports[port as usize];
-        if iops.read32 as *const() == Self::empty_read32 as *const() {
-            debug!("read32 port #{:02x} {}", port, self.get_port_description(port));
+        if iops.read32 as *const () == Self::empty_read32 as *const () {
+            debug!(
+                "read32 port #{:02x} {}",
+                port,
+                self.get_port_description(port)
+            );
         }
         let v = (iops.read32)(&iops.dev, port);
         v
@@ -118,36 +124,47 @@ impl IO {
 
     pub fn io_port_write8(&self, port: u32, data: u8) {
         let iops = &self.ports[port as usize];
-        if iops.write8 as *const() == Self::empty_write8 as *const() {
-            debug!("write8 port  #{:02x} <- 0x{:02x} {}", port, data, self.get_port_description(port));
+        if iops.write8 as *const () == Self::empty_write8 as *const () {
+            debug!(
+                "write8 port  #{:02x} <- 0x{:02x} {}",
+                port,
+                data,
+                self.get_port_description(port)
+            );
         }
         (iops.write8)(&iops.dev, port, data);
     }
 
     pub fn io_port_write16(&self, port: u32, data: u16) {
         let iops = &self.ports[port as usize];
-        if iops.write16 as *const() == Self::empty_write16 as *const() {
-            debug!("write16 port  #{:02x} <- 0x{:02x} {}", port, data, self.get_port_description(port));
+        if iops.write16 as *const () == Self::empty_write16 as *const () {
+            debug!(
+                "write16 port  #{:02x} <- 0x{:02x} {}",
+                port,
+                data,
+                self.get_port_description(port)
+            );
         }
         (iops.write16)(&iops.dev, port, data);
     }
 
     pub fn io_port_write32(&self, port: u32, data: u32) {
         let iops = &self.ports[port as usize];
-        if iops.write32 as *const() == Self::empty_write32 as *const() {
-            debug!("write32 port  #{:02x} <- 0x{:02x} {}", port, data, self.get_port_description(port));
+        if iops.write32 as *const () == Self::empty_write32 as *const () {
+            debug!(
+                "write32 port  #{:02x} <- 0x{:02x} {}",
+                port,
+                data,
+                self.get_port_description(port)
+            );
         }
         (iops.write32)(&iops.dev, port, data);
     }
 
-
     fn get_port_description(&self, addr: u32) -> String {
         DEBUG_PORTS
             .get(&addr)
-            .map_or_else(
-                String::default, 
-                |s| format!("({})", s)
-            )
+            .map_or_else(String::default, |s| format!("({})", s))
     }
 }
 

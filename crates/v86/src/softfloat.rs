@@ -87,56 +87,78 @@ impl F80 {
         sign_exponent: 0xFFFF,
     };
 
-    pub fn sign(&self) -> bool { (self.sign_exponent >> 15) == 1 }
-    pub fn exponent(&self) -> i16 { (self.sign_exponent as i16 & 0x7FFF) - 0x3FFF }
+    pub fn sign(&self) -> bool {
+        (self.sign_exponent >> 15) == 1
+    }
+    pub fn exponent(&self) -> i16 {
+        (self.sign_exponent as i16 & 0x7FFF) - 0x3FFF
+    }
 
     pub fn of_i32(src: i32) -> F80 {
         let mut x = F80::ZERO;
-        unsafe {
-            i32_to_extF80M(src, &mut x)
-        };
+        unsafe { i32_to_extF80M(src, &mut x) };
         x
     }
     pub fn of_i64(src: i64) -> F80 {
         let mut x = F80::ZERO;
-        unsafe {
-            i64_to_extF80M(src, &mut x)
-        };
+        unsafe { i64_to_extF80M(src, &mut x) };
         x
     }
 
     pub fn of_f32(src: i32) -> F80 {
         let mut x = F80::ZERO;
-        unsafe {
-            f32_to_extF80M(src, &mut x)
-        };
+        unsafe { f32_to_extF80M(src, &mut x) };
         x
     }
 
     pub fn of_f64(src: u64) -> F80 {
         let mut x = F80::ZERO;
-        unsafe {
-            f64_to_extF80M(src, &mut x)
-        };
+        unsafe { f64_to_extF80M(src, &mut x) };
         x
     }
-    fn of_f64x(src: f64) -> F80 { F80::of_f64(unsafe { std::mem::transmute(src) }) }
+    fn of_f64x(src: f64) -> F80 {
+        F80::of_f64(unsafe { std::mem::transmute(src) })
+    }
 
-    pub fn to_f32(&self) -> i32 { unsafe { extF80M_to_f32(self) } }
-    pub fn to_f64(&self) -> u64 { unsafe { extF80M_to_f64(self) } }
-    fn to_f64x(&self) -> f64 { unsafe { std::mem::transmute(extF80M_to_f64(self)) } }
+    pub fn to_f32(&self) -> i32 {
+        unsafe { extF80M_to_f32(self) }
+    }
+    pub fn to_f64(&self) -> u64 {
+        unsafe { extF80M_to_f64(self) }
+    }
+    fn to_f64x(&self) -> f64 {
+        unsafe { std::mem::transmute(extF80M_to_f64(self)) }
+    }
 
-    pub fn to_i32(&self) -> i32 { unsafe { extF80M_to_i32(self, softfloat_roundingMode, false) } }
-    pub fn to_i64(&self) -> i64 { unsafe { extF80M_to_i64(self, softfloat_roundingMode, false) } }
+    pub fn to_i32(&self) -> i32 {
+        unsafe { extF80M_to_i32(self, softfloat_roundingMode, false) }
+    }
+    pub fn to_i64(&self) -> i64 {
+        unsafe { extF80M_to_i64(self, softfloat_roundingMode, false) }
+    }
 
-    pub fn cos(self) -> F80 { F80::of_f64x(self.to_f64x().cos()) }
-    pub fn sin(self) -> F80 { F80::of_f64x(self.to_f64x().sin()) }
-    pub fn tan(self) -> F80 { F80::of_f64x(self.to_f64x().tan()) }
-    pub fn atan(self) -> F80 { F80::of_f64x(self.to_f64x().atan()) }
-    pub fn atan2(self, other: F80) -> F80 { F80::of_f64x(self.to_f64x().atan2(other.to_f64x())) }
+    pub fn cos(self) -> F80 {
+        F80::of_f64x(self.to_f64x().cos())
+    }
+    pub fn sin(self) -> F80 {
+        F80::of_f64x(self.to_f64x().sin())
+    }
+    pub fn tan(self) -> F80 {
+        F80::of_f64x(self.to_f64x().tan())
+    }
+    pub fn atan(self) -> F80 {
+        F80::of_f64x(self.to_f64x().atan())
+    }
+    pub fn atan2(self, other: F80) -> F80 {
+        F80::of_f64x(self.to_f64x().atan2(other.to_f64x()))
+    }
 
-    pub fn log2(self) -> F80 { F80::of_f64x(self.to_f64x().log2()) }
-    pub fn ln(self) -> F80 { F80::of_f64x(self.to_f64x().ln()) }
+    pub fn log2(self) -> F80 {
+        F80::of_f64x(self.to_f64x().log2())
+    }
+    pub fn ln(self) -> F80 {
+        F80::of_f64x(self.to_f64x().ln())
+    }
 
     pub fn abs(self) -> F80 {
         F80 {
@@ -144,27 +166,23 @@ impl F80 {
             sign_exponent: self.sign_exponent & !0x8000,
         }
     }
-    pub fn two_pow(self) -> F80 { F80::of_f64x(2.0f64.powf(self.to_f64x())) }
+    pub fn two_pow(self) -> F80 {
+        F80::of_f64x(2.0f64.powf(self.to_f64x()))
+    }
     pub fn round(self) -> F80 {
         let mut result = F80::ZERO;
-        unsafe {
-            extF80M_roundToInt(&self, softfloat_roundingMode, false, &mut result)
-        };
+        unsafe { extF80M_roundToInt(&self, softfloat_roundingMode, false, &mut result) };
         result
     }
     pub fn trunc(self) -> F80 {
         let mut result = F80::ZERO;
-        unsafe {
-            extF80M_roundToInt(&self, 1, false, &mut result)
-        };
+        unsafe { extF80M_roundToInt(&self, 1, false, &mut result) };
         result
     }
 
     pub fn sqrt(self) -> F80 {
         let mut result = F80::ZERO;
-        unsafe {
-            extF80M_sqrt(&self, &mut result)
-        };
+        unsafe { extF80M_sqrt(&self, &mut result) };
         result
     }
 
@@ -202,20 +220,19 @@ impl F80 {
         // translate softfloat's flags to x87 status flags
         f >> 4 & 1 | f >> 1 & 4 | f << 3 & 16
     }
-    pub fn clear_exception_flags() { unsafe { softfloat_exceptionFlags = 0 } }
+    pub fn clear_exception_flags() {
+        unsafe { softfloat_exceptionFlags = 0 }
+    }
 
     pub fn partial_cmp_quiet(&self, other: &Self) -> Option<std::cmp::Ordering> {
         // TODO: Can probably be done more efficiently
         if unsafe { extF80M_lt_quiet(self, other) } {
             Some(std::cmp::Ordering::Less)
-        }
-        else if unsafe { extF80M_lt_quiet(other, self) } {
+        } else if unsafe { extF80M_lt_quiet(other, self) } {
             Some(std::cmp::Ordering::Greater)
-        }
-        else if self == other {
+        } else if self == other {
             Some(std::cmp::Ordering::Equal)
-        }
-        else {
+        } else {
             None
         }
     }
@@ -225,9 +242,7 @@ impl std::ops::Add for F80 {
     type Output = F80;
     fn add(self, other: Self) -> Self {
         let mut result = F80::ZERO;
-        unsafe {
-            extF80M_add(&self, &other, &mut result)
-        };
+        unsafe { extF80M_add(&self, &other, &mut result) };
         result
     }
 }
@@ -235,9 +250,7 @@ impl std::ops::Sub for F80 {
     type Output = F80;
     fn sub(self, other: Self) -> Self {
         let mut result = F80::ZERO;
-        unsafe {
-            extF80M_sub(&self, &other, &mut result)
-        };
+        unsafe { extF80M_sub(&self, &other, &mut result) };
         result
     }
 }
@@ -253,9 +266,7 @@ impl std::ops::Mul for F80 {
     type Output = F80;
     fn mul(self, other: Self) -> Self {
         let mut result = F80::ZERO;
-        unsafe {
-            extF80M_mul(&self, &other, &mut result)
-        };
+        unsafe { extF80M_mul(&self, &other, &mut result) };
         result
     }
 }
@@ -263,9 +274,7 @@ impl std::ops::Div for F80 {
     type Output = F80;
     fn div(self, other: Self) -> Self {
         let mut result = F80::ZERO;
-        unsafe {
-            extF80M_div(&self, &other, &mut result)
-        };
+        unsafe { extF80M_div(&self, &other, &mut result) };
         result
     }
 }
@@ -284,21 +293,20 @@ impl std::ops::Rem for F80 {
 }
 
 impl PartialEq for F80 {
-    fn eq(&self, other: &Self) -> bool { unsafe { extF80M_eq(self, other) } }
+    fn eq(&self, other: &Self) -> bool {
+        unsafe { extF80M_eq(self, other) }
+    }
 }
 impl PartialOrd for F80 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         // TODO: Can probably be done more efficiently
         if unsafe { extF80M_lt(self, other) } {
             Some(std::cmp::Ordering::Less)
-        }
-        else if unsafe { extF80M_lt(other, self) } {
+        } else if unsafe { extF80M_lt(other, self) } {
             Some(std::cmp::Ordering::Greater)
-        }
-        else if self == other {
+        } else if self == other {
             Some(std::cmp::Ordering::Equal)
-        }
-        else {
+        } else {
             None
         }
     }

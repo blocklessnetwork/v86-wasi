@@ -41,22 +41,22 @@ pub fn make_graph(basic_blocks: &Vec<BasicBlock>) -> Graph {
                 if let Some(next_block_branch_taken_addr) = next_block_branch_taken_addr {
                     edges.insert(next_block_branch_taken_addr);
                 }
-            },
+            }
             &BasicBlockType::Normal {
                 next_block_addr: Some(next_block_addr),
                 ..
             } => {
                 edges.insert(next_block_addr);
-            },
+            }
             &BasicBlockType::Normal {
                 next_block_addr: None,
                 ..
-            } => {},
-            BasicBlockType::Exit => {},
+            } => {}
+            BasicBlockType::Exit => {}
             BasicBlockType::AbsoluteEip => {
                 // Not necessary: We generate a loop around the outer brtable unconditionally
                 //edges.insert(ENTRY_NODE_ID);
-            },
+            }
         }
 
         nodes.insert(b.addr, edges);
@@ -83,27 +83,27 @@ impl WasmStructure {
         match self {
             Self::BasicBlock(addr) => {
                 dbg_log!("{} 0x{:x}", " ".repeat(depth), addr);
-            },
+            }
             Self::Dispatcher(entries) => {
                 dbg_log!("{} Dispatcher entries:", " ".repeat(depth));
                 for e in entries {
                     dbg_log!("{}  {:x}", " ".repeat(depth), e);
                 }
-            },
+            }
             Self::Loop(elements) => {
                 dbg_log!("{} loop_void({})", " ".repeat(depth), elements.len());
                 for e in elements {
                     e.print(depth + 1)
                 }
                 dbg_log!("{} loop_end({})", " ".repeat(depth), elements.len());
-            },
+            }
             Self::Block(elements) => {
                 dbg_log!("{} block_void({})", " ".repeat(depth), elements.len());
                 for e in elements {
                     e.print(depth + 1)
                 }
                 dbg_log!("{} block_end({})", " ".repeat(depth), elements.len());
-            },
+            }
         }
     }
 
@@ -116,7 +116,7 @@ impl WasmStructure {
                     for c in children.iter() {
                         handle(c, edges, result);
                     }
-                },
+                }
             }
         }
 
@@ -152,7 +152,7 @@ pub fn assert_invariants(blocks: &Vec<WasmStructure>) {
                     let is_last = i == children.len() - 1;
                     check(c, is_last, in_head_loop && is_first, is_first);
                 }
-            },
+            }
             WasmStructure::Loop(children) => {
                 dbg_assert!(!in_head_loop);
                 dbg_assert!(!children.is_empty());
@@ -161,14 +161,14 @@ pub fn assert_invariants(blocks: &Vec<WasmStructure>) {
                     let is_last = i == children.len() - 1;
                     check(c, in_tail_block && is_last, is_first, is_first);
                 }
-            },
+            }
             &WasmStructure::BasicBlock(addr) => {
                 dbg_assert!(addr != ENTRY_NODE_ID);
-            },
+            }
             WasmStructure::Dispatcher(_) => {
                 dbg_assert!(is_first);
                 //dbg_assert!(in_head_loop); // fails for module dispatcher
-            },
+            }
         }
     }
 
@@ -251,8 +251,7 @@ pub fn loopify(nodes: &Graph) -> Vec<WasmStructure> {
                 // self-loops
                 if nodes.get(&group[0]).unwrap().contains(&group[0]) {
                     return vec![WasmStructure::Loop(vec![block])].into_iter();
-                }
-                else {
+                } else {
                     return vec![block].into_iter();
                 }
             }
@@ -303,8 +302,7 @@ pub fn loopify(nodes: &Graph) -> Vec<WasmStructure> {
                 }
 
                 return vec![WasmStructure::Loop(loop_nodes)].into_iter();
-            }
-            else {
+            } else {
                 profiler::stat_increment_by(
                     profiler::stat::COMPILE_DUPLICATED_BASIC_BLOCK,
                     ((entries_to_group.len() - 1) * group.len()) as u64,
@@ -367,7 +365,7 @@ pub fn blockify(blocks: &mut Vec<WasmStructure>, edges: &Graph) {
                 None => {
                     i += 1;
                     continue;
-                },
+                }
             }
         };
 
@@ -377,8 +375,8 @@ pub fn blockify(blocks: &mut Vec<WasmStructure>, edges: &Graph) {
                 &WasmStructure::BasicBlock(_) => {
                     i += 1;
                     continue;
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
 
@@ -389,14 +387,14 @@ pub fn blockify(blocks: &mut Vec<WasmStructure>, edges: &Graph) {
             WasmStructure::Block(c) => c.extend(children),
             _ => {
                 dbg_assert!(false);
-            },
+            }
         }
         match &blocks[source + 1] {
             WasmStructure::BasicBlock(_) =>
                 //dbg_assert!(*b == bbs.next().unwrap())
                 {}
-            WasmStructure::Dispatcher(_) => {},
-            WasmStructure::Loop(_blocks) | WasmStructure::Block(_blocks) => {}, //dbg_assert!(blocks[0].head() == bb),
+            WasmStructure::Dispatcher(_) => {}
+            WasmStructure::Loop(_blocks) | WasmStructure::Block(_blocks) => {} //dbg_assert!(blocks[0].head() == bb),
         }
 
         {

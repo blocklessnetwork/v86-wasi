@@ -1,5 +1,5 @@
 use cpu::cpu::{
-    tlb_data, FLAG_CARRY, FLAG_OVERFLOW, FLAG_SIGN, FLAG_ZERO, OPSIZE_8, OPSIZE_16, OPSIZE_32,
+    tlb_data, FLAG_CARRY, FLAG_OVERFLOW, FLAG_SIGN, FLAG_ZERO, OPSIZE_16, OPSIZE_32, OPSIZE_8,
     TLB_GLOBAL, TLB_HAS_CODE, TLB_NO_USER, TLB_READONLY, TLB_VALID,
 };
 use cpu::global_pointers;
@@ -108,8 +108,7 @@ pub fn gen_page_switch_check(
         gen_debug_track_jit_exit(ctx.builder, last_instruction_addr);
         ctx.builder.br(ctx.exit_label);
         ctx.builder.block_end();
-    }
-    else {
+    } else {
         ctx.builder.br_if(ctx.exit_label);
     }
 }
@@ -130,7 +129,7 @@ pub fn gen_get_reg8(ctx: &mut JitContext, r: u32) {
             ctx.builder.get_local(&ctx.register_locals[r as usize]);
             ctx.builder.const_i32(0xFF);
             ctx.builder.and_i32();
-        },
+        }
         regs::AH | regs::CH | regs::DH | regs::BH => {
             ctx.builder
                 .get_local(&ctx.register_locals[(r - 4) as usize]);
@@ -138,7 +137,7 @@ pub fn gen_get_reg8(ctx: &mut JitContext, r: u32) {
             ctx.builder.shr_u_i32();
             ctx.builder.const_i32(0xFF);
             ctx.builder.and_i32();
-        },
+        }
         _ => assert!(false),
     }
 }
@@ -155,14 +154,14 @@ pub fn gen_get_reg8_or_alias_to_reg32(ctx: &mut JitContext, r: u32) -> WasmLocal
             ctx.builder.const_i32(8);
             ctx.builder.shr_u_i32();
             ctx.builder.set_new_local()
-        },
+        }
         _ => panic!(),
     }
 }
 
 pub fn gen_free_reg8_or_alias(ctx: &mut JitContext, r: u32, local: WasmLocal) {
     match r {
-        regs::AL | regs::CL | regs::DL | regs::BL => {},
+        regs::AL | regs::CL | regs::DL | regs::BL => {}
         regs::AH | regs::CH | regs::DH | regs::BH => ctx.builder.free_local(local),
         _ => panic!(),
     }
@@ -191,7 +190,7 @@ pub fn gen_set_reg8(ctx: &mut JitContext, r: u32) {
 
             ctx.builder.or_i32();
             ctx.builder.set_local(&ctx.register_locals[r as usize]);
-        },
+        }
         regs::AH | regs::CH | regs::DH | regs::BH => {
             // reg32[r] = stack_value << 8 & 0xFF00 | reg32[r] & ~0xFF00
             ctx.builder.const_i32(8);
@@ -207,7 +206,7 @@ pub fn gen_set_reg8(ctx: &mut JitContext, r: u32) {
             ctx.builder.or_i32();
             ctx.builder
                 .set_local(&ctx.register_locals[(r - 4) as usize]);
-        },
+        }
         _ => assert!(false),
     }
 }
@@ -234,7 +233,7 @@ pub fn gen_set_reg8_unmasked(ctx: &mut JitContext, r: u32) {
 
             ctx.builder.or_i32();
             ctx.builder.set_local(&ctx.register_locals[r as usize]);
-        },
+        }
         regs::AH | regs::CH | regs::DH | regs::BH => {
             // reg32[r] = stack_value << 8 | reg32[r] & ~0xFF00
             ctx.builder.const_i32(8);
@@ -250,7 +249,7 @@ pub fn gen_set_reg8_unmasked(ctx: &mut JitContext, r: u32) {
             ctx.builder.or_i32();
             ctx.builder
                 .set_local(&ctx.register_locals[(r - 4) as usize]);
-        },
+        }
         _ => assert!(false),
     }
 }
@@ -300,8 +299,7 @@ pub fn decr_exc_asize(ctx: &mut JitContext) {
     ctx.builder.sub_i32();
     if ctx.cpu.asize_32() {
         gen_set_reg32(ctx, regs::ECX);
-    }
-    else {
+    } else {
         gen_set_reg16(ctx, regs::CX);
     }
 }
@@ -368,7 +366,9 @@ pub fn sign_extend_i16(builder: &mut WasmBuilder) {
     builder.shr_s_i32();
 }
 
-pub fn gen_fn0_const(builder: &mut WasmBuilder, name: &str) { builder.call_fn0(name) }
+pub fn gen_fn0_const(builder: &mut WasmBuilder, name: &str) {
+    builder.call_fn0(name)
+}
 pub fn gen_fn1_const(builder: &mut WasmBuilder, name: &str, arg0: u32) {
     builder.const_i32(arg0 as i32);
     builder.call_fn1(name);
@@ -412,8 +412,7 @@ pub fn gen_modrm_resolve_with_local(
 ) {
     if let Some(r) = modrm::get_as_reg_index_if_possible(ctx, &modrm_byte) {
         gen(ctx, &ctx.reg(r));
-    }
-    else {
+    } else {
         gen_modrm_resolve(ctx, modrm_byte);
         let address = ctx.builder.set_new_local();
         gen(ctx, &address);
@@ -627,19 +626,19 @@ fn gen_safe_read(
     match bits {
         BitSize::BYTE => {
             ctx.builder.call_fn2_ret("safe_read8_slow_jit");
-        },
+        }
         BitSize::WORD => {
             ctx.builder.call_fn2_ret("safe_read16_slow_jit");
-        },
+        }
         BitSize::DWORD => {
             ctx.builder.call_fn2_ret("safe_read32s_slow_jit");
-        },
+        }
         BitSize::QWORD => {
             ctx.builder.call_fn2_ret("safe_read64s_slow_jit");
-        },
+        }
         BitSize::DQWORD => {
             ctx.builder.call_fn2_ret("safe_read128s_slow_jit");
-        },
+        }
     }
     ctx.builder.tee_local(&entry_local);
     ctx.builder.const_i32(1);
@@ -673,16 +672,16 @@ fn gen_safe_read(
     match bits {
         BitSize::BYTE => {
             ctx.builder.load_u8(0);
-        },
+        }
         BitSize::WORD => {
             ctx.builder.load_unaligned_u16(0);
-        },
+        }
         BitSize::DWORD => {
             ctx.builder.load_unaligned_i32(0);
-        },
+        }
         BitSize::QWORD => {
             ctx.builder.load_unaligned_i64(0);
-        },
+        }
         BitSize::DQWORD => {
             let where_to_write = where_to_write.unwrap();
             let virt_address_local = ctx.builder.set_new_local();
@@ -697,7 +696,7 @@ fn gen_safe_read(
             ctx.builder.store_unaligned_i64(where_to_write + 8);
 
             ctx.builder.free_local(virt_address_local);
-        },
+        }
     }
 
     ctx.builder.free_local(entry_local);
@@ -839,28 +838,28 @@ fn gen_safe_write(
         GenSafeWriteValue::TwoI64s(local1, local2) => {
             ctx.builder.get_local_i64(local1);
             ctx.builder.get_local_i64(local2)
-        },
+        }
     }
     ctx.builder
         .const_i32(ctx.start_of_current_instruction as i32 & 0xFFF);
     match bits {
         BitSize::BYTE => {
             ctx.builder.call_fn3_ret("safe_write8_slow_jit");
-        },
+        }
         BitSize::WORD => {
             ctx.builder.call_fn3_ret("safe_write16_slow_jit");
-        },
+        }
         BitSize::DWORD => {
             ctx.builder.call_fn3_ret("safe_write32_slow_jit");
-        },
+        }
         BitSize::QWORD => {
             ctx.builder
                 .call_fn3_i32_i64_i32_ret("safe_write64_slow_jit");
-        },
+        }
         BitSize::DQWORD => {
             ctx.builder
                 .call_fn4_i32_i64_i64_i32_ret("safe_write128_slow_jit");
-        },
+        }
     }
     ctx.builder.tee_local(&entry_local);
     ctx.builder.const_i32(1);
@@ -902,22 +901,22 @@ fn gen_safe_write(
             ctx.builder.get_local_i64(local2);
             ctx.builder.store_unaligned_i64(8);
             ctx.builder.free_local(virt_address_local);
-        },
+        }
     }
     match bits {
         BitSize::BYTE => {
             ctx.builder.store_u8(0);
-        },
+        }
         BitSize::WORD => {
             ctx.builder.store_unaligned_u16(0);
-        },
+        }
         BitSize::DWORD => {
             ctx.builder.store_unaligned_i32(0);
-        },
+        }
         BitSize::QWORD => {
             ctx.builder.store_unaligned_i64(0);
-        },
-        BitSize::DQWORD => {}, // handled above
+        }
+        BitSize::DQWORD => {} // handled above
     }
 
     ctx.builder.free_local(entry_local);
@@ -987,19 +986,19 @@ pub fn gen_safe_read_write(
     match bits {
         BitSize::BYTE => {
             ctx.builder.call_fn2_ret("safe_read_write8_slow_jit");
-        },
+        }
         BitSize::WORD => {
             ctx.builder.call_fn2_ret("safe_read_write16_slow_jit");
-        },
+        }
         BitSize::DWORD => {
             ctx.builder.call_fn2_ret("safe_read_write32s_slow_jit");
-        },
+        }
         BitSize::QWORD => {
             ctx.builder.call_fn2_ret("safe_read_write64_slow_jit");
-        },
+        }
         BitSize::DQWORD => {
             dbg_assert!(false);
-        },
+        }
     }
     ctx.builder.tee_local(&entry_local);
     ctx.builder.const_i32(1);
@@ -1033,16 +1032,16 @@ pub fn gen_safe_read_write(
     match bits {
         BitSize::BYTE => {
             ctx.builder.load_u8(0);
-        },
+        }
         BitSize::WORD => {
             ctx.builder.load_unaligned_u16(0);
-        },
+        }
         BitSize::DWORD => {
             ctx.builder.load_unaligned_i32(0);
-        },
+        }
         BitSize::QWORD => {
             ctx.builder.load_unaligned_i64(0);
-        },
+        }
         BitSize::DQWORD => assert!(false), // not used
     }
 
@@ -1053,8 +1052,7 @@ pub fn gen_safe_read_write(
     // TODO: Could get rid of this local by returning one from f
     let value_local = if bits == BitSize::QWORD {
         GenSafeReadWriteValue::I64(ctx.builder.set_new_local_i64())
-    }
-    else {
+    } else {
         GenSafeReadWriteValue::I32(ctx.builder.set_new_local())
     };
 
@@ -1076,20 +1074,20 @@ pub fn gen_safe_read_write(
         match bits {
             BitSize::BYTE => {
                 ctx.builder.call_fn3_ret("safe_write8_slow_jit");
-            },
+            }
             BitSize::WORD => {
                 ctx.builder.call_fn3_ret("safe_write16_slow_jit");
-            },
+            }
             BitSize::DWORD => {
                 ctx.builder.call_fn3_ret("safe_write32_slow_jit");
-            },
+            }
             BitSize::QWORD => {
                 ctx.builder
                     .call_fn3_i32_i64_i32_ret("safe_write64_slow_jit");
-            },
+            }
             BitSize::DQWORD => {
                 dbg_assert!(false);
-            },
+            }
         }
 
         if cfg!(debug_assertions) {
@@ -1107,14 +1105,13 @@ pub fn gen_safe_read_write(
                     _ => {
                         dbg_assert!(false);
                         0
-                    },
+                    }
                 });
                 ctx.builder.get_local(&address_local);
                 ctx.builder.call_fn2("bug_gen_safe_read_write_page_fault");
             }
             ctx.builder.block_end();
-        }
-        else {
+        } else {
             ctx.builder.drop_();
         }
     }
@@ -1129,19 +1126,19 @@ pub fn gen_safe_read_write(
     match bits {
         BitSize::BYTE => {
             ctx.builder.store_u8(0);
-        },
+        }
         BitSize::WORD => {
             ctx.builder.store_unaligned_u16(0);
-        },
+        }
         BitSize::DWORD => {
             ctx.builder.store_unaligned_i32(0);
-        },
+        }
         BitSize::QWORD => {
             ctx.builder.store_unaligned_i64(0);
-        },
+        }
         BitSize::DQWORD => {
             dbg_assert!(false);
-        },
+        }
     }
 
     match value_local {
@@ -1236,8 +1233,7 @@ pub fn gen_pop16_ss32(ctx: &mut JitContext) {
 pub fn gen_pop16(ctx: &mut JitContext) {
     if ctx.cpu.ssize_32() {
         gen_pop16_ss32(ctx);
-    }
-    else {
+    } else {
         gen_pop16_ss16(ctx);
     }
 }
@@ -1273,8 +1269,7 @@ pub fn gen_pop32s_ss32(ctx: &mut JitContext) {
         let address_local = ctx.builder.set_new_local();
         gen_safe_read32(ctx, &address_local);
         ctx.builder.free_local(address_local);
-    }
-    else {
+    } else {
         let reg = ctx.register_locals[regs::ESP as usize].unsafe_clone();
         gen_safe_read32(ctx, &reg);
     }
@@ -1290,8 +1285,7 @@ pub fn gen_pop32s_ss32(ctx: &mut JitContext) {
 pub fn gen_pop32s(ctx: &mut JitContext) {
     if ctx.cpu.ssize_32() {
         gen_pop32s_ss32(ctx);
-    }
-    else {
+    } else {
         gen_pop32s_ss16(ctx);
     }
 }
@@ -1302,8 +1296,7 @@ pub fn gen_adjust_stack_reg(ctx: &mut JitContext, offset: u32) {
         ctx.builder.const_i32(offset as i32);
         ctx.builder.add_i32();
         gen_set_reg32(ctx, regs::ESP);
-    }
-    else {
+    } else {
         gen_get_reg16(ctx, regs::SP);
         ctx.builder.const_i32(offset as i32);
         ctx.builder.add_i32();
@@ -1316,8 +1309,7 @@ pub fn gen_leave(ctx: &mut JitContext, os32: bool) {
 
     if ctx.cpu.ssize_32() {
         gen_get_reg32(ctx, regs::EBP);
-    }
-    else {
+    } else {
         gen_get_reg16(ctx, regs::BP);
     }
 
@@ -1332,8 +1324,7 @@ pub fn gen_leave(ctx: &mut JitContext, os32: bool) {
         gen_safe_read32(ctx, &address_local);
         ctx.builder.free_local(address_local);
         gen_set_reg32(ctx, regs::EBP);
-    }
-    else {
+    } else {
         let address_local = ctx.builder.set_new_local();
         gen_safe_read16(ctx, &address_local);
         ctx.builder.free_local(address_local);
@@ -1347,8 +1338,7 @@ pub fn gen_leave(ctx: &mut JitContext, os32: bool) {
         ctx.builder.const_i32(if os32 { 4 } else { 2 });
         ctx.builder.add_i32();
         gen_set_reg32(ctx, regs::ESP);
-    }
-    else {
+    } else {
         ctx.builder.get_local(&old_vbp);
         ctx.builder.const_i32(if os32 { 4 } else { 2 });
         ctx.builder.add_i32();
@@ -1405,8 +1395,7 @@ pub fn gen_task_switch_test_mmx(ctx: &mut JitContext) {
 pub fn gen_push16(ctx: &mut JitContext, value_local: &WasmLocal) {
     if ctx.cpu.ssize_32() {
         gen_get_reg32(ctx, regs::ESP);
-    }
-    else {
+    } else {
         gen_get_reg16(ctx, regs::SP);
     };
 
@@ -1431,8 +1420,7 @@ pub fn gen_push16(ctx: &mut JitContext, value_local: &WasmLocal) {
 
         ctx.builder.get_local(&reg_updated_local);
         reg_updated_local
-    }
-    else {
+    } else {
         // short path: The address written to is equal to ESP/SP minus two
         let reg_updated_local = ctx.builder.tee_new_local();
         gen_safe_write16(ctx, &reg_updated_local, &value_local);
@@ -1441,8 +1429,7 @@ pub fn gen_push16(ctx: &mut JitContext, value_local: &WasmLocal) {
 
     if ctx.cpu.ssize_32() {
         gen_set_reg32(ctx, regs::ESP);
-    }
-    else {
+    } else {
         gen_set_reg16(ctx, regs::SP);
     };
     ctx.builder.free_local(reg_updated_local);
@@ -1451,8 +1438,7 @@ pub fn gen_push16(ctx: &mut JitContext, value_local: &WasmLocal) {
 pub fn gen_push32(ctx: &mut JitContext, value_local: &WasmLocal) {
     if ctx.cpu.ssize_32() {
         gen_get_reg32(ctx, regs::ESP);
-    }
-    else {
+    } else {
         gen_get_reg16(ctx, regs::SP);
     };
 
@@ -1478,8 +1464,7 @@ pub fn gen_push32(ctx: &mut JitContext, value_local: &WasmLocal) {
 
         ctx.builder.get_local(&new_sp_local);
         new_sp_local
-    }
-    else {
+    } else {
         // short path: The address written to is equal to ESP/SP minus four
         let new_sp_local = ctx.builder.tee_new_local();
         gen_safe_write32(ctx, &new_sp_local, &value_local);
@@ -1488,8 +1473,7 @@ pub fn gen_push32(ctx: &mut JitContext, value_local: &WasmLocal) {
 
     if ctx.cpu.ssize_32() {
         gen_set_reg32(ctx, regs::ESP);
-    }
-    else {
+    } else {
         gen_set_reg16(ctx, regs::SP);
     };
     ctx.builder.free_local(new_sp_local);
@@ -1569,26 +1553,24 @@ pub fn gen_getzf(ctx: &mut JitContext, negate: ConditionNegate) {
             if negate == ConditionNegate::False {
                 ctx.builder.eqz_i32();
             }
-        },
+        }
         &Instruction::Arithmetic { opsize } => {
             gen_profiler_stat_increment(ctx.builder, profiler::stat::CONDITION_OPTIMISED);
             // Note: Necessary because test{8,16} don't mask their neither last_result nor any of their operands
             // TODO: Use local instead of last_result for inc/dec/sub/add/and/or/xor
             if opsize == OPSIZE_32 {
                 gen_get_last_result(ctx.builder);
-            }
-            else if opsize == OPSIZE_16 {
+            } else if opsize == OPSIZE_16 {
                 ctx.builder
                     .load_fixed_u16(global_pointers::last_result as u32);
-            }
-            else if opsize == OPSIZE_8 {
+            } else if opsize == OPSIZE_8 {
                 ctx.builder
                     .load_fixed_u8(global_pointers::last_result as u32);
             }
             if negate == ConditionNegate::False {
                 ctx.builder.eqz_i32();
             }
-        },
+        }
         _ => {
             gen_profiler_stat_increment(ctx.builder, profiler::stat::CONDITION_UNOPTIMISED);
             gen_get_flags_changed(ctx.builder);
@@ -1619,7 +1601,7 @@ pub fn gen_getzf(ctx: &mut JitContext, negate: ConditionNegate) {
             if negate == ConditionNegate::True {
                 ctx.builder.eqz_i32();
             }
-        },
+        }
     }
 }
 
@@ -1635,35 +1617,33 @@ pub fn gen_getcf(ctx: &mut JitContext, negate: ConditionNegate) {
             if source == &InstructionOperand::Other || *opsize != OPSIZE_32 {
                 gen_get_last_op1(ctx.builder);
                 gen_get_last_result(ctx.builder);
-            }
-            else {
+            } else {
                 match dest {
                     InstructionOperand::WasmLocal(l) => {
                         ctx.builder.get_local(l);
-                    },
+                    }
                     InstructionOperand::Other => {
                         gen_get_last_op1(ctx.builder);
-                    },
+                    }
                     &InstructionOperand::Immediate(_) => panic!(),
                 }
                 match source {
                     InstructionOperand::WasmLocal(l) => {
                         ctx.builder.get_local(l);
-                    },
+                    }
                     InstructionOperand::Other => panic!(),
                     &InstructionOperand::Immediate(i) => {
                         ctx.builder.const_i32(i);
-                    },
+                    }
                 }
             }
 
             if negate == ConditionNegate::True {
                 ctx.builder.geu_i32();
-            }
-            else {
+            } else {
                 ctx.builder.ltu_i32();
             }
-        },
+        }
         _ => {
             gen_profiler_stat_increment(ctx.builder, profiler::stat::CONDITION_UNOPTIMISED);
             gen_getcf_unoptimised(ctx.builder);
@@ -1671,7 +1651,7 @@ pub fn gen_getcf(ctx: &mut JitContext, negate: ConditionNegate) {
             if negate == ConditionNegate::True {
                 ctx.builder.eqz_i32();
             }
-        },
+        }
     }
 }
 
@@ -1719,15 +1699,13 @@ pub fn gen_getsf(ctx: &mut JitContext) {
             gen_get_last_result(ctx.builder);
             ctx.builder.const_i32(if opsize == OPSIZE_32 {
                 0x8000_0000u32 as i32
-            }
-            else if opsize == OPSIZE_16 {
+            } else if opsize == OPSIZE_16 {
                 0x8000
-            }
-            else {
+            } else {
                 0x80
             });
             ctx.builder.and_i32();
-        },
+        }
         Instruction::Other => {
             gen_profiler_stat_increment(ctx.builder, profiler::stat::CONDITION_UNOPTIMISED);
             gen_get_flags_changed(ctx.builder);
@@ -1748,7 +1726,7 @@ pub fn gen_getsf(ctx: &mut JitContext) {
                 ctx.builder.and_i32();
             }
             ctx.builder.block_end();
-        },
+        }
     }
 }
 
@@ -1813,11 +1791,11 @@ pub fn gen_test_be(ctx: &mut JitContext, negate: ConditionNegate) {
                             .const_i32(if *opsize == OPSIZE_8 { 0xFF } else { 0xFFFF });
                         ctx.builder.and_i32();
                     }
-                },
+                }
                 &InstructionOperand::Immediate(_) => panic!(),
                 InstructionOperand::Other => {
                     gen_get_last_op1(ctx.builder);
-                },
+                }
             }
             match source {
                 InstructionOperand::WasmLocal(l) => {
@@ -1827,7 +1805,7 @@ pub fn gen_test_be(ctx: &mut JitContext, negate: ConditionNegate) {
                             .const_i32(if *opsize == OPSIZE_8 { 0xFF } else { 0xFFFF });
                         ctx.builder.and_i32();
                     }
-                },
+                }
                 InstructionOperand::Other => {
                     gen_get_last_op1(ctx.builder);
                     gen_get_last_result(ctx.builder);
@@ -1837,19 +1815,18 @@ pub fn gen_test_be(ctx: &mut JitContext, negate: ConditionNegate) {
                             .const_i32(if *opsize == OPSIZE_8 { 0xFF } else { 0xFFFF });
                         ctx.builder.and_i32();
                     }
-                },
+                }
                 &InstructionOperand::Immediate(i) => {
                     ctx.builder.const_i32(i);
-                },
+                }
             }
 
             if negate == ConditionNegate::True {
                 ctx.builder.gtu_i32();
-            }
-            else {
+            } else {
                 ctx.builder.leu_i32();
             }
-        },
+        }
         Instruction::Sub { opsize } => {
             gen_profiler_stat_increment(ctx.builder, profiler::stat::CONDITION_OPTIMISED);
 
@@ -1866,11 +1843,10 @@ pub fn gen_test_be(ctx: &mut JitContext, negate: ConditionNegate) {
 
             if negate == ConditionNegate::True {
                 ctx.builder.gtu_i32();
-            }
-            else {
+            } else {
                 ctx.builder.leu_i32();
             }
-        },
+        }
         _ => {
             gen_profiler_stat_increment(ctx.builder, profiler::stat::CONDITION_UNOPTIMISED);
             gen_getcf(ctx, ConditionNegate::False);
@@ -1879,7 +1855,7 @@ pub fn gen_test_be(ctx: &mut JitContext, negate: ConditionNegate) {
             if negate == ConditionNegate::True {
                 ctx.builder.eqz_i32();
             }
-        },
+        }
     }
 }
 
@@ -1899,7 +1875,7 @@ pub fn gen_test_l(ctx: &mut JitContext, negate: ConditionNegate) {
                             .const_i32(if *opsize == OPSIZE_8 { 24 } else { 16 });
                         ctx.builder.shl_i32();
                     }
-                },
+                }
                 InstructionOperand::Other => {
                     gen_get_last_op1(ctx.builder);
                     if *opsize == OPSIZE_8 || *opsize == OPSIZE_16 {
@@ -1907,7 +1883,7 @@ pub fn gen_test_l(ctx: &mut JitContext, negate: ConditionNegate) {
                             .const_i32(if *opsize == OPSIZE_8 { 24 } else { 16 });
                         ctx.builder.shl_i32();
                     }
-                },
+                }
                 &InstructionOperand::Immediate(_) => panic!(),
             }
             match source {
@@ -1918,7 +1894,7 @@ pub fn gen_test_l(ctx: &mut JitContext, negate: ConditionNegate) {
                             .const_i32(if *opsize == OPSIZE_8 { 24 } else { 16 });
                         ctx.builder.shl_i32();
                     }
-                },
+                }
                 InstructionOperand::Other => {
                     gen_get_last_op1(ctx.builder);
                     gen_get_last_result(ctx.builder);
@@ -1928,7 +1904,7 @@ pub fn gen_test_l(ctx: &mut JitContext, negate: ConditionNegate) {
                             .const_i32(if *opsize == OPSIZE_8 { 24 } else { 16 });
                         ctx.builder.shl_i32();
                     }
-                },
+                }
                 &InstructionOperand::Immediate(i) => {
                     ctx.builder.const_i32(i);
                     if *opsize == OPSIZE_8 || *opsize == OPSIZE_16 {
@@ -1936,15 +1912,14 @@ pub fn gen_test_l(ctx: &mut JitContext, negate: ConditionNegate) {
                             .const_i32(if *opsize == OPSIZE_8 { 24 } else { 16 });
                         ctx.builder.shl_i32();
                     }
-                },
+                }
             }
             if negate == ConditionNegate::True {
                 ctx.builder.ge_i32();
-            }
-            else {
+            } else {
                 ctx.builder.lt_i32();
             }
-        },
+        }
         _ => {
             gen_profiler_stat_increment(ctx.builder, profiler::stat::CONDITION_UNOPTIMISED);
             gen_getsf(ctx);
@@ -1955,7 +1930,7 @@ pub fn gen_test_l(ctx: &mut JitContext, negate: ConditionNegate) {
             if negate == ConditionNegate::True {
                 ctx.builder.eqz_i32();
             }
-        },
+        }
     }
 }
 
@@ -1975,7 +1950,7 @@ pub fn gen_test_le(ctx: &mut JitContext, negate: ConditionNegate) {
                             .const_i32(if *opsize == OPSIZE_8 { 24 } else { 16 });
                         ctx.builder.shl_i32();
                     }
-                },
+                }
                 InstructionOperand::Other => {
                     gen_get_last_op1(ctx.builder);
                     if *opsize == OPSIZE_8 || *opsize == OPSIZE_16 {
@@ -1983,7 +1958,7 @@ pub fn gen_test_le(ctx: &mut JitContext, negate: ConditionNegate) {
                             .const_i32(if *opsize == OPSIZE_8 { 24 } else { 16 });
                         ctx.builder.shl_i32();
                     }
-                },
+                }
                 &InstructionOperand::Immediate(_) => panic!(),
             }
             match source {
@@ -1994,7 +1969,7 @@ pub fn gen_test_le(ctx: &mut JitContext, negate: ConditionNegate) {
                             .const_i32(if *opsize == OPSIZE_8 { 24 } else { 16 });
                         ctx.builder.shl_i32();
                     }
-                },
+                }
                 InstructionOperand::Other => {
                     gen_get_last_op1(ctx.builder);
                     gen_get_last_result(ctx.builder);
@@ -2004,7 +1979,7 @@ pub fn gen_test_le(ctx: &mut JitContext, negate: ConditionNegate) {
                             .const_i32(if *opsize == OPSIZE_8 { 24 } else { 16 });
                         ctx.builder.shl_i32();
                     }
-                },
+                }
                 &InstructionOperand::Immediate(i) => {
                     ctx.builder.const_i32(i);
                     if *opsize == OPSIZE_8 || *opsize == OPSIZE_16 {
@@ -2012,15 +1987,14 @@ pub fn gen_test_le(ctx: &mut JitContext, negate: ConditionNegate) {
                             .const_i32(if *opsize == OPSIZE_8 { 24 } else { 16 });
                         ctx.builder.shl_i32();
                     }
-                },
+                }
             }
             if negate == ConditionNegate::True {
                 ctx.builder.gt_i32();
-            }
-            else {
+            } else {
                 ctx.builder.le_i32();
             }
-        },
+        }
         _ => {
             gen_profiler_stat_increment(ctx.builder, profiler::stat::CONDITION_UNOPTIMISED);
             gen_test_l(ctx, ConditionNegate::False);
@@ -2029,7 +2003,7 @@ pub fn gen_test_le(ctx: &mut JitContext, negate: ConditionNegate) {
             if negate == ConditionNegate::True {
                 ctx.builder.eqz_i32();
             }
-        },
+        }
     }
 }
 
@@ -2051,16 +2025,14 @@ pub fn gen_test_loopz(ctx: &mut JitContext, is_asize_32: bool) {
 pub fn gen_test_loop(ctx: &mut JitContext, is_asize_32: bool) {
     if is_asize_32 {
         gen_get_reg32(ctx, regs::ECX);
-    }
-    else {
+    } else {
         gen_get_reg16(ctx, regs::CX);
     }
 }
 pub fn gen_test_jcxz(ctx: &mut JitContext, is_asize_32: bool) {
     if is_asize_32 {
         gen_get_reg32(ctx, regs::ECX);
-    }
-    else {
+    } else {
         gen_get_reg16(ctx, regs::CX);
     }
     ctx.builder.eqz_i32();
@@ -2171,68 +2143,64 @@ pub fn gen_condition_fn(ctx: &mut JitContext, condition: u8) {
         match condition & 0xF {
             0x0 => {
                 gen_getof(ctx.builder);
-            },
+            }
             0x1 => {
                 gen_getof(ctx.builder);
                 ctx.builder.eqz_i32();
-            },
+            }
             0x2 => {
                 gen_getcf(ctx, ConditionNegate::False);
-            },
+            }
             0x3 => {
                 gen_getcf(ctx, ConditionNegate::True);
-            },
+            }
             0x4 => {
                 gen_getzf(ctx, ConditionNegate::False);
-            },
+            }
             0x5 => {
                 gen_getzf(ctx, ConditionNegate::True);
-            },
+            }
             0x6 => {
                 gen_test_be(ctx, ConditionNegate::False);
-            },
+            }
             0x7 => {
                 gen_test_be(ctx, ConditionNegate::True);
-            },
+            }
             0x8 => {
                 gen_getsf(ctx);
-            },
+            }
             0x9 => {
                 gen_getsf(ctx);
                 ctx.builder.eqz_i32();
-            },
+            }
             0xA => ctx.builder.call_fn0_ret("test_p"),
             0xB => ctx.builder.call_fn0_ret("test_np"),
             0xC => {
                 gen_test_l(ctx, ConditionNegate::False);
-            },
+            }
             0xD => {
                 gen_test_l(ctx, ConditionNegate::True);
-            },
+            }
             0xE => {
                 gen_test_le(ctx, ConditionNegate::False);
-            },
+            }
             0xF => {
                 gen_test_le(ctx, ConditionNegate::True);
-            },
+            }
             _ => {
                 dbg_assert!(false);
-            },
+            }
         }
-    }
-    else {
+    } else {
         // loop, loopnz, loopz, jcxz
         dbg_assert!(condition & !0x3 == 0xE0);
         if condition == 0xE0 {
             gen_test_loopnz(ctx, ctx.cpu.asize_32());
-        }
-        else if condition == 0xE1 {
+        } else if condition == 0xE1 {
             gen_test_loopz(ctx, ctx.cpu.asize_32());
-        }
-        else if condition == 0xE2 {
+        } else if condition == 0xE2 {
             gen_test_loop(ctx, ctx.cpu.asize_32());
-        }
-        else if condition == 0xE3 {
+        } else if condition == 0xE3 {
             gen_test_jcxz(ctx, ctx.cpu.asize_32());
         }
     }

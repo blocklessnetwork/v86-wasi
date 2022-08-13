@@ -34,7 +34,9 @@ pub fn allocate_memory(size: u32) -> u32 {
 }
 
 #[no_mangle]
-pub unsafe fn zero_memory(size: u32) { ptr::write_bytes(mem8, 0, size as usize); }
+pub unsafe fn zero_memory(size: u32) {
+    ptr::write_bytes(mem8, 0, size as usize);
+}
 
 #[no_mangle]
 pub fn in_mapped_range(addr: u32) -> bool {
@@ -45,19 +47,19 @@ pub fn in_mapped_range(addr: u32) -> bool {
 pub fn read8(addr: u32) -> i32 {
     if in_mapped_range(addr) {
         return unsafe { mmap_read8(addr) };
-    }
-    else {
+    } else {
         return read8_no_mmap_check(addr);
     };
 }
-pub fn read8_no_mmap_check(addr: u32) -> i32 { unsafe { *mem8.offset(addr as isize) as i32 } }
+pub fn read8_no_mmap_check(addr: u32) -> i32 {
+    unsafe { *mem8.offset(addr as isize) as i32 }
+}
 
 #[no_mangle]
 pub fn read16(addr: u32) -> i32 {
     if in_mapped_range(addr) {
         return unsafe { mmap_read16(addr) };
-    }
-    else {
+    } else {
         return read16_no_mmap_check(addr);
     };
 }
@@ -69,8 +71,7 @@ pub fn read16_no_mmap_check(addr: u32) -> i32 {
 pub fn read32s(addr: u32) -> i32 {
     if in_mapped_range(addr) {
         return unsafe { mmap_read32(addr) };
-    }
-    else {
+    } else {
         return read32_no_mmap_check(addr);
     };
 }
@@ -81,8 +82,7 @@ pub fn read32_no_mmap_check(addr: u32) -> i32 {
 pub unsafe fn read64s(addr: u32) -> i64 {
     if in_mapped_range(addr) {
         return mmap_read32(addr) as i64 | (mmap_read32(addr.wrapping_add(4 as u32)) as i64) << 32;
-    }
-    else {
+    } else {
         return *(mem8.offset(addr as isize) as *mut i64);
     };
 }
@@ -96,8 +96,7 @@ pub unsafe fn read128(addr: u32) -> reg128 {
         value.i32_0[1] = mmap_read32(addr.wrapping_add(4 as u32));
         value.i32_0[2] = mmap_read32(addr.wrapping_add(8 as u32));
         value.i32_0[3] = mmap_read32(addr.wrapping_add(12 as u32))
-    }
-    else {
+    } else {
         value.i64_0[0] = *(mem8.offset(addr as isize) as *mut i64);
         value.i64_0[1] = *(mem8.offset(addr as isize).offset(8) as *mut i64)
     }
@@ -107,8 +106,7 @@ pub unsafe fn read128(addr: u32) -> reg128 {
 pub unsafe fn write8(addr: u32, value: i32) {
     if in_mapped_range(addr) {
         mmap_write8(addr, value & 0xFF);
-    }
-    else {
+    } else {
         ::jit::jit_dirty_page(::jit::get_jit_state(), Page::page_of(addr));
         write8_no_mmap_or_dirty_check(addr, value);
     };
@@ -122,8 +120,7 @@ pub unsafe fn write8_no_mmap_or_dirty_check(addr: u32, value: i32) {
 pub unsafe fn write16(addr: u32, value: i32) {
     if in_mapped_range(addr) {
         mmap_write16(addr, value & 0xFFFF);
-    }
-    else {
+    } else {
         ::jit::jit_dirty_cache_small(addr, addr.wrapping_add(2 as u32));
         write16_no_mmap_or_dirty_check(addr, value);
     };
@@ -136,8 +133,7 @@ pub unsafe fn write16_no_mmap_or_dirty_check(addr: u32, value: i32) {
 pub unsafe fn write32(addr: u32, value: i32) {
     if in_mapped_range(addr) {
         mmap_write32(addr, value);
-    }
-    else {
+    } else {
         ::jit::jit_dirty_cache_small(addr, addr.wrapping_add(4 as u32));
         write32_no_mmap_or_dirty_check(addr, value);
     };

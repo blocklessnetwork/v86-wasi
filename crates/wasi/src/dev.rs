@@ -1,5 +1,3 @@
-
 pub enum Dev {
-    Empty
+    Empty,
 }
-

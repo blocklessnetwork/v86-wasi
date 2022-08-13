@@ -293,7 +293,7 @@ pub unsafe fn sse_comparison(op: i32, x: f64, y: f64) -> bool {
         _ => {
             dbg_assert!(false);
             return false;
-        },
+        }
     };
 }
 pub unsafe fn sse_min(x: f64, y: f64) -> f64 {
@@ -310,8 +310,7 @@ pub unsafe fn sse_convert_with_truncation_f32_to_i32(x: f32) -> i32 {
     let x = x.trunc();
     if x >= -2147483648.0 && x < 2147483648.0 {
         return x as i64 as i32;
-    }
-    else {
+    } else {
         // TODO: Signal
         return -0x80000000;
     };
@@ -321,8 +320,7 @@ pub unsafe fn sse_convert_f32_to_i32(x: f32) -> i32 {
     let x = sse_integer_round(x as f64);
     if x >= -2147483648.0 && x < 2147483648.0 {
         return x as i64 as i32;
-    }
-    else {
+    } else {
         // TODO: Signal
         return -0x80000000;
     };
@@ -333,8 +331,7 @@ pub unsafe fn sse_convert_with_truncation_f64_to_i32(x: f64) -> i32 {
     let x = x.trunc();
     if x >= -2147483648.0 && x < 2147483648.0 {
         return x as i64 as i32;
-    }
-    else {
+    } else {
         // TODO: Signal
         return -0x80000000;
     };
@@ -344,8 +341,7 @@ pub unsafe fn sse_convert_f64_to_i32(x: f64) -> i32 {
     let x = sse_integer_round(x);
     if x >= -2147483648.0 && x < 2147483648.0 {
         return x as i64 as i32;
-    }
-    else {
+    } else {
         // TODO: Signal
         return -0x80000000;
     };
@@ -362,12 +358,10 @@ pub unsafe fn sse_integer_round(f: f64) -> f64 {
             rounded = 2.0 * (f * 0.5).round()
         }
         return rounded;
-    }
-    else if rc == 1 || rc == 3 && f > 0.0 {
+    } else if rc == 1 || rc == 3 && f > 0.0 {
         // rc=3 is truncate -> floor for positive numbers
         return f.floor();
-    }
-    else {
+    } else {
         return f.ceil();
     };
 }

@@ -4,7 +4,7 @@ use leb::{
     write_fixed_leb16_at_idx, write_fixed_leb32_at_idx, write_leb_i32, write_leb_i64, write_leb_u32,
 };
 use std::mem::transmute;
-use util::{SafeToU8, SafeToU16};
+use util::{SafeToU16, SafeToU8};
 use wasmgen::wasm_opcodes as op;
 
 #[derive(PartialEq)]
@@ -44,7 +44,9 @@ impl FunctionType {
         dbg_assert!(x <= FunctionType::LAST as u8);
         unsafe { transmute(x) }
     }
-    pub fn to_u8(self: FunctionType) -> u8 { self as u8 }
+    pub fn to_u8(self: FunctionType) -> u8 {
+        self as u8
+    }
     pub const LAST: FunctionType = FunctionType::FN4_I32_I64_I64_I32_RET;
 }
 
@@ -77,22 +79,30 @@ pub struct WasmBuilder {
 #[derive(Eq, PartialEq)]
 pub struct WasmLocal(u8);
 impl WasmLocal {
-    pub fn idx(&self) -> u8 { self.0 }
+    pub fn idx(&self) -> u8 {
+        self.0
+    }
     /// Unsafe: Can result in multiple free's. Should only be used for locals that are used during
     /// the whole module (for example, registers)
-    pub fn unsafe_clone(&self) -> WasmLocal { WasmLocal(self.0) }
+    pub fn unsafe_clone(&self) -> WasmLocal {
+        WasmLocal(self.0)
+    }
 }
 
 pub struct WasmLocalI64(u8);
 impl WasmLocalI64 {
-    pub fn idx(&self) -> u8 { self.0 }
+    pub fn idx(&self) -> u8 {
+        self.0
+    }
 }
 
 #[derive(Copy, Clone, Eq, Hash, PartialEq)]
 pub struct Label(u32);
 impl Label {
     const ZERO: Label = Label(0);
-    fn next(&self) -> Label { Label(self.0.wrapping_add(1)) }
+    fn next(&self) -> Label {
+        Label(self.0.wrapping_add(1))
+    }
 }
 
 impl WasmBuilder {
@@ -191,8 +201,7 @@ impl WasmBuilder {
             let local_index = WASM_MODULE_ARGUMENT_COUNT + i;
             if free_locals_i64.iter().any(|v| v.idx() == local_index) {
                 op::TYPE_I64
-            }
-            else {
+            } else {
                 dbg_assert!(free_locals_i32.iter().any(|v| v.idx() == local_index));
                 op::TYPE_I32
             }
@@ -248,20 +257,20 @@ impl WasmBuilder {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(0); // no args
                     self.output.push(0); // no return val
-                },
+                }
                 FunctionType::FN1 => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(1);
                     self.output.push(op::TYPE_I32);
                     self.output.push(0);
-                },
+                }
                 FunctionType::FN2 => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(2);
                     self.output.push(op::TYPE_I32);
                     self.output.push(op::TYPE_I32);
                     self.output.push(0);
-                },
+                }
                 FunctionType::FN3 => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(3);
@@ -269,26 +278,26 @@ impl WasmBuilder {
                     self.output.push(op::TYPE_I32);
                     self.output.push(op::TYPE_I32);
                     self.output.push(0);
-                },
+                }
                 FunctionType::FN0_RET => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(0);
                     self.output.push(1);
                     self.output.push(op::TYPE_I32);
-                },
+                }
                 FunctionType::FN0_RET_I64 => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(0);
                     self.output.push(1);
                     self.output.push(op::TYPE_I64);
-                },
+                }
                 FunctionType::FN1_RET => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(1);
                     self.output.push(op::TYPE_I32);
                     self.output.push(1);
                     self.output.push(op::TYPE_I32);
-                },
+                }
                 FunctionType::FN2_RET => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(2);
@@ -296,42 +305,42 @@ impl WasmBuilder {
                     self.output.push(op::TYPE_I32);
                     self.output.push(1);
                     self.output.push(op::TYPE_I32);
-                },
+                }
                 FunctionType::FN1_RET_I64 => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(1);
                     self.output.push(op::TYPE_I32);
                     self.output.push(1);
                     self.output.push(op::TYPE_I64);
-                },
+                }
                 FunctionType::FN1_F32_RET => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(1);
                     self.output.push(op::TYPE_F32);
                     self.output.push(1);
                     self.output.push(op::TYPE_I32);
-                },
+                }
                 FunctionType::FN1_F64_RET => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(1);
                     self.output.push(op::TYPE_F64);
                     self.output.push(1);
                     self.output.push(op::TYPE_I32);
-                },
+                }
                 FunctionType::FN2_I32_I64 => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(2);
                     self.output.push(op::TYPE_I32);
                     self.output.push(op::TYPE_I64);
                     self.output.push(0);
-                },
+                }
                 FunctionType::FN2_I64_I32 => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(2);
                     self.output.push(op::TYPE_I64);
                     self.output.push(op::TYPE_I32);
                     self.output.push(0);
-                },
+                }
                 FunctionType::FN2_I64_I32_RET => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(2);
@@ -339,7 +348,7 @@ impl WasmBuilder {
                     self.output.push(op::TYPE_I32);
                     self.output.push(1);
                     self.output.push(op::TYPE_I32);
-                },
+                }
                 FunctionType::FN2_I64_I32_RET_I64 => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(2);
@@ -347,14 +356,14 @@ impl WasmBuilder {
                     self.output.push(op::TYPE_I32);
                     self.output.push(1);
                     self.output.push(op::TYPE_I64);
-                },
+                }
                 FunctionType::FN2_F32_I32 => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(2);
                     self.output.push(op::TYPE_F32);
                     self.output.push(op::TYPE_I32);
                     self.output.push(0);
-                },
+                }
                 FunctionType::FN3_RET => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(3);
@@ -363,7 +372,7 @@ impl WasmBuilder {
                     self.output.push(op::TYPE_I32);
                     self.output.push(1);
                     self.output.push(op::TYPE_I32);
-                },
+                }
                 FunctionType::FN3_I64_I32_I32 => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(3);
@@ -371,7 +380,7 @@ impl WasmBuilder {
                     self.output.push(op::TYPE_I32);
                     self.output.push(op::TYPE_I32);
                     self.output.push(0);
-                },
+                }
                 FunctionType::FN3_I32_I64_I32 => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(3);
@@ -379,7 +388,7 @@ impl WasmBuilder {
                     self.output.push(op::TYPE_I64);
                     self.output.push(op::TYPE_I32);
                     self.output.push(0);
-                },
+                }
                 FunctionType::FN3_I32_I64_I32_RET => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(3);
@@ -388,7 +397,7 @@ impl WasmBuilder {
                     self.output.push(op::TYPE_I32);
                     self.output.push(1);
                     self.output.push(op::TYPE_I32);
-                },
+                }
                 FunctionType::FN4_I32_I64_I64_I32_RET => {
                     self.output.push(op::TYPE_FUNC);
                     self.output.push(4);
@@ -398,7 +407,7 @@ impl WasmBuilder {
                     self.output.push(op::TYPE_I32);
                     self.output.push(1);
                     self.output.push(op::TYPE_I32);
-                },
+                }
             }
         }
 
@@ -524,12 +533,16 @@ impl WasmBuilder {
             None => {
                 let idx = self.write_import_entry(fn_name, type_index);
                 idx
-            },
+            }
         }
     }
 
-    pub fn get_output_ptr(&self) -> *const u8 { self.output.as_ptr() }
-    pub fn get_output_len(&self) -> u32 { self.output.len() as u32 }
+    pub fn get_output_ptr(&self) -> *const u8 {
+        self.output.as_ptr()
+    }
+    pub fn get_output_len(&self) -> u32 {
+        self.output.len() as u32
+    }
 
     fn open_block(&mut self) -> Label {
         let label = self.next_label;
@@ -553,7 +566,7 @@ impl WasmBuilder {
                 let new_idx = self.local_count + WASM_MODULE_ARGUMENT_COUNT;
                 self.local_count = self.local_count.checked_add(1).unwrap();
                 WasmLocal(new_idx)
-            },
+            }
         }
     }
     pub fn free_local(&mut self, local: WasmLocal) {
@@ -599,7 +612,7 @@ impl WasmBuilder {
                 let new_idx = self.local_count + WASM_MODULE_ARGUMENT_COUNT;
                 self.local_count += 1;
                 WasmLocalI64(new_idx)
-            },
+            }
         }
     }
     pub fn free_local_i64(&mut self, local: WasmLocalI64) {
@@ -769,42 +782,102 @@ impl WasmBuilder {
         self.store_aligned_i64(0);
     }
 
-    pub fn add_i32(&mut self) { self.instruction_body.push(op::OP_I32ADD); }
-    pub fn add_i64(&mut self) { self.instruction_body.push(op::OP_I64ADD); }
-    pub fn sub_i32(&mut self) { self.instruction_body.push(op::OP_I32SUB); }
-    pub fn and_i32(&mut self) { self.instruction_body.push(op::OP_I32AND); }
-    pub fn or_i32(&mut self) { self.instruction_body.push(op::OP_I32OR); }
-    pub fn or_i64(&mut self) { self.instruction_body.push(op::OP_I64OR); }
-    pub fn xor_i32(&mut self) { self.instruction_body.push(op::OP_I32XOR); }
-    pub fn mul_i32(&mut self) { self.instruction_body.push(op::OP_I32MUL); }
-    pub fn mul_i64(&mut self) { self.instruction_body.push(op::OP_I64MUL); }
-    pub fn div_i64(&mut self) { self.instruction_body.push(op::OP_I64DIVU); }
-    pub fn rem_i64(&mut self) { self.instruction_body.push(op::OP_I64REMU); }
+    pub fn add_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32ADD);
+    }
+    pub fn add_i64(&mut self) {
+        self.instruction_body.push(op::OP_I64ADD);
+    }
+    pub fn sub_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32SUB);
+    }
+    pub fn and_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32AND);
+    }
+    pub fn or_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32OR);
+    }
+    pub fn or_i64(&mut self) {
+        self.instruction_body.push(op::OP_I64OR);
+    }
+    pub fn xor_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32XOR);
+    }
+    pub fn mul_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32MUL);
+    }
+    pub fn mul_i64(&mut self) {
+        self.instruction_body.push(op::OP_I64MUL);
+    }
+    pub fn div_i64(&mut self) {
+        self.instruction_body.push(op::OP_I64DIVU);
+    }
+    pub fn rem_i64(&mut self) {
+        self.instruction_body.push(op::OP_I64REMU);
+    }
 
-    pub fn rotl_i32(&mut self) { self.instruction_body.push(op::OP_I32ROTL); }
+    pub fn rotl_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32ROTL);
+    }
 
-    pub fn shl_i32(&mut self) { self.instruction_body.push(op::OP_I32SHL); }
-    pub fn shl_i64(&mut self) { self.instruction_body.push(op::OP_I64SHL); }
-    pub fn shr_u_i32(&mut self) { self.instruction_body.push(op::OP_I32SHRU); }
-    pub fn shr_u_i64(&mut self) { self.instruction_body.push(op::OP_I64SHRU); }
-    pub fn shr_s_i32(&mut self) { self.instruction_body.push(op::OP_I32SHRS); }
+    pub fn shl_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32SHL);
+    }
+    pub fn shl_i64(&mut self) {
+        self.instruction_body.push(op::OP_I64SHL);
+    }
+    pub fn shr_u_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32SHRU);
+    }
+    pub fn shr_u_i64(&mut self) {
+        self.instruction_body.push(op::OP_I64SHRU);
+    }
+    pub fn shr_s_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32SHRS);
+    }
 
-    pub fn eq_i32(&mut self) { self.instruction_body.push(op::OP_I32EQ); }
-    pub fn eq_i64(&mut self) { self.instruction_body.push(op::OP_I64EQ); }
-    pub fn ne_i32(&mut self) { self.instruction_body.push(op::OP_I32NE); }
-    pub fn ne_i64(&mut self) { self.instruction_body.push(op::OP_I64NE); }
+    pub fn eq_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32EQ);
+    }
+    pub fn eq_i64(&mut self) {
+        self.instruction_body.push(op::OP_I64EQ);
+    }
+    pub fn ne_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32NE);
+    }
+    pub fn ne_i64(&mut self) {
+        self.instruction_body.push(op::OP_I64NE);
+    }
 
-    pub fn le_i32(&mut self) { self.instruction_body.push(op::OP_I32LES); }
-    pub fn lt_i32(&mut self) { self.instruction_body.push(op::OP_I32LTS); }
-    pub fn ge_i32(&mut self) { self.instruction_body.push(op::OP_I32GES); }
-    pub fn gt_i32(&mut self) { self.instruction_body.push(op::OP_I32GTS); }
+    pub fn le_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32LES);
+    }
+    pub fn lt_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32LTS);
+    }
+    pub fn ge_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32GES);
+    }
+    pub fn gt_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32GTS);
+    }
 
-    pub fn gtu_i32(&mut self) { self.instruction_body.push(op::OP_I32GTU); }
-    pub fn geu_i32(&mut self) { self.instruction_body.push(op::OP_I32GEU); }
-    pub fn ltu_i32(&mut self) { self.instruction_body.push(op::OP_I32LTU); }
-    pub fn leu_i32(&mut self) { self.instruction_body.push(op::OP_I32LEU); }
+    pub fn gtu_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32GTU);
+    }
+    pub fn geu_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32GEU);
+    }
+    pub fn ltu_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32LTU);
+    }
+    pub fn leu_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32LEU);
+    }
 
-    pub fn gtu_i64(&mut self) { self.instruction_body.push(op::OP_I64GTU); }
+    pub fn gtu_i64(&mut self) {
+        self.instruction_body.push(op::OP_I64GTU);
+    }
 
     pub fn reinterpret_i32_as_f32(&mut self) {
         self.instruction_body.push(op::OP_F32REINTERPRETI32);
@@ -825,12 +898,20 @@ impl WasmBuilder {
     pub fn extend_unsigned_i32_to_i64(&mut self) {
         self.instruction_body.push(op::OP_I64EXTENDUI32);
     }
-    pub fn extend_signed_i32_to_i64(&mut self) { self.instruction_body.push(op::OP_I64EXTENDSI32); }
-    pub fn wrap_i64_to_i32(&mut self) { self.instruction_body.push(op::OP_I32WRAPI64); }
+    pub fn extend_signed_i32_to_i64(&mut self) {
+        self.instruction_body.push(op::OP_I64EXTENDSI32);
+    }
+    pub fn wrap_i64_to_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32WRAPI64);
+    }
 
-    pub fn eqz_i32(&mut self) { self.instruction_body.push(op::OP_I32EQZ); }
+    pub fn eqz_i32(&mut self) {
+        self.instruction_body.push(op::OP_I32EQZ);
+    }
 
-    pub fn select(&mut self) { self.instruction_body.push(op::OP_SELECT); }
+    pub fn select(&mut self) {
+        self.instruction_body.push(op::OP_SELECT);
+    }
 
     pub fn if_i32(&mut self) {
         self.open_block();
@@ -878,10 +959,14 @@ impl WasmBuilder {
         self.instruction_body.push(op::OP_END);
     }
 
-    pub fn return_(&mut self) { self.instruction_body.push(op::OP_RETURN); }
+    pub fn return_(&mut self) {
+        self.instruction_body.push(op::OP_RETURN);
+    }
 
     #[allow(dead_code)]
-    pub fn drop_(&mut self) { self.instruction_body.push(op::OP_DROP); }
+    pub fn drop_(&mut self) {
+        self.instruction_body.push(op::OP_DROP);
+    }
 
     pub fn brtable(
         &mut self,
@@ -920,27 +1005,57 @@ impl WasmBuilder {
         write_leb_u32(&mut self.instruction_body, i as u32);
     }
 
-    pub fn call_fn0(&mut self, name: &str) { self.call_fn(name, FunctionType::FN0) }
-    pub fn call_fn0_ret(&mut self, name: &str) { self.call_fn(name, FunctionType::FN0_RET) }
-    pub fn call_fn0_ret_i64(&mut self, name: &str) { self.call_fn(name, FunctionType::FN0_RET_I64) }
-    pub fn call_fn1(&mut self, name: &str) { self.call_fn(name, FunctionType::FN1) }
-    pub fn call_fn1_ret(&mut self, name: &str) { self.call_fn(name, FunctionType::FN1_RET) }
-    pub fn call_fn1_ret_i64(&mut self, name: &str) { self.call_fn(name, FunctionType::FN1_RET_I64) }
-    pub fn call_fn1_f32_ret(&mut self, name: &str) { self.call_fn(name, FunctionType::FN1_F32_RET) }
-    pub fn call_fn1_f64_ret(&mut self, name: &str) { self.call_fn(name, FunctionType::FN1_F64_RET) }
-    pub fn call_fn2(&mut self, name: &str) { self.call_fn(name, FunctionType::FN2) }
-    pub fn call_fn2_i32_i64(&mut self, name: &str) { self.call_fn(name, FunctionType::FN2_I32_I64) }
-    pub fn call_fn2_i64_i32(&mut self, name: &str) { self.call_fn(name, FunctionType::FN2_I64_I32) }
+    pub fn call_fn0(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN0)
+    }
+    pub fn call_fn0_ret(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN0_RET)
+    }
+    pub fn call_fn0_ret_i64(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN0_RET_I64)
+    }
+    pub fn call_fn1(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN1)
+    }
+    pub fn call_fn1_ret(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN1_RET)
+    }
+    pub fn call_fn1_ret_i64(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN1_RET_I64)
+    }
+    pub fn call_fn1_f32_ret(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN1_F32_RET)
+    }
+    pub fn call_fn1_f64_ret(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN1_F64_RET)
+    }
+    pub fn call_fn2(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN2)
+    }
+    pub fn call_fn2_i32_i64(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN2_I32_I64)
+    }
+    pub fn call_fn2_i64_i32(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN2_I64_I32)
+    }
     pub fn call_fn2_i64_i32_ret(&mut self, name: &str) {
         self.call_fn(name, FunctionType::FN2_I64_I32_RET)
     }
     pub fn call_fn2_i64_i32_ret_i64(&mut self, name: &str) {
         self.call_fn(name, FunctionType::FN2_I64_I32_RET_I64)
     }
-    pub fn call_fn2_f32_i32(&mut self, name: &str) { self.call_fn(name, FunctionType::FN2_F32_I32) }
-    pub fn call_fn2_ret(&mut self, name: &str) { self.call_fn(name, FunctionType::FN2_RET) }
-    pub fn call_fn3(&mut self, name: &str) { self.call_fn(name, FunctionType::FN3) }
-    pub fn call_fn3_ret(&mut self, name: &str) { self.call_fn(name, FunctionType::FN3_RET) }
+    pub fn call_fn2_f32_i32(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN2_F32_I32)
+    }
+    pub fn call_fn2_ret(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN2_RET)
+    }
+    pub fn call_fn3(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN3)
+    }
+    pub fn call_fn3_ret(&mut self, name: &str) {
+        self.call_fn(name, FunctionType::FN3_RET)
+    }
     pub fn call_fn3_i64_i32_i32(&mut self, name: &str) {
         self.call_fn(name, FunctionType::FN3_I64_I32_I32)
     }
@@ -954,9 +1069,13 @@ impl WasmBuilder {
         self.call_fn(name, FunctionType::FN4_I32_I64_I64_I32_RET)
     }
 
-    pub fn unreachable(&mut self) { self.instruction_body.push(op::OP_UNREACHABLE) }
+    pub fn unreachable(&mut self) {
+        self.instruction_body.push(op::OP_UNREACHABLE)
+    }
 
-    pub fn instruction_body_length(&self) -> u32 { self.instruction_body.len() as u32 }
+    pub fn instruction_body_length(&self) -> u32 {
+        self.instruction_body.len() as u32
+    }
 }
 
 #[cfg(test)]

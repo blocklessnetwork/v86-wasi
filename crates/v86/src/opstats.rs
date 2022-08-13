@@ -36,12 +36,10 @@ pub fn decode(mut instruction: u32) -> Instruction {
         if is_0f {
             final_opcode = opcode;
             break;
-        }
-        else {
+        } else {
             if opcode == 0x0F {
                 is_0f = true;
-            }
-            else if opcode == 0x26
+            } else if opcode == 0x26
                 || opcode == 0x2E
                 || opcode == 0x36
                 || opcode == 0x3E
@@ -54,8 +52,7 @@ pub fn decode(mut instruction: u32) -> Instruction {
                 || opcode == 0xF3
             {
                 prefixes.push(opcode);
-            }
-            else {
+            } else {
                 final_opcode = opcode;
                 break;
             }
@@ -81,8 +78,7 @@ pub fn decode(mut instruction: u32) -> Instruction {
             | 0xf4 | 0xf5 | 0xf6 | 0xf7 | 0xf8 | 0xf9 | 0xfa | 0xfb | 0xfc | 0xfd | 0xfe => true,
             _ => false,
         }
-    }
-    else {
+    } else {
         match final_opcode {
             0x0 | 0x1 | 0x2 | 0x3 | 0x8 | 0x9 | 0x10 | 0x11 | 0x12 | 0x13 | 0x18 | 0x19 | 0x20
             | 0x21 | 0x22 | 0x23 | 0x28 | 0x29 | 0x30 | 0x31 | 0x32 | 0x33 | 0x38 | 0x39 | 0x62
@@ -102,8 +98,7 @@ pub fn decode(mut instruction: u32) -> Instruction {
             || final_opcode == 0xAE
             || final_opcode == 0xBA
             || final_opcode == 0xC7
-    }
-    else {
+    } else {
         final_opcode >= 0x80 && final_opcode < 0x84
             || final_opcode >= 0xC0 && final_opcode < 0xC2
             || final_opcode >= 0xD0 && final_opcode < 0xD4

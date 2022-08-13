@@ -9,27 +9,26 @@
 // ins    0    0   1/w
 // outs   0    1   0
 
-use cpu::arith::{cmp8, cmp16, cmp32};
+use cpu::arith::{cmp16, cmp32, cmp8};
 use cpu::cpu::{
-    get_seg, io_port_read8, io_port_read16, io_port_read32, io_port_write8, io_port_write16,
-    io_port_write32, read_reg16, read_reg32, safe_read8, safe_read16, safe_read32s, safe_write8,
-    safe_write16, safe_write32, set_reg_asize, test_privileges_for_io, translate_address_read,
-    translate_address_write_and_can_skip_dirty, writable_or_pagefault, write_reg8, write_reg16,
-    write_reg32, AL, AX, DX, EAX, ECX, EDI, ES, ESI, FLAG_DIRECTION,
+    get_seg, io_port_read16, io_port_read32, io_port_read8, io_port_write16, io_port_write32,
+    io_port_write8, read_reg16, read_reg32, safe_read16, safe_read32s, safe_read8, safe_write16,
+    safe_write32, safe_write8, set_reg_asize, test_privileges_for_io, translate_address_read,
+    translate_address_write_and_can_skip_dirty, writable_or_pagefault, write_reg16, write_reg32,
+    write_reg8, AL, AX, DX, EAX, ECX, EDI, ES, ESI, FLAG_DIRECTION,
 };
 use cpu::global_pointers::{flags, instruction_pointer, previous_ip};
 use cpu::memory::{
     in_mapped_range, memcpy_no_mmap_or_dirty_check, memset_no_mmap_or_dirty_check,
-    read8_no_mmap_check, read16_no_mmap_check, read32_no_mmap_check, write8_no_mmap_or_dirty_check,
-    write16_no_mmap_or_dirty_check, write32_no_mmap_or_dirty_check,
+    read16_no_mmap_check, read32_no_mmap_check, read8_no_mmap_check,
+    write16_no_mmap_or_dirty_check, write32_no_mmap_or_dirty_check, write8_no_mmap_or_dirty_check,
 };
 use page::Page;
 
 fn count_until_end_of_page(direction: i32, size: i32, addr: u32) -> u32 {
     (if direction == 1 {
         (0x1000 - (addr & 0xFFF)) / size as u32
-    }
-    else {
+    } else {
         (addr & 0xFFF) / size as u32 + 1
     }) as u32
 }
@@ -101,7 +100,7 @@ unsafe fn string_instruction(
     let mut src = match instruction {
         Instruction::Movs | Instruction::Cmps | Instruction::Lods | Instruction::Outs => {
             read_reg32(ESI) & asize_mask
-        },
+        }
         _ => 0,
     };
     let mut dst = match instruction {
@@ -119,7 +118,7 @@ unsafe fn string_instruction(
                 return;
             };
             c
-        },
+        }
         Rep::None => 0,
     };
 
@@ -130,7 +129,7 @@ unsafe fn string_instruction(
                 return;
             }
             port
-        },
+        }
         _ => 0,
     };
 
@@ -154,14 +153,14 @@ unsafe fn string_instruction(
                 rep_fast = rep_fast && !in_mapped_range(addr);
                 phys_dst = addr;
                 skip_dirty_page = skip;
-            },
+            }
             Instruction::Cmps | Instruction::Scas => {
                 let addr = return_on_pagefault!(translate_address_read(es + dst));
                 rep_fast = rep_fast && !in_mapped_range(addr);
                 phys_dst = addr;
                 skip_dirty_page = true;
-            },
-            _ => {},
+            }
+            _ => {}
         };
 
         match instruction {
@@ -169,8 +168,8 @@ unsafe fn string_instruction(
                 let addr = return_on_pagefault!(translate_address_read(ds + src));
                 rep_fast = rep_fast && !in_mapped_range(addr);
                 phys_src = addr;
-            },
-            _ => {},
+            }
+            _ => {}
         };
 
         match instruction {
@@ -179,8 +178,8 @@ unsafe fn string_instruction(
                 let overlap = u32::max(phys_src, phys_dst) - u32::min(phys_src, phys_dst)
                     < count * size_bytes as u32;
                 rep_fast = rep_fast && !overlap;
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
@@ -194,10 +193,10 @@ unsafe fn string_instruction(
                 ),
                 Instruction::Stos | Instruction::Ins | Instruction::Scas => {
                     count_until_end_of_page(direction, size_bytes, phys_dst)
-                },
+                }
                 Instruction::Lods | Instruction::Outs => {
                     count_until_end_of_page(direction, size_bytes, phys_src)
-                },
+                }
             },
         );
         dbg_assert!(count_until_end_of_page > 0);
@@ -219,7 +218,7 @@ unsafe fn string_instruction(
                         Size::W => read16_no_mmap_check(phys_src),
                         Size::D => read32_no_mmap_check(phys_src),
                     }
-                },
+                }
                 Instruction::Scas | Instruction::Stos => data & size_mask,
                 Instruction::Ins => match size {
                     Size::B => io_port_read8(port),
@@ -263,7 +262,7 @@ unsafe fn string_instruction(
                     );
                     i = count_until_end_of_page;
                     break;
-                },
+                }
                 Instruction::Stos => match size {
                     Size::B => {
                         if direction == -1 {
@@ -276,7 +275,7 @@ unsafe fn string_instruction(
                         );
                         i = count_until_end_of_page;
                         break;
-                    },
+                    }
                     Size::W => write16_no_mmap_or_dirty_check(phys_dst, src_val),
                     Size::D => write32_no_mmap_or_dirty_check(phys_dst, src_val),
                 },
@@ -289,14 +288,14 @@ unsafe fn string_instruction(
                 | Instruction::Scas
                 | Instruction::Ins => {
                     phys_dst += increment as u32;
-                },
-                _ => {},
+                }
+                _ => {}
             }
             match instruction {
                 Instruction::Movs | Instruction::Cmps | Instruction::Lods | Instruction::Outs => {
                     phys_src += increment as u32;
-                },
-                _ => {},
+                }
+                _ => {}
             };
 
             match instruction {
@@ -307,7 +306,7 @@ unsafe fn string_instruction(
                         Rep::None => {
                             dbg_assert!(false);
                             true
-                        },
+                        }
                     };
                     if !rep_cmp || count == i {
                         match size {
@@ -318,8 +317,8 @@ unsafe fn string_instruction(
                         rep_cmp_finished = true;
                         break;
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
 
@@ -333,16 +332,15 @@ unsafe fn string_instruction(
 
         src += i as i32 * increment;
         dst += i as i32 * increment;
-    }
-    else {
+    } else {
         loop {
             match instruction {
                 Instruction::Ins => {
                     // check fault *before* reading from port
                     // (technically not necessary according to Intel manuals)
                     break_on_pagefault!(writable_or_pagefault(es + dst, size_bytes));
-                },
-                _ => {},
+                }
+                _ => {}
             };
             let src_val = match instruction {
                 Instruction::Movs | Instruction::Cmps | Instruction::Lods | Instruction::Outs => {
@@ -351,7 +349,7 @@ unsafe fn string_instruction(
                         Size::W => safe_read16(ds + src),
                         Size::D => safe_read32s(ds + src),
                     })
-                },
+                }
                 Instruction::Scas | Instruction::Stos => data & size_mask,
                 Instruction::Ins => match size {
                     Size::B => io_port_read8(port),
@@ -391,13 +389,13 @@ unsafe fn string_instruction(
                 | Instruction::Stos
                 | Instruction::Scas
                 | Instruction::Ins => dst = dst + increment & asize_mask,
-                _ => {},
+                _ => {}
             }
             match instruction {
                 Instruction::Movs | Instruction::Cmps | Instruction::Lods | Instruction::Outs => {
                     src = src + increment & asize_mask
-                },
-                _ => {},
+                }
+                _ => {}
             };
 
             let finished = match rep {
@@ -413,11 +411,10 @@ unsafe fn string_instruction(
                     if count != 0 && rep_cmp {
                         //*instruction_pointer = *previous_ip
                         false
-                    }
-                    else {
+                    } else {
                         true
                     }
-                },
+                }
                 Rep::None => true,
             };
 
@@ -428,7 +425,7 @@ unsafe fn string_instruction(
                         Size::W => cmp16(src_val, dst_val),
                         Size::D => cmp32(src_val, dst_val),
                     },
-                    _ => {},
+                    _ => {}
                 }
                 break;
             }
@@ -441,20 +438,20 @@ unsafe fn string_instruction(
         | Instruction::Stos
         | Instruction::Scas
         | Instruction::Ins => set_reg_asize(is_asize_32, EDI, dst),
-        _ => {},
+        _ => {}
     }
     match instruction {
         Instruction::Movs | Instruction::Cmps | Instruction::Lods | Instruction::Outs => {
             set_reg_asize(is_asize_32, ESI, src)
-        },
-        _ => {},
+        }
+        _ => {}
     };
 
     match rep {
         Rep::Z | Rep::NZ => {
             set_reg_asize(is_asize_32, ECX, count as i32);
-        },
-        Rep::None => {},
+        }
+        Rep::None => {}
     }
 }
 

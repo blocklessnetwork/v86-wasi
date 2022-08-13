@@ -11,6 +11,11 @@ fn main() {
     add_x86_to_linker(&mut linker);
     linker.module(&mut store, "", &module).unwrap();
     let inst = linker.instantiate(&mut store, &module).unwrap();
-    let func = inst.get_typed_func::<(), (), _>(&mut store, "start").unwrap();
-    func.call(store, ()).unwrap();
+    let mem = inst.get_memory(store.as_context_mut(), "memory").unwrap();
+    println!("{}", mem.data_size(store.as_context()));
+    let func = inst
+        .get_typed_func::<(), (), _>(&mut store, "start")
+        .unwrap();
+    func.call(store.as_context_mut(), ()).unwrap();
+    
 }

@@ -55,7 +55,9 @@ pub unsafe fn zstd_create_ctx(src_size: u32) -> *mut ZstdContext {
 }
 
 #[no_mangle]
-pub unsafe fn zstd_get_src_ptr(ctx: *mut ZstdContext) -> *mut u8 { (*ctx).src }
+pub unsafe fn zstd_get_src_ptr(ctx: *mut ZstdContext) -> *mut u8 {
+    (*ctx).src
+}
 
 #[no_mangle]
 pub unsafe fn zstd_free_ctx(ctx: *mut ZstdContext) {

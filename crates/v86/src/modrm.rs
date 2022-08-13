@@ -27,7 +27,11 @@ impl ModrmByte {
 }
 
 pub fn decode(ctx: &mut CpuContext, modrm_byte: u8) -> ModrmByte {
-    if ctx.asize_32() { decode32(ctx, modrm_byte) } else { decode16(ctx, modrm_byte) }
+    if ctx.asize_32() {
+        decode32(ctx, modrm_byte)
+    } else {
+        decode16(ctx, modrm_byte)
+    }
 }
 
 fn decode16(ctx: &mut CpuContext, modrm_byte: u8) -> ModrmByte {
@@ -137,8 +141,7 @@ fn decode_sib(ctx: &mut CpuContext, immediate: Imm32) -> ModrmByte {
     if r == 4 {
         segment = SS;
         reg = ESP;
-    }
-    else if r == 5 {
+    } else if r == 5 {
         if immediate == Imm32::None {
             return ModrmByte {
                 segment: DS,
@@ -148,13 +151,11 @@ fn decode_sib(ctx: &mut CpuContext, immediate: Imm32) -> ModrmByte {
                 immediate: ctx.read_imm32() as i32,
                 is_16: false,
             };
-        }
-        else {
+        } else {
             segment = SS;
             reg = EBP;
         }
-    }
-    else {
+    } else {
         segment = DS;
         reg = r as u32;
     }
@@ -197,11 +198,10 @@ pub fn gen(ctx: &mut JitContext, modrm_byte: ModrmByte) {
             } => {
                 if modrm_byte.immediate == 0 {
                     profiler::stat::MODRM_SIMPLE_REG
-                }
-                else {
+                } else {
                     profiler::stat::MODRM_SIMPLE_REG_WITH_OFFSET
                 }
-            },
+            }
             _ => profiler::stat::MODRM_COMPLEX,
         },
     );
@@ -241,7 +241,11 @@ pub fn gen(ctx: &mut JitContext, modrm_byte: ModrmByte) {
 
 pub fn get_as_reg_index_if_possible(ctx: &mut JitContext, modrm_byte: &ModrmByte) -> Option<u32> {
     let prefix = ctx.cpu.prefixes & PREFIX_MASK_SEGMENT;
-    let seg = if prefix != 0 { prefix - 1 } else { modrm_byte.segment };
+    let seg = if prefix != 0 {
+        prefix - 1
+    } else {
+        modrm_byte.segment
+    };
     if can_optimize_get_seg(ctx, seg)
         && modrm_byte.second_reg.is_none()
         && modrm_byte.immediate == 0
@@ -249,13 +253,14 @@ pub fn get_as_reg_index_if_possible(ctx: &mut JitContext, modrm_byte: &ModrmByte
         && modrm_byte.shift == 0
     {
         modrm_byte.first_reg
-    }
-    else {
+    } else {
         None
     }
 }
 
-pub fn skip(ctx: &mut CpuContext, modrm_byte: u8) { let _ = decode(ctx, modrm_byte); }
+pub fn skip(ctx: &mut CpuContext, modrm_byte: u8) {
+    let _ = decode(ctx, modrm_byte);
+}
 
 #[derive(PartialEq)]
 enum Imm32 {
@@ -275,7 +280,11 @@ pub fn jit_add_seg_offset(ctx: &mut JitContext, default_segment: u32) {
         return;
     }
 
-    let seg = if prefix != 0 { prefix - 1 } else { default_segment };
+    let seg = if prefix != 0 {
+        prefix - 1
+    } else {
+        default_segment
+    };
     jit_add_seg_offset_no_override(ctx, seg);
 }
 
