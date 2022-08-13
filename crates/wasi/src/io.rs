@@ -4,7 +4,7 @@ use std::{collections::HashMap, ops::Add, marker::PhantomData};
 
 use crate::Dev;
 
-trait MemAccessTrait<T> {
+pub(crate) trait MemAccessTrait<T> {
     fn read(&self, store: impl AsContext, idx: u32) -> T;
     fn write(&mut self, store: impl AsContextMut, idx: u32, v: T);
 }

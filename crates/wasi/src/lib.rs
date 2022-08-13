@@ -9,6 +9,7 @@ mod cpu;
 mod dev;
 mod io;
 mod mem;
+pub use cpu::CPU;
 
 pub use dev::Dev;
 

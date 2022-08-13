@@ -3,7 +3,7 @@
 // https://www-ssl.intel.com/content/www/us/en/processors/architectures-software-developer-manuals.html
 // http://ref.x86asm.net/geek32.html
 
-use crate::io::{IO, MemAccess};
+use crate::io::{IO, MemAccess, MemAccessTrait};
 use wasmtime::{Memory, Instance, Store, AsContextMut, TypedFunc};
 
 struct IOMap {
@@ -129,6 +129,7 @@ struct VMOpers {
     typed_read32s: TypedFunc<u32, i32>,
     typed_write16: TypedFunc<(u32, i32), ()>,
     typed_write32: TypedFunc<(u32, i32), ()>,
+    typed_allocate_memory: TypedFunc<u32, u32>,
 }
 
 impl VMOpers {
@@ -139,12 +140,14 @@ impl VMOpers {
         let typed_read32s = inst.get_typed_func(store.as_context_mut(), "read32s").unwrap();
         let typed_write16 = inst.get_typed_func(store.as_context_mut(), "write16").unwrap();
         let typed_write32 = inst.get_typed_func(store.as_context_mut(), "write32").unwrap();
+        let typed_allocate_memory = inst.get_typed_func(store.as_context_mut(), "allocate_memory").unwrap();
         Self {
             typed_read8,
             typed_read16,
             typed_read32s,
             typed_write16, 
             typed_write32, 
+            typed_allocate_memory,
         }
     }
 
@@ -167,41 +170,64 @@ impl VMOpers {
     fn write32(&self, store: impl AsContextMut,addr: u32, val: i32) {
         self.typed_write32.call(store, (addr, val)).unwrap()
     }
+
+    fn allocate_memory(&self, store: impl AsContextMut, size: u32) -> u32 {
+        self.typed_allocate_memory.call(store, size).unwrap()
+    }
 }
 
 
 
-pub(crate) struct CPU<S:'static> {
+pub struct CPU<S:'static> {
     memory: Memory,
     store: Store<S>,
     inst: Instance,
     iomap: IOMap,
+    vm_opers: VMOpers,
     io: IO,
 }
 
 impl<T> CPU<T> {
-    pub fn new(mut store: Store<T>, inst: Instance) -> Self {
+    pub fn new(inst: Instance, mut store: Store<T>) -> Self {
         let memory = inst.get_memory(store.as_context_mut(), "memory").unwrap();
         Self {
             inst,
             memory,
+            vm_opers: VMOpers::new(&inst, &mut store),
             store,
             iomap: IOMap::new(memory),
             io: IO::new(),
         }
     }
 
-    pub(crate) fn create_memory(size: u32) {
+    fn read8(&mut self, addr:u32) -> i32 {
+        self.vm_opers.read8(self.store.as_context_mut(), addr)
+    }
+
+    fn read16(&mut self, addr:u32) -> i32 {
+        self.vm_opers.read16(self.store.as_context_mut(), addr)
+    }
+
+    fn read32s(&mut self, addr:u32) -> i32 {
+        self.vm_opers.read32s(self.store.as_context_mut(), addr)
+    }
+
+    fn allocate_memory(&mut self, addr:u32) -> u32 {
+        self.vm_opers.allocate_memory(self.store.as_context_mut(), addr)
+    }
+
+    pub(crate) fn create_memory(&mut self, size: u32) {
         let size = if size < 1024 * 1024 {
             1024 * 1024
         } else {
             size
         };
 
-
+        self.iomap.memory_size_io.write(self.store.as_context_mut(), 0u32, size as _);
+        self.allocate_memory(size);
     }
 
     pub fn init(&mut self) {
-
+        self.create_memory(1024 * 1024);
     }
 }
