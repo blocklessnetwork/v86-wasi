@@ -58,7 +58,7 @@ impl Emulator {
     }
 
     pub fn time_elapsed(&self) -> f64 {
-        self.inner().start_time.elapsed().as_millis() as f64/1000_f64
+        self.inner().start_time.elapsed().as_millis() as f64
     }
 
     pub fn start(&mut self, inst: Instance, store: &mut Store<Emulator>) {
