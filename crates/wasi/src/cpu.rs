@@ -3,10 +3,12 @@
 // https://www-ssl.intel.com/content/www/us/en/processors/architectures-software-developer-manuals.html
 // http://ref.x86asm.net/geek32.html
 
-use crate::io::{IO, MemAccess, MemAccessTrait};
+use crate::{io::{IO, MemAccess, MemAccessTrait}, MMAP_BLOCK_SIZE, Emulator};
 use wasmtime::{Memory, Instance, Store, AsContextMut, TypedFunc};
 
 struct IOMap {
+    mem8: Option<MemAccess<u8>>,
+    mem32s: Option<MemAccess<i32>>,
     memory_size_io: MemAccess<u32>,
     segment_is_null_io: MemAccess<u8>,
     segment_offsets_io: MemAccess<i32>,
@@ -119,6 +121,8 @@ impl IOMap {
             previous_ip_io,
             apic_enabled_io,
             acpi_enabled_io,
+            mem8: None,
+            mem32s: None,
         }
     }
 }
@@ -129,6 +133,7 @@ struct VMOpers {
     typed_read32s: TypedFunc<u32, i32>,
     typed_write16: TypedFunc<(u32, i32), ()>,
     typed_write32: TypedFunc<(u32, i32), ()>,
+    typed_reset_cpu: TypedFunc<(), ()>,
     typed_allocate_memory: TypedFunc<u32, u32>,
 }
 
@@ -140,12 +145,14 @@ impl VMOpers {
         let typed_read32s = inst.get_typed_func(store.as_context_mut(), "read32s").unwrap();
         let typed_write16 = inst.get_typed_func(store.as_context_mut(), "write16").unwrap();
         let typed_write32 = inst.get_typed_func(store.as_context_mut(), "write32").unwrap();
+        let typed_reset_cpu = inst.get_typed_func(store.as_context_mut(), "reset_cpu").unwrap();
         let typed_allocate_memory = inst.get_typed_func(store.as_context_mut(), "allocate_memory").unwrap();
         Self {
             typed_read8,
             typed_read16,
             typed_read32s,
             typed_write16, 
+            typed_reset_cpu,
             typed_write32, 
             typed_allocate_memory,
         }
@@ -174,60 +181,83 @@ impl VMOpers {
     fn allocate_memory(&self, store: impl AsContextMut, size: u32) -> u32 {
         self.typed_allocate_memory.call(store, size).unwrap()
     }
+
+    fn reset_cpu(&self, store: impl AsContextMut) {
+        self.typed_reset_cpu.call(store, ()).unwrap()
+    }
 }
 
 
 
-pub struct CPU<S:'static> {
+pub struct CPU {
     memory: Memory,
-    store: Store<S>,
     inst: Instance,
     iomap: IOMap,
     vm_opers: VMOpers,
     io: IO,
 }
 
-impl<T> CPU<T> {
-    pub fn new(inst: Instance, mut store: Store<T>) -> Self {
+impl CPU {
+    pub fn new(inst: Instance, mut store: &mut Store<Emulator>) -> Self {
         let memory = inst.get_memory(store.as_context_mut(), "memory").unwrap();
         Self {
             inst,
             memory,
             vm_opers: VMOpers::new(&inst, &mut store),
-            store,
             iomap: IOMap::new(memory),
             io: IO::new(),
         }
     }
 
-    fn read8(&mut self, addr:u32) -> i32 {
-        self.vm_opers.read8(self.store.as_context_mut(), addr)
+    fn read8(&mut self, store: &mut Store<Emulator>, addr:u32) -> i32 {
+        self.vm_opers.read8(store.as_context_mut(), addr)
     }
 
-    fn read16(&mut self, addr:u32) -> i32 {
-        self.vm_opers.read16(self.store.as_context_mut(), addr)
+    fn read16(&mut self, store: &mut Store<Emulator>, addr:u32) -> i32 {
+        self.vm_opers.read16(store.as_context_mut(), addr)
     }
 
-    fn read32s(&mut self, addr:u32) -> i32 {
-        self.vm_opers.read32s(self.store.as_context_mut(), addr)
+    fn read32s(&mut self, store: &mut Store<Emulator>, addr:u32) -> i32 {
+        self.vm_opers.read32s(store.as_context_mut(), addr)
     }
 
-    fn allocate_memory(&mut self, addr:u32) -> u32 {
-        self.vm_opers.allocate_memory(self.store.as_context_mut(), addr)
+    fn allocate_memory(&mut self, store: &mut Store<Emulator>, addr:u32) -> u32 {
+        self.vm_opers.allocate_memory(store.as_context_mut(), addr)
     }
 
-    pub(crate) fn create_memory(&mut self, size: u32) {
+    fn write_mem_size(&mut self, store: &mut Store<Emulator>, size: u32) {
+        self.iomap.memory_size_io.write(store.as_context_mut(), 0u32, size as _);
+    }
+
+    fn read_mem_size(&mut self, store: &mut Store<Emulator>) -> u32 {
+        self.iomap.memory_size_io.read(store.as_context_mut(), 0u32)
+    }
+
+    fn reset_cpu(&mut self, store: &mut Store<Emulator>) {
+        self.vm_opers.reset_cpu(store.as_context_mut());
+    }
+
+    pub(crate) fn create_memory(&mut self, store: &mut Store<Emulator>, size: u32) {
+        let max_size = (1_u32 << 31_u32) - MMAP_BLOCK_SIZE as u32;
         let size = if size < 1024 * 1024 {
             1024 * 1024
+        } else if size > max_size {
+            max_size
         } else {
             size
         };
 
-        self.iomap.memory_size_io.write(self.store.as_context_mut(), 0u32, size as _);
-        self.allocate_memory(size);
+        assert!((size & MMAP_BLOCK_SIZE as u32  - 1) == 0);
+        let ms = self.read_mem_size(store);
+        assert!(ms == 0, "Expected uninitialised memory");
+        self.write_mem_size(store, size);
+        let offset = self.allocate_memory(store, size);
+        self.iomap.mem8 = Some(MemAccess::new(offset as _, size, self.memory));
+        self.iomap.mem32s = Some(MemAccess::new(offset as _, size >> 2, self.memory));
     }
 
-    pub fn init(&mut self) {
-        self.create_memory(1024 * 1024);
+    pub fn init(&mut self, store: &mut Store<Emulator>) {
+        self.create_memory(store, 1024 * 1024);
+        self.reset_cpu(store);
     }
 }

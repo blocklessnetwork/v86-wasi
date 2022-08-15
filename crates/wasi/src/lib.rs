@@ -9,16 +9,20 @@ mod cpu;
 mod dev;
 mod io;
 mod mem;
+mod consts;
+mod emulator;
+pub use consts::*;
 pub use cpu::CPU;
+pub use emulator::Emulator;
 
 pub use dev::Dev;
 
-pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
+pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
     linker
         .func_wrap(
             "env",
             "log_from_wasm",
-            move |mut caller: Caller<'_, T>, off: u32, len: u32| {
+            move |mut caller: Caller<'_, Emulator>, off: u32, len: u32| {
                 let mem = match caller.get_export("memory") {
                     Some(Extern::Memory(m)) => m,
                     _ => {
@@ -41,7 +45,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "console_log_from_wasm",
-            move |mut caller: Caller<'_, T>, off: u32, len: u32| {
+            move |mut caller: Caller<'_, Emulator>, off: u32, len: u32| {
                 let mem = match caller.get_export("memory") {
                     Some(Extern::Memory(m)) => m,
                     _ => {
@@ -61,13 +65,13 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .unwrap();
 
     linker
-        .func_wrap("env", "abort", move |mut _caller: Caller<'_, T>| {
+        .func_wrap("env", "abort", move |mut _caller: Caller<'_, Emulator>| {
             panic!("env abort call.");
         })
         .unwrap();
 
     linker
-        .func_wrap("env", "hlt_op", move |mut _caller: Caller<'_, T>| {
+        .func_wrap("env", "hlt_op", move |mut _caller: Caller<'_, Emulator>| {
             panic!("env hlt_op call.");
         })
         .unwrap();
@@ -76,7 +80,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "get_rand_int",
-            move |mut _caller: Caller<'_, T>| -> i32 {
+            move |mut _caller: Caller<'_, Emulator>| -> i32 {
                 panic!("env get_rand_int call.");
             },
         )
@@ -86,7 +90,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "cpu_exception_hook",
-            move |mut _caller: Caller<'_, T>, _i: i32| -> i32 {
+            move |mut _caller: Caller<'_, Emulator>, _i: i32| -> i32 {
                 panic!("env cpu_exception_hook call.");
             },
         )
@@ -96,8 +100,8 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "microtick",
-            move |mut _caller: Caller<'_, T>| -> f64 {
-                panic!("env microtick call.");
+            move |caller: Caller<'_, Emulator>| -> f64 {
+                caller.data().time_elapsed()
             },
         )
         .unwrap();
@@ -106,7 +110,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "dbg_trace_from_wasm",
-            move |mut _caller: Caller<'_, T>| {
+            move |mut _caller: Caller<'_, Emulator>| {
                 panic!("env dbg_trace_from_wasm call.");
             },
         )
@@ -116,7 +120,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "pic_acknowledge",
-            move |mut _caller: Caller<'_, T>| {
+            move |mut _caller: Caller<'_, Emulator>| {
                 panic!("env pic_acknowledge call.");
             },
         )
@@ -126,7 +130,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "io_port_read8",
-            move |mut _caller: Caller<'_, T>, _off: i32| -> i32 {
+            move |mut _caller: Caller<'_, Emulator>, _off: i32| -> i32 {
                 panic!("env io_port_read8 call.");
             },
         )
@@ -136,7 +140,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "io_port_read16",
-            move |mut _caller: Caller<'_, T>, _off: i32| -> i32 {
+            move |mut _caller: Caller<'_, Emulator>, _off: i32| -> i32 {
                 panic!("env io_port_read16 call.");
             },
         )
@@ -146,7 +150,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "io_port_read32",
-            move |mut _caller: Caller<'_, T>, _off: i32| -> i32 {
+            move |mut _caller: Caller<'_, Emulator>, _off: i32| -> i32 {
                 panic!("env io_port_read32 call.");
             },
         )
@@ -156,7 +160,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "io_port_write8",
-            move |mut _caller: Caller<'_, T>, _off: i32, _v: i32| {
+            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v: i32| {
                 panic!("env io_port_write8 call.");
             },
         )
@@ -166,7 +170,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "io_port_write16",
-            move |mut _caller: Caller<'_, T>, _off: i32, _v: i32| {
+            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v: i32| {
                 panic!("env io_port_write16 call.");
             },
         )
@@ -176,7 +180,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "io_port_write32",
-            move |mut _caller: Caller<'_, T>, _off: i32, _v: i32| {
+            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v: i32| {
                 panic!("env io_port_write32 call.");
             },
         )
@@ -186,7 +190,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "mmap_read8",
-            move |mut _caller: Caller<'_, T>, _off: i32| -> i32 {
+            move |mut _caller: Caller<'_, Emulator>, _off: i32| -> i32 {
                 panic!("env mmap_read8 call.");
             },
         )
@@ -196,7 +200,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "mmap_read16",
-            move |mut _caller: Caller<'_, T>, _off: i32| -> i32 {
+            move |mut _caller: Caller<'_, Emulator>, _off: i32| -> i32 {
                 panic!("env mmap_read16 call.");
             },
         )
@@ -206,7 +210,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "mmap_read32",
-            move |mut _caller: Caller<'_, T>, _off: i32| -> i32 {
+            move |mut _caller: Caller<'_, Emulator>, _off: i32| -> i32 {
                 panic!("env mmap_read32 call.");
             },
         )
@@ -216,7 +220,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "mmap_write8",
-            move |mut _caller: Caller<'_, T>, _off: i32, _v: i32| {
+            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v: i32| {
                 panic!("env mmap_write8 call.");
             },
         )
@@ -226,7 +230,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "mmap_write16",
-            move |mut _caller: Caller<'_, T>, _off: i32, _v: i32| {
+            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v: i32| {
                 panic!("env mmap_write16 call.");
             },
         )
@@ -236,7 +240,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "mmap_write32",
-            move |mut _caller: Caller<'_, T>, _off: i32, _v: i32| {
+            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v: i32| {
                 panic!("env mmap_write32 call.");
             },
         )
@@ -246,7 +250,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "mmap_write64",
-            move |mut _caller: Caller<'_, T>, _off: i32, _v0: i32, _v1: i32| {
+            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v0: i32, _v1: i32| {
                 panic!("env mmap_write64 call.");
             },
         )
@@ -256,7 +260,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "mmap_write128",
-            move |mut _caller: Caller<'_, T>, _off: i32, _v0: i32, _v1: i32, _v2: i32, _v3: i32| {
+            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v0: i32, _v1: i32, _v2: i32, _v3: i32| {
                 panic!("env mmap_write128 call.");
             },
         )
@@ -266,7 +270,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "codegen_finalize",
-            move |mut _caller: Caller<'_, T>, _i: i32, _addr: u32, _f: i32, _ptr: i32, _l: i32| {
+            move |mut _caller: Caller<'_, Emulator>, _i: i32, _addr: u32, _f: i32, _ptr: i32, _l: i32| {
                 panic!("env codegen_finalize call.");
             },
         )
@@ -276,7 +280,7 @@ pub fn add_x86_to_linker<T>(linker: &mut Linker<T>) {
         .func_wrap(
             "env",
             "jit_clear_func",
-            move |mut _caller: Caller<'_, T>, _i: i32| {
+            move |mut _caller: Caller<'_, Emulator>, _i: i32| {
                 panic!("env jit_clear_func call.");
             },
         )

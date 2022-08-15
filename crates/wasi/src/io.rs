@@ -55,21 +55,21 @@ impl_mem_access!(i32, 4);
 
 const PORTS_SIZE: usize = 0x10000;
 
-type RD8_FN = fn(&Dev, u32) -> u8;
-type RD16_FN = fn(&Dev, u32) -> u16;
-type RD32_FN = fn(&Dev, u32) -> u32;
-type WR8_FN = fn(&Dev, u32, u8);
-type WR16_FN = fn(&Dev, u32, u16);
-type WR32_FN = fn(&Dev, u32, u32);
+type Rd8Fn = fn(&Dev, u32) -> u8;
+type Rd16Fn = fn(&Dev, u32) -> u16;
+type Rd32Fn = fn(&Dev, u32) -> u32;
+type Wr8Fn = fn(&Dev, u32, u8);
+type Wr16Fn = fn(&Dev, u32, u16);
+type Wr32Fn = fn(&Dev, u32, u32);
 
 struct IOps {
-    read8: RD8_FN,
-    read16: RD16_FN,
-    read32: RD32_FN,
+    read8: Rd8Fn,
+    read16: Rd16Fn,
+    read32: Rd32Fn,
 
-    write8: WR8_FN,
-    write16: WR16_FN,
-    write32: WR32_FN,
+    write8: Wr8Fn,
+    write16: Wr16Fn,
+    write32: Wr32Fn,
 
     dev: Dev,
 }
@@ -117,7 +117,7 @@ impl IO {
         IO { ports: v }
     }
 
-    pub fn register_read(&mut self, port: u32, dev: Dev, r8: RD8_FN, r16: RD16_FN, r32: RD32_FN) {
+    pub fn register_read(&mut self, port: u32, dev: Dev, r8: Rd8Fn, r16: Rd16Fn, r32: Rd32Fn) {
         let iops = &mut self.ports[port as usize];
         iops.read8 = r8;
         iops.read16 = r16;
@@ -125,7 +125,7 @@ impl IO {
         iops.dev = dev;
     }
 
-    pub fn register_write(&mut self, port: u32, dev: Dev, w8: WR8_FN, w16: WR16_FN, w32: WR32_FN) {
+    pub fn register_write(&mut self, port: u32, dev: Dev, w8: Wr8Fn, w16: Wr16Fn, w32: Wr32Fn) {
         let iops = &mut self.ports[port as usize];
         iops.write8 = w8;
         iops.write16 = w16;
