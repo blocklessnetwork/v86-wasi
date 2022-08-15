@@ -23,13 +23,6 @@ impl InnerEmulator {
     }
 }
 
-impl Drop for InnerEmulator {
-    fn drop(&mut self) {
-        println!("drop InnerEmulator")
-    }
-}
-
-
 pub struct Emulator {
     inner: *mut Rc<Cell<InnerEmulator>>,
 }
