@@ -1,4 +1,4 @@
-use std::{time, cell::Cell, rc::Rc};
+use std::{cell::Cell, rc::Rc, time};
 
 use wasmtime::{Instance, Store};
 
@@ -11,7 +11,7 @@ struct InnerEmulator {
 
 impl InnerEmulator {
     fn new() -> Self {
-        Self { 
+        Self {
             start_time: time::Instant::now(),
             cpu: None,
         }
@@ -23,30 +23,16 @@ impl InnerEmulator {
     }
 }
 
+#[derive(Clone)]
 pub struct Emulator {
-    inner: *mut Rc<Cell<InnerEmulator>>,
-}
-
-impl Clone for Emulator {
-    fn clone(&self) -> Self {
-        let inner = unsafe {Box::from_raw(self.inner)};
-        let d: Box<Rc<_>> = inner.clone();
-        let _ = Box::into_raw(inner);
-        Self { inner:  Box::into_raw(d)}
-    }
-}
-
-impl Drop for Emulator {
-    fn drop(&mut self) {
-        unsafe {Box::from_raw(self.inner)};
-    }
+    inner: Rc<Cell<InnerEmulator>>,
 }
 
 impl Emulator {
     pub fn new() -> Self {
-        let inner = Box::new(Rc::new(Cell::new(InnerEmulator::new())));
+        let inner = Rc::new(Cell::new(InnerEmulator::new()));
         Emulator {
-            inner: Box::into_raw(inner),
+            inner: inner,
         }
     }
 
@@ -55,19 +41,28 @@ impl Emulator {
     }
 
     pub fn start(&mut self, inst: Instance, store: &mut Store<Emulator>) {
-        self.inner().init(inst, store);
+        self.inner_mut().init(inst, store);
     }
 
     pub fn inner_strong_count(&self) -> usize {
-        let rc: &Rc<_> = unsafe {&(*self.inner)};
-        Rc::strong_count(rc)
+        Rc::strong_count(&self.inner)
     }
 
-    fn inner(&self) -> &mut InnerEmulator {
-        unsafe{
+    pub fn cpu(&self) -> Option<&CPU> {
+        self.inner().cpu.as_ref()
+    }
+
+    fn inner(&self) -> &InnerEmulator {
+        unsafe {
             let rc = &(*self.inner);
             &mut (*rc.as_ptr())
         }
     }
-    
+
+    fn inner_mut(&self) -> &mut InnerEmulator {
+        unsafe {
+            let rc = &(*self.inner);
+            &mut (*rc.as_ptr())
+        }
+    }
 }

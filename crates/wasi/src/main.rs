@@ -4,7 +4,7 @@ use wasmtime::*;
 fn main() {
     let mut conf = Config::new();
     conf.cache_config_load_default().unwrap();
-    let  engine = Engine::new(&conf).unwrap();
+    let engine = Engine::new(&conf).unwrap();
     let mut emulator = Emulator::new();
     let mut store = Store::new(&engine, emulator.clone());
     let module = Module::from_file(&engine, "target/v86-debug.wasm").unwrap();

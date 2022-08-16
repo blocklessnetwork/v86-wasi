@@ -5,12 +5,12 @@ use core::slice;
 
 use mem::add_mem_to_linker;
 use wasmtime::*;
+mod consts;
 mod cpu;
 mod dev;
+mod emulator;
 mod io;
 mod mem;
-mod consts;
-mod emulator;
 pub use consts::*;
 pub use cpu::CPU;
 pub use emulator::Emulator;
@@ -101,9 +101,9 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
             "env",
             "microtick",
             move |caller: Caller<'_, Emulator>| -> f64 {
-                let rs = caller.data().time_elapsed();
-                println!("{}", rs);
-                rs
+                let emu = caller.data();
+                println!("emu {}", emu.cpu().is_none());
+                emu.time_elapsed()
             },
         )
         .unwrap();
@@ -262,7 +262,12 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "mmap_write128",
-            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v0: i32, _v1: i32, _v2: i32, _v3: i32| {
+            move |mut _caller: Caller<'_, Emulator>,
+                  _off: i32,
+                  _v0: i32,
+                  _v1: i32,
+                  _v2: i32,
+                  _v3: i32| {
                 panic!("env mmap_write128 call.");
             },
         )
@@ -272,7 +277,12 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "codegen_finalize",
-            move |mut _caller: Caller<'_, Emulator>, _i: i32, _addr: u32, _f: i32, _ptr: i32, _l: i32| {
+            move |mut _caller: Caller<'_, Emulator>,
+                  _i: i32,
+                  _addr: u32,
+                  _f: i32,
+                  _ptr: i32,
+                  _l: i32| {
                 panic!("env codegen_finalize call.");
             },
         )
