@@ -11,6 +11,8 @@ mod dev;
 mod emulator;
 mod io;
 mod mem;
+mod setting;
+pub use setting::*;
 pub use consts::*;
 pub use cpu::CPU;
 pub use emulator::Emulator;
@@ -102,7 +104,6 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
             "microtick",
             move |caller: Caller<'_, Emulator>| -> f64 {
                 let emu = caller.data();
-                println!("emu {}", emu.cpu().is_none());
                 emu.time_elapsed()
             },
         )

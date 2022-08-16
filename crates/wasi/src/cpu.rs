@@ -3,9 +3,11 @@
 // https://www-ssl.intel.com/content/www/us/en/processors/architectures-software-developer-manuals.html
 // http://ref.x86asm.net/geek32.html
 
+use std::rc::Weak;
+
 use crate::{
     io::{MemAccess, MemAccessTrait, IO},
-    Emulator, MMAP_BLOCK_SIZE,
+    Emulator, MMAP_BLOCK_SIZE, Setting,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -205,6 +207,7 @@ impl VMOpers {
 
 pub struct CPU {
     memory: Memory,
+    store: Weak<Store<Emulator>>,
     inst: Instance,
     iomap: IOMap,
     vm_opers: VMOpers,
@@ -212,52 +215,78 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new(inst: Instance, store: &mut impl AsContextMut) -> Self {
-        let memory = inst.get_memory(store.as_context_mut(), "memory").unwrap();
+    fn store_mut(&self) -> Option<&'static mut Store<Emulator>> {
+        if self.store.weak_count() == 0 {
+            None
+        } else {
+            Some(unsafe{&mut *(self.store.as_ptr() as *mut Store<Emulator>)})
+        }
+    }
+
+    pub fn new(inst: Instance, store: Weak<Store<Emulator>>) -> Self {
+        let s = unsafe{&mut *(store.as_ptr() as *mut Store<Emulator>)};
+        let memory = inst.get_memory(s.as_context_mut(), "memory").unwrap();
         Self {
             inst,
+            store,
             memory,
-            vm_opers: VMOpers::new(&inst, store),
+            vm_opers: VMOpers::new(&inst, s),
             iomap: IOMap::new(memory),
             io: IO::new(),
         }
     }
 
-    fn read8(&mut self, store: &mut impl AsContextMut, addr: u32) -> i32 {
-        self.vm_opers.read8(store, addr)
+    fn read8(&mut self, addr: u32) -> i32 {
+        self.store_mut().map_or(0, |store| {
+            self.vm_opers.read8(store, addr)
+        })
     }
 
-    fn read16(&mut self, store: &mut impl AsContextMut, addr: u32) -> i32 {
-        self.vm_opers.read16(store, addr)
+    fn read16(&mut self, addr: u32) -> i32 {
+        self.store_mut().map_or(0, |store| {
+            self.vm_opers.read16(store, addr)
+        })
     }
 
-    fn read32s(&mut self, store: &mut impl AsContextMut, addr: u32) -> i32 {
-        self.vm_opers.read32s(store, addr)
+    fn read32s(&mut self, addr: u32) -> i32 {
+        self.store_mut().map_or(0, |store| {
+            self.vm_opers.read32s(store, addr)
+        })
     }
 
-    fn write_slice(&mut self, store: &mut impl AsContextMut, val: &[u8], offset: usize) {
-        self.memory.write(store, offset, val).unwrap();
+    fn write_slice(&mut self, val: &[u8], offset: usize) {
+        self.store_mut().map(|store| {
+            self.memory.write(store, offset, val).unwrap()
+        });
     }
 
-    fn allocate_memory(&mut self, store: &mut impl AsContextMut, addr: u32) -> u32 {
-        self.vm_opers.allocate_memory(store, addr)
+    fn allocate_memory(&mut self, addr: u32) -> u32 {
+        self.store_mut().map_or(0, |store| {
+            self.vm_opers.allocate_memory(store, addr)
+        })
     }
 
-    fn write_mem_size(&mut self, store: &mut impl AsContextMut, size: u32) {
-        self.iomap
-            .memory_size_io
-            .write(store, 0u32, size as _);
+    fn write_mem_size(&mut self, size: u32) {
+        self.store_mut().map(|s| {
+            self.iomap
+                .memory_size_io
+                .write(s, 0u32, size as _);
+        });
     }
 
-    fn read_mem_size(&mut self, store: &mut impl AsContextMut) -> u32 {
-        self.iomap.memory_size_io.read(store, 0u32)
+    fn read_mem_size(&mut self) -> u32 {
+        self.store_mut().map_or(0, |store| {
+            self.iomap.memory_size_io.read(store, 0u32)
+        })
     }
 
-    fn reset_cpu(&mut self, store: &mut impl AsContextMut) {
-        self.vm_opers.reset_cpu(store);
+    fn reset_cpu(&mut self) {
+        self.store_mut().map(|store| {
+            self.vm_opers.reset_cpu(store);
+        });
     }
 
-    pub(crate) fn create_memory(&mut self, store: &mut impl AsContextMut, size: u32) {
+    pub(crate) fn create_memory(&mut self, size: u32) {
         let max_size = (1_u32 << 31_u32) - MMAP_BLOCK_SIZE as u32;
         let size = if size < 1024 * 1024 {
             1024 * 1024
@@ -268,16 +297,23 @@ impl CPU {
         };
 
         assert!((size & MMAP_BLOCK_SIZE as u32 - 1) == 0);
-        let ms = self.read_mem_size(store);
+        let ms = self.read_mem_size();
         assert!(ms == 0, "Expected uninitialised memory");
-        self.write_mem_size(store, size);
-        let offset = self.allocate_memory(store, size);
+        self.write_mem_size(size);
+        let offset = self.allocate_memory(size);
         self.iomap.mem8 = Some(MemAccess::new(offset as _, size, self.memory));
         self.iomap.mem32s = Some(MemAccess::new(offset as _, size >> 2, self.memory));
     }
 
-    pub fn init(&mut self, store: &mut Store<Emulator>) {
-        self.create_memory(store, 1024 * 1024);
-        self.reset_cpu(store);
+    fn load_bios(&mut self, setting: &Setting) {
+        let bios = setting.load_bios_file().expect("Warning: No BIOS");
+        let offset = 0x100000 - bios.len();
+        self.write_slice(&bios, offset);
+    }
+
+    pub fn init(&mut self,  setting: &Setting) {
+        self.create_memory(1024 * 1024 * 64);
+        self.reset_cpu();
+        self.load_bios(setting);
     }
 }
