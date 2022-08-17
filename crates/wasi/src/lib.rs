@@ -104,7 +104,7 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
             "microtick",
             move |caller: Caller<'_, Emulator>| -> f64 {
                 let emu = caller.data();
-                emu.time_elapsed()
+                emu.microtick()
             },
         )
         .unwrap();

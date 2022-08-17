@@ -3,11 +3,11 @@
 // https://www-ssl.intel.com/content/www/us/en/processors/architectures-software-developer-manuals.html
 // http://ref.x86asm.net/geek32.html
 
-use std::rc::Weak;
+use std::{rc::Weak, cell::Cell};
 
 use crate::{
     io::{MemAccess, MemAccessTrait, IO},
-    Emulator, MMAP_BLOCK_SIZE, Setting,
+    Emulator, MMAP_BLOCK_SIZE, Setting, FLAG_INTERRUPT, emulator::InnerEmulator, TIME_PER_FRAME,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -139,7 +139,9 @@ struct VMOpers {
     typed_write16: TypedFunc<(u32, i32), ()>,
     typed_write32: TypedFunc<(u32, i32), ()>,
     typed_reset_cpu: TypedFunc<(), ()>,
+    typed_get_eflags_no_arith: TypedFunc<(), i32>,
     typed_allocate_memory: TypedFunc<u32, u32>,
+    typed_do_many_cycles_native: TypedFunc<(), ()>,
 }
 
 impl VMOpers {
@@ -165,14 +167,22 @@ impl VMOpers {
         let typed_allocate_memory = inst
             .get_typed_func(store.as_context_mut(), "allocate_memory")
             .unwrap();
+        let typed_get_eflags_no_arith = inst
+            .get_typed_func(store.as_context_mut(), "get_eflags_no_arith")
+            .unwrap();
+        let typed_do_many_cycles_native = inst
+            .get_typed_func(store.as_context_mut(), "do_many_cycles_native")
+            .unwrap();
         Self {
             typed_read8,
             typed_read16,
             typed_read32s,
             typed_write16,
-            typed_reset_cpu,
             typed_write32,
+            typed_reset_cpu,
             typed_allocate_memory,
+            typed_get_eflags_no_arith,
+            typed_do_many_cycles_native,
         }
     }
 
@@ -200,6 +210,14 @@ impl VMOpers {
         self.typed_allocate_memory.call(store, size).unwrap()
     }
 
+    fn get_eflags_no_arith(&self, store: impl AsContextMut) -> i32 {
+        self.typed_get_eflags_no_arith.call(store, ()).unwrap()
+    }
+
+    fn do_many_cycles_native(&self, store: impl AsContextMut) {
+        self.typed_do_many_cycles_native.call(store, ()).unwrap();
+    }
+
     fn reset_cpu(&self, store: &mut impl AsContextMut) {
         self.typed_reset_cpu.call(store.as_context_mut(), ()).unwrap()
     }
@@ -208,6 +226,7 @@ impl VMOpers {
 pub struct CPU {
     memory: Memory,
     store: Weak<Store<Emulator>>,
+    emulator: Option<Weak<Cell<InnerEmulator>>>,
     inst: Instance,
     iomap: IOMap,
     vm_opers: VMOpers,
@@ -229,11 +248,16 @@ impl CPU {
         Self {
             inst,
             store,
+            emulator: None,
             memory,
             vm_opers: VMOpers::new(&inst, s),
             iomap: IOMap::new(memory),
             io: IO::new(),
         }
+    }
+
+    pub(crate) fn set_emulator(&mut self, emu: Option<Weak<Cell<InnerEmulator>>>) {
+        self.emulator = emu;
     }
 
     fn read8(&mut self, addr: u32) -> i32 {
@@ -280,6 +304,12 @@ impl CPU {
         });
     }
 
+    fn do_many_cycles_native(&mut self) {
+        self.store_mut().map(|store| {
+            self.vm_opers.do_many_cycles_native(store);
+        });
+    }
+
     fn read_mem_size(&mut self) -> u32 {
         self.store_mut().map_or(0, |store| {
             self.iomap.memory_size_io.read(store, 0u32)
@@ -315,7 +345,9 @@ impl CPU {
         let bios = setting.load_bios_file().expect("Warning: No BIOS");
         let offset = 0x100000 - bios.len();
         self.write_slice(&bios, offset);
+        #[cfg(feature="check_bios")]
         self.check_bios(&bios, offset);
+        
     }
 
     fn check_bios(&mut self, bios: &[u8], off: usize) {
@@ -328,5 +360,86 @@ impl CPU {
         self.create_memory(1024 * 1024 * 64);
         self.reset_cpu();
         self.load_bios(setting);
+    }
+
+    fn in_hlt(&mut self) -> bool {
+        self.store_mut().map_or(false, |store| {
+            self.iomap.in_hlt_io.read(store, 1) > 0
+        })
+    }
+
+    fn handle_irqs(&mut self) {
+        if self.has_interrupt() {
+            //TODO: 
+        }
+    }
+
+    #[inline]
+    fn has_interrupt(&mut self) -> bool {
+        (self.get_eflags_no_arith() & (FLAG_INTERRUPT as i32)) != 0
+    }
+
+    fn emulator_mut(&self) -> Option<&mut InnerEmulator> {
+        self.emulator.as_ref().map(|e| {
+            if e.weak_count() == 0 {
+                None
+            } else {
+                unsafe {
+                    let e = (*e.as_ptr()).as_ptr();
+                    Some(&mut *e)
+                }
+            }
+        }).flatten()
+    }
+
+    fn microtick(&self) -> f64 {
+        self.emulator_mut().map_or(0f64, |e| e.microtick())
+    }
+
+    fn hlt_loop(&mut self) -> i32 {
+        if self.has_interrupt() {
+            let s = self.run_hardware_timers(self.microtick());
+            self.handle_irqs();
+            s
+        } else {
+            100
+        }
+    }
+
+    fn run_hardware_timers(&self, now: f64) -> i32 {
+        //TODO:
+        100
+    }
+
+    fn get_eflags_no_arith(&self) -> i32 {
+        self.store_mut().map_or(0, |store| {
+            self.vm_opers.get_eflags_no_arith(store)
+        })
+    }
+
+    fn do_many_cycles(&mut self) {
+        self.do_many_cycles_native();
+        //TODO:
+    }
+
+    pub fn main_run(&mut self) -> i32 {
+        if self.in_hlt() {
+            let t = self.hlt_loop();
+            if self.in_hlt() {
+                return t;
+            }
+        }
+        let start  = self.microtick();
+        let mut now = start;
+        while now - start < TIME_PER_FRAME as _ {
+            self.do_many_cycles();
+            now = self.microtick();
+            let t = self.run_hardware_timers(now);
+            self.handle_irqs();
+            if self.in_hlt() {
+                return t
+            }
+        }
+        return 0;
     }
 }
