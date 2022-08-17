@@ -260,6 +260,12 @@ impl CPU {
         });
     }
 
+    fn read_slice(&mut self, val: &mut [u8], offset: usize) {
+        self.store_mut().map(|store| {
+            self.memory.read(store, offset, val).unwrap()
+        });
+    }
+
     fn allocate_memory(&mut self, addr: u32) -> u32 {
         self.store_mut().map_or(0, |store| {
             self.vm_opers.allocate_memory(store, addr)
@@ -309,6 +315,13 @@ impl CPU {
         let bios = setting.load_bios_file().expect("Warning: No BIOS");
         let offset = 0x100000 - bios.len();
         self.write_slice(&bios, offset);
+        self.check_bios(&bios, offset);
+    }
+
+    fn check_bios(&mut self, bios: &[u8], off: usize) {
+        let mut in_m = vec![0; bios.len()];
+        self.read_slice(&mut in_m, off);
+        assert!(in_m == bios);
     }
 
     pub fn init(&mut self,  setting: &Setting) {
