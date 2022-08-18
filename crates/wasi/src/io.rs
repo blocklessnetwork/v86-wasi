@@ -83,14 +83,17 @@ pub struct IO {
 
 impl IO {
     fn empty_read8(_: &Dev, _: u32) -> u8 {
+        debug!("empty_read8");
         0xFF
     }
 
     fn empty_read16(_: &Dev, _: u32) -> u16 {
+        debug!("empty_read16");
         0xFFFF
     }
 
     fn empty_read32(_: &Dev, _: u32) -> u32 {
+        debug!("empty_read32");
         0xFFFF_FFFF
     }
 
