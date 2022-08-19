@@ -6,7 +6,17 @@ use crate::Dev;
 
 pub(crate) trait MemAccessTrait<T> {
     fn read(&self, store: impl AsContext, idx: u32) -> T;
+    fn offset(&self) -> usize;
+    fn memory(&mut self) -> &mut Memory;
     fn write(&mut self, store: impl AsContextMut, idx: u32, v: T);
+    fn write_slice(&mut self, store: impl AsContextMut, off: usize, bs: &[u8]) {
+        let offset = self.offset();
+        self.memory().write(store, offset + off, bs).unwrap();
+    }
+    fn read_slice(&mut self, store: impl AsContextMut, off: usize, bs: &mut [u8]) {
+        let offset = self.offset();
+        self.memory().read(store, offset + off, bs).unwrap();
+    }
 }
 
 pub struct MemAccess<T> {
@@ -17,6 +27,9 @@ pub struct MemAccess<T> {
 }
 
 impl<T> MemAccess<T> {
+    
+    
+
     pub fn new(offset: usize, len: u32, mem: Memory) -> Self {
         Self {
             offset,
@@ -30,6 +43,17 @@ impl<T> MemAccess<T> {
 macro_rules! impl_mem_access {
     ($t:ty, $s:literal) => {
         impl MemAccessTrait<$t> for MemAccess<$t> {
+
+            #[inline(always)]
+            fn offset(&self) -> usize {
+                self.offset
+            }
+
+            #[inline(always)]
+            fn memory(&mut self) -> &mut Memory {
+                &mut self.mem
+            }
+
             fn read(&self, store: impl AsContext, idx: u32) -> $t {
                 let mut d = [0u8; $s];
                 self.mem

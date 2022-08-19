@@ -1970,7 +1970,6 @@ pub fn rebuild_all_pages(ctx: &mut JitState) {
 /// Register a write in this page: Delete all present code
 pub fn jit_dirty_page(ctx: &mut JitState, page: Page) {
     let mut did_have_code = false;
-
     if ctx.all_pages.contains(&page) {
         profiler::stat_increment(stat::INVALIDATE_PAGE_HAD_CODE);
         did_have_code = true;
@@ -1980,7 +1979,6 @@ pub fn jit_dirty_page(ctx: &mut JitState, page: Page) {
             Some((wasm_table_index, _)) => Some(*wasm_table_index),
             None => None,
         };
-
         for (&wasm_table_index, pages) in &ctx.used_wasm_table_indices {
             if Some(wasm_table_index) != compiling && pages.contains(&page) {
                 index_to_free.insert(wasm_table_index);
@@ -2027,24 +2025,23 @@ pub fn jit_dirty_page(ctx: &mut JitState, page: Page) {
             free_wasm_table_index(ctx, index)
         }
     }
+    if ctx.entry_points.contains_key(&page) {
+        match ctx.entry_points.remove(&page) {
+            None => {}
+            Some(_entry_points) => {
+                profiler::stat_increment(stat::INVALIDATE_PAGE_HAD_ENTRY_POINTS);
+                did_have_code = true;
 
-    match ctx.entry_points.remove(&page) {
-        None => {}
-        Some(_entry_points) => {
-            profiler::stat_increment(stat::INVALIDATE_PAGE_HAD_ENTRY_POINTS);
-            did_have_code = true;
-
-            // don't try to compile code in this page anymore until it's hot again
-            ctx.hot_pages[jit_hot_hash_page(page) as usize] = 0;
+                // don't try to compile code in this page anymore until it's hot again
+                ctx.hot_pages[jit_hot_hash_page(page) as usize] = 0;
+            }
         }
     }
 
     for pages in ctx.used_wasm_table_indices.values() {
         dbg_assert!(!pages.contains(&page));
     }
-
     check_jit_state_invariants(ctx);
-
     dbg_assert!(!ctx.all_pages.contains(&page));
     dbg_assert!(!jit_page_has_code_ctx(ctx, page));
 

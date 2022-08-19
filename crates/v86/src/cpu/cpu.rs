@@ -2994,11 +2994,10 @@ pub unsafe fn cycle_internal() {
         };
     } else {
         *previous_ip = *instruction_pointer;
-        dbg_log!("execute.. {}", *instruction_pointer);
         let opcode = return_on_pagefault!(read_imm8());
+        // dbg_log!("ip {:x} opcode {:x}", *instruction_pointer, opcode);
         *instruction_counter += 1;
         dbg_assert!(*prefixes == 0);
-        dbg_log!("execute.. {}", opcode | (*is_32 as i32) << 8);
         run_instruction(opcode | (*is_32 as i32) << 8);
         dbg_assert!(*prefixes == 0);
     }
@@ -3113,7 +3112,6 @@ pub unsafe fn do_many_cycles_native() {
     while (*instruction_counter).wrapping_sub(initial_instruction_counter) < LOOP_COUNTER as u32
         && !*in_hlt
     {
-        dbg_log!("{} {}",(*instruction_counter).wrapping_sub(initial_instruction_counter), *in_hlt);
         cycle_internal();
     }
 }

@@ -62,6 +62,11 @@ struct IOMap {
 }
 
 impl IOMap {
+
+    fn mem8_write_slice(&mut self, store: impl AsContextMut, offset: usize, bs: &[u8]) {
+        self.mem8.as_mut().map(|mem8| mem8.write_slice(store, offset, bs));
+    }
+
     fn new(memory: Memory) -> Self {
         let memory_size_io = MemAccess::new(812, 1, memory);
         let segment_is_null_io = MemAccess::new(724, 8, memory);
@@ -142,6 +147,7 @@ struct VMOpers {
     typed_get_eflags_no_arith: TypedFunc<(), i32>,
     typed_allocate_memory: TypedFunc<u32, u32>,
     typed_do_many_cycles_native: TypedFunc<(), ()>,
+    typed_set_tsc: TypedFunc<(u32, u32), ()>,
 }
 
 impl VMOpers {
@@ -173,9 +179,13 @@ impl VMOpers {
         let typed_do_many_cycles_native = inst
             .get_typed_func(store.as_context_mut(), "do_many_cycles_native")
             .unwrap();
+        let typed_set_tsc = inst
+            .get_typed_func(store.as_context_mut(), "set_tsc")
+            .unwrap();
         Self {
             typed_read8,
             typed_read16,
+            typed_set_tsc,
             typed_read32s,
             typed_write16,
             typed_write32,
@@ -220,6 +230,10 @@ impl VMOpers {
 
     fn reset_cpu(&self, store: &mut impl AsContextMut) {
         self.typed_reset_cpu.call(store.as_context_mut(), ()).unwrap()
+    }
+
+    fn set_tsc(&self, store: &mut impl AsContextMut,low: u32, hig: u32) {
+        self.typed_set_tsc.call(store.as_context_mut(), (low, hig)).unwrap()
     }
 }
 
@@ -278,12 +292,6 @@ impl CPU {
         })
     }
 
-    fn write_slice(&mut self, val: &[u8], offset: usize) {
-        self.store_mut().map(|store| {
-            self.memory.write(store, offset, val).unwrap()
-        });
-    }
-
     fn read_slice(&mut self, val: &mut [u8], offset: usize) {
         self.store_mut().map(|store| {
             self.memory.read(store, offset, val).unwrap()
@@ -322,6 +330,12 @@ impl CPU {
         });
     }
 
+    fn set_tsc(&mut self,low: u32, hig: u32) {
+        self.store_mut().map(|store| {
+            self.vm_opers.set_tsc(store, low, hig);
+        });
+    }
+
     pub(crate) fn create_memory(&mut self, size: u32) {
         let max_size = (1_u32 << 31_u32) - MMAP_BLOCK_SIZE as u32;
         let size = if size < 1024 * 1024 {
@@ -344,7 +358,15 @@ impl CPU {
     fn load_bios(&mut self, setting: &Setting) {
         let bios = setting.load_bios_file().expect("Warning: No BIOS");
         let offset = 0x100000 - bios.len();
-        self.write_slice(&bios, offset);
+        debug!("load bois to: {}", offset);
+        self.store_mut().map(|store| {
+            self.iomap.mem8_write_slice(store, offset, &bios);
+        });
+        self.store_mut().map(|store| {
+            self.iomap.mem8.as_ref().map(|m| {
+                println!("{}", m.read(store, 0xFFFF0));
+            });
+        });
         #[cfg(feature="check_bios")]
         self.check_bios(&bios, offset);
         
@@ -357,6 +379,7 @@ impl CPU {
     }
 
     pub fn init(&mut self,  setting: &Setting) {
+        self.set_tsc(0, 0);
         self.create_memory(1024 * 1024 * 64);
         self.reset_cpu();
         self.load_bios(setting);
