@@ -2995,7 +2995,6 @@ pub unsafe fn cycle_internal() {
     } else {
         *previous_ip = *instruction_pointer;
         let opcode = return_on_pagefault!(read_imm8());
-        // dbg_log!("ip {:x} opcode {:x}", *instruction_pointer, opcode);
         *instruction_counter += 1;
         dbg_assert!(*prefixes == 0);
         run_instruction(opcode | (*is_32 as i32) << 8);

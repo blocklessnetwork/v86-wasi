@@ -2025,16 +2025,14 @@ pub fn jit_dirty_page(ctx: &mut JitState, page: Page) {
             free_wasm_table_index(ctx, index)
         }
     }
-    if ctx.entry_points.contains_key(&page) {
-        match ctx.entry_points.remove(&page) {
-            None => {}
-            Some(_entry_points) => {
-                profiler::stat_increment(stat::INVALIDATE_PAGE_HAD_ENTRY_POINTS);
-                did_have_code = true;
+    match ctx.entry_points.remove(&page) {
+        None => {}
+        Some(_entry_points) => {
+            profiler::stat_increment(stat::INVALIDATE_PAGE_HAD_ENTRY_POINTS);
+            did_have_code = true;
 
-                // don't try to compile code in this page anymore until it's hot again
-                ctx.hot_pages[jit_hot_hash_page(page) as usize] = 0;
-            }
+            // don't try to compile code in this page anymore until it's hot again
+            ctx.hot_pages[jit_hot_hash_page(page) as usize] = 0;
         }
     }
 
