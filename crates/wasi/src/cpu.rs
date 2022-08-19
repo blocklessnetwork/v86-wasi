@@ -362,11 +362,6 @@ impl CPU {
         self.store_mut().map(|store| {
             self.iomap.mem8_write_slice(store, offset, &bios);
         });
-        self.store_mut().map(|store| {
-            self.iomap.mem8.as_ref().map(|m| {
-                println!("{}", m.read(store, 0xFFFF0));
-            });
-        });
         #[cfg(feature="check_bios")]
         self.check_bios(&bios, offset);
         
