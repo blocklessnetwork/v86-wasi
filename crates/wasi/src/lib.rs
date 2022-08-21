@@ -11,6 +11,7 @@ mod dev;
 mod emulator;
 mod io;
 mod mem;
+mod rtc;
 mod setting;
 pub use setting::*;
 pub use consts::*;
@@ -133,8 +134,11 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "io_port_read8",
-            move |mut _caller: Caller<'_, Emulator>, _off: i32| -> i32 {
-                panic!("env io_port_read8 call.");
+            move |mut caller: Caller<'_, Emulator>, port: i32| -> i32 {
+                let emu = caller.data_mut();
+                emu.cpu_mut().map_or(0, |cpu| {
+                    cpu.io.io_port_read8(port as _) as _
+                })
             },
         )
         .unwrap();
@@ -143,8 +147,11 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "io_port_read16",
-            move |mut _caller: Caller<'_, Emulator>, _off: i32| -> i32 {
-                panic!("env io_port_read16 call.");
+            move |mut caller: Caller<'_, Emulator>, port: i32| -> i32 {
+                let emu = caller.data_mut();
+                emu.cpu_mut().map_or(0, |cpu| {
+                    cpu.io.io_port_read16(port as _) as _
+                })
             },
         )
         .unwrap();
@@ -153,8 +160,11 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "io_port_read32",
-            move |mut _caller: Caller<'_, Emulator>, _off: i32| -> i32 {
-                panic!("env io_port_read32 call.");
+            move |mut caller: Caller<'_, Emulator>, port: i32| -> i32 {
+                let emu = caller.data_mut();
+                emu.cpu_mut().map_or(0, |cpu| {
+                    cpu.io.io_port_read32(port as _) as _
+                })
             },
         )
         .unwrap();
@@ -163,8 +173,11 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "io_port_write8",
-            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v: i32| {
-                panic!("env io_port_write8 call.");
+            move |mut caller: Caller<'_, Emulator>, port: i32, data: i32| {
+                let emu = caller.data_mut();
+                emu.cpu_mut().map(|cpu| {
+                    cpu.io.io_port_write8(port as _, data as _);
+                });
             },
         )
         .unwrap();

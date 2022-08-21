@@ -58,9 +58,6 @@ impl Emulator {
 
     pub fn start(&mut self, inst: Instance, store: Weak<Store<Emulator>>) {
         self.inner_mut().init(inst, store);
-        self.cpu_mut().map(|c| {
-            c.set_emulator(Some(Rc::downgrade(&self.inner)));
-        });
         self.inner_mut().start();
     }
 

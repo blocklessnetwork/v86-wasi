@@ -1,4 +1,4 @@
-macro_rules! debug {
+macro_rules! dbg_log {
     ($fmt:expr, $($arg:tt)*) => {
         println!($fmt, $($arg)*);
     };

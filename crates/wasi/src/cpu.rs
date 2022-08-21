@@ -7,7 +7,7 @@ use std::{rc::Weak, cell::Cell};
 
 use crate::{
     io::{MemAccess, MemAccessTrait, IO},
-    Emulator, MMAP_BLOCK_SIZE, Setting, FLAG_INTERRUPT, emulator::InnerEmulator, TIME_PER_FRAME,
+    Emulator, MMAP_BLOCK_SIZE, Setting, FLAG_INTERRUPT, emulator::InnerEmulator, TIME_PER_FRAME, Dev,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -240,11 +240,10 @@ impl VMOpers {
 pub struct CPU {
     memory: Memory,
     store: Weak<Store<Emulator>>,
-    emulator: Option<Weak<Cell<InnerEmulator>>>,
     inst: Instance,
     iomap: IOMap,
     vm_opers: VMOpers,
-    io: IO,
+    pub io: IO,
 }
 
 impl CPU {
@@ -262,16 +261,11 @@ impl CPU {
         Self {
             inst,
             store,
-            emulator: None,
             memory,
             vm_opers: VMOpers::new(&inst, s),
             iomap: IOMap::new(memory),
             io: IO::new(),
         }
-    }
-
-    pub(crate) fn set_emulator(&mut self, emu: Option<Weak<Cell<InnerEmulator>>>) {
-        self.emulator = emu;
     }
 
     fn read8(&mut self, addr: u32) -> i32 {
@@ -358,7 +352,7 @@ impl CPU {
     fn load_bios(&mut self, setting: &Setting) {
         let bios = setting.load_bios_file().expect("Warning: No BIOS");
         let offset = 0x100000 - bios.len();
-        debug!("load bois to: {}", offset);
+        dbg_log!("load bois to: {}", offset);
         self.store_mut().map(|store| {
             self.iomap.mem8_write_slice(store, offset, &bios);
         });
@@ -378,6 +372,20 @@ impl CPU {
         self.create_memory(1024 * 1024 * 64);
         self.reset_cpu();
         self.load_bios(setting);
+
+        self.io.register_read8(0xB3, Dev::Empty, |_: &Dev, _: u32| -> u8 {
+            dbg_log!("port 0xB3 read");
+            0
+        });
+        self.io.register_read8(0x92, Dev::Empty, |_: &Dev, _: u32| -> u8 {
+            dbg_log!("port 0x92 read");
+            0
+        });
+        self.io.register_write8(0x92, Dev::Empty, |_: &Dev, _: u32, v: u8| {
+            dbg_log!("port 0x92 write {}", v);
+        });
+        //TODO: IO 0x511
+
     }
 
     fn in_hlt(&mut self) -> bool {
@@ -397,17 +405,10 @@ impl CPU {
         (self.get_eflags_no_arith() & (FLAG_INTERRUPT as i32)) != 0
     }
 
-    fn emulator_mut(&self) -> Option<&mut InnerEmulator> {
-        self.emulator.as_ref().map(|e| {
-            if e.weak_count() == 0 {
-                None
-            } else {
-                unsafe {
-                    let e = (*e.as_ptr()).as_ptr();
-                    Some(&mut *e)
-                }
-            }
-        }).flatten()
+    fn emulator_mut(&self) -> Option<&mut Emulator> {
+        self.store_mut().map(|store| {
+            store.data_mut()
+        })
     }
 
     fn microtick(&self) -> f64 {
