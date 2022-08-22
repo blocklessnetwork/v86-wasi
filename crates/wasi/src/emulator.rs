@@ -2,7 +2,7 @@ use std::{cell::Cell, rc::{Rc, Weak}, time};
 
 use wasmtime::{Instance, Store};
 
-use crate::{CPU, Setting};
+use crate::{CPU, Setting, rtc::RTC};
 
 pub(crate) struct InnerEmulator {
     start_time: time::Instant,
@@ -17,10 +17,6 @@ impl InnerEmulator {
             setting,
             cpu: None,
         }
-    }
-
-    fn cpu(&mut self) -> Option<&mut CPU> {
-        self.cpu.as_mut()
     }
 
     fn init(&mut self, inst: Instance, store: Weak<Store<Emulator>>) {
@@ -67,6 +63,10 @@ impl Emulator {
 
     pub fn cpu_mut(&self) -> Option<&mut CPU> {
         self.inner_mut().cpu.as_mut()
+    }
+
+    pub(crate) fn rtc_mut(&self) -> Option<&mut RTC> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.rtc)
     }
 
     fn inner(&self) -> &InnerEmulator {

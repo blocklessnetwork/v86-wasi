@@ -3,11 +3,12 @@
 // https://www-ssl.intel.com/content/www/us/en/processors/architectures-software-developer-manuals.html
 // http://ref.x86asm.net/geek32.html
 
-use std::{rc::Weak, cell::Cell};
+use std::{rc::Weak, cell::Cell, cmp::min_by};
 
 use crate::{
     io::{MemAccess, MemAccessTrait, IO},
-    Emulator, MMAP_BLOCK_SIZE, Setting, FLAG_INTERRUPT, emulator::InnerEmulator, TIME_PER_FRAME, Dev,
+    consts::*,
+    Emulator, MMAP_BLOCK_SIZE, Setting, FLAG_INTERRUPT, emulator::InnerEmulator, TIME_PER_FRAME, Dev, rtc::RTC,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -242,11 +243,14 @@ pub struct CPU {
     store: Weak<Store<Emulator>>,
     inst: Instance,
     iomap: IOMap,
+    pub(crate) rtc: RTC,
     vm_opers: VMOpers,
     pub io: IO,
 }
 
 impl CPU {
+
+    #[inline(always)]
     fn store_mut(&self) -> Option<&'static mut Store<Emulator>> {
         if self.store.weak_count() == 0 {
             None
@@ -258,22 +262,26 @@ impl CPU {
     pub fn new(inst: Instance, store: Weak<Store<Emulator>>) -> Self {
         let s = unsafe{&mut *(store.as_ptr() as *mut Store<Emulator>)};
         let memory = inst.get_memory(s.as_context_mut(), "memory").unwrap();
+        let rtc = RTC::new(store.clone());
         Self {
             inst,
             store,
             memory,
+            rtc,
             vm_opers: VMOpers::new(&inst, s),
             iomap: IOMap::new(memory),
             io: IO::new(),
         }
     }
 
+    #[inline(always)]
     fn read8(&mut self, addr: u32) -> i32 {
         self.store_mut().map_or(0, |store| {
             self.vm_opers.read8(store, addr)
         })
     }
 
+    #[inline(always)]
     fn read16(&mut self, addr: u32) -> i32 {
         self.store_mut().map_or(0, |store| {
             self.vm_opers.read16(store, addr)
@@ -292,12 +300,14 @@ impl CPU {
         });
     }
 
+    #[inline(always)]
     fn allocate_memory(&mut self, addr: u32) -> u32 {
         self.store_mut().map_or(0, |store| {
             self.vm_opers.allocate_memory(store, addr)
         })
     }
 
+    #[inline(always)]
     fn write_mem_size(&mut self, size: u32) {
         self.store_mut().map(|s| {
             self.iomap
@@ -312,6 +322,7 @@ impl CPU {
         });
     }
 
+    #[inline(always)]
     fn read_mem_size(&mut self) -> u32 {
         self.store_mut().map_or(0, |store| {
             self.iomap.memory_size_io.read(store, 0u32)
@@ -386,6 +397,10 @@ impl CPU {
         });
         //TODO: IO 0x511
 
+        self.rtc.init();
+
+        //TODO device loading
+        self.fill_cmos();
     }
 
     fn in_hlt(&mut self) -> bool {
@@ -400,17 +415,19 @@ impl CPU {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn has_interrupt(&mut self) -> bool {
         (self.get_eflags_no_arith() & (FLAG_INTERRUPT as i32)) != 0
     }
 
+    #[inline(always)]
     fn emulator_mut(&self) -> Option<&mut Emulator> {
         self.store_mut().map(|store| {
             store.data_mut()
         })
     }
 
+    #[inline(always)]
     fn microtick(&self) -> f64 {
         self.emulator_mut().map_or(0f64, |e| e.microtick())
     }
@@ -460,5 +477,58 @@ impl CPU {
             }
         }
         return 0;
+    }
+
+    pub(crate)fn fill_cmos(&mut self) {
+        let boot_order: u32 = 0x213;
+        // Used by seabios to determine the boot order
+        //   Nibble
+        //   1: FloppyPrio
+        //   2: HDPrio
+        //   3: CDPrio
+        //   4: BEVPrio
+        // bootflag 1, high nibble, lowest priority
+        // Low nibble: Disable floppy signature check (1)
+        self.rtc.cmos_write(CMOS_BIOS_BOOTFLAG1 , 1 | ((boot_order >> 4) & 0xF0) as u8);
+
+        // bootflag 2, both nibbles, high and middle priority
+        self.rtc.cmos_write(CMOS_BIOS_BOOTFLAG2, (boot_order & 0xFF) as u8);
+
+        self.rtc.cmos_write(CMOS_MEM_BASE_LOW, (640 & 0xFF) as u8);
+        self.rtc.cmos_write(CMOS_MEM_BASE_HIGH, (640 >> 8) as u8);
+        let mut memory_above_1m = 0; // in k
+        
+        
+        let memory_size = self.read_mem_size();
+        if memory_size >= 1024 * 1024 {
+            memory_above_1m = (memory_size - 1024 * 1024) >> 10;
+            memory_above_1m = memory_above_1m.min(0xFFFF);
+        }
+        self.rtc.cmos_write(CMOS_MEM_OLD_EXT_LOW, (memory_above_1m & 0xFF) as u8);
+        self.rtc.cmos_write(CMOS_MEM_OLD_EXT_HIGH, (memory_above_1m >> 8 & 0xFF) as u8);
+        self.rtc.cmos_write(CMOS_MEM_EXTMEM_LOW, (memory_above_1m & 0xFF) as u8);
+        self.rtc.cmos_write(CMOS_MEM_EXTMEM_HIGH, (memory_above_1m >> 8 & 0xFF) as u8);
+        let mut memory_above_16m = 0; // in 64k blocks
+        let memory_size = self.read_mem_size();
+        if memory_size >= 16 * 1024 * 1024 {
+            memory_above_16m = (memory_size - 16 * 1024 * 1024) >> 16;
+            memory_above_16m = memory_above_16m.min(0xFFFF);
+        }
+        self.rtc.cmos_write(CMOS_MEM_EXTMEM2_LOW, (memory_above_16m & 0xFF) as u8);
+        self.rtc.cmos_write(CMOS_MEM_EXTMEM2_HIGH, (memory_above_16m >> 8 & 0xFF) as u8);
+
+        // memory above 4G (not supported by this emulator)
+        self.rtc.cmos_write(CMOS_MEM_HIGHMEM_LOW, 0);
+        self.rtc.cmos_write(CMOS_MEM_HIGHMEM_MID, 0);
+        self.rtc.cmos_write(CMOS_MEM_HIGHMEM_HIGH, 0);
+
+        self.rtc.cmos_write(CMOS_EQUIPMENT_INFO, 0x2F);
+
+        self.rtc.cmos_write(CMOS_BIOS_SMP_COUNT, 0);
+
+        //TODO: fast boot
+        if false {
+            self.rtc.cmos_write(0x3f, 0x01);
+        } 
     }
 }

@@ -1,26 +1,9 @@
-use std::{rc::Rc, cell::Cell};
+use std::{rc::{Rc, Weak}, cell::Cell};
 
 use chrono::{Utc, TimeZone, Datelike, Timelike};
+use wasmtime::Store;
 
-use crate::{CPU, Dev};
-
-const CMOS_RTC_SECONDS: u8 = 0x00;
-const CMOS_RTC_SECONDS_ALARM: u8 = 0x01;
-const CMOS_RTC_MINUTES: u8 = 0x2;
-const CMOS_RTC_MINUTES_ALARM: u8 = 0x03;
-const CMOS_RTC_HOURS: u8 = 0x4;
-const CMOS_RTC_HOURS_ALARM: u8 = 0x05;
-const CMOS_RTC_DAY_WEEK: u8 = 0x06;
-const CMOS_RTC_DAY_MONTH: u8 = 0x07;
-const CMOS_RTC_MONTH: u8 = 0x08;
-const CMOS_RTC_YEAR: u8 = 0x09;
-
-const CMOS_STATUS_A: u8 = 0x0a;
-const CMOS_STATUS_B: u8 = 0x0b;
-const CMOS_STATUS_C: u8 = 0x0c;
-const CMOS_STATUS_D: u8 = 0x0d;
-const CMOS_CENTURY: u8 = 0x32;
-const CMOS_RESET_CODE: u8 = 0xff;
+use crate::{CPU, Dev, Emulator, EmulatorTrait, consts::*};
 
 
 pub(crate) struct RTC {
@@ -30,6 +13,7 @@ pub(crate) struct RTC {
     last_update: i64,
     next_interrupt: i64,
     next_interrupt_alarm: usize,
+    store: Weak<Store<Emulator>>,
     periodic_interrupt: bool,
     periodic_interrupt_time: f64,
     nmi_disabled: u8,
@@ -39,9 +23,16 @@ pub(crate) struct RTC {
 }
 
 impl RTC {
-    pub fn new() -> Self {
+
+    #[inline]
+    fn cpu_mut(&mut self) -> Option<&mut CPU> {
+        self.store.cpu_mut()
+    }
+
+    pub fn new(store: Weak<Store<Emulator>>) -> Self {
         let now = Utc::now().timestamp_millis();
         Self { 
+            store,
             cmos_index: 0, 
             cmos_data: vec![0;128], 
             rtc_time: now, 
@@ -56,21 +47,22 @@ impl RTC {
         }
     }
 
-    pub fn init(this: &Rc<Cell<RTC>>, cpu: &mut CPU) {
-        let weak = Rc::downgrade(&this);
-        cpu.io.register_write8(0x70, crate::Dev::RTC(weak), |dev: &Dev, _: u32, v: u8| {
-            dev.rtc_mut().map(|rtc| {
-                rtc.cmos_index = v&0x7f; 
-                rtc.nmi_disabled = v >> 7;
+    pub fn init(&mut self) {
+        let weak_store = self.store.clone();
+        self.cpu_mut().map(|cpu| {
+            cpu.io.register_write8(0x70, crate::Dev::RTC(weak_store.clone()), |dev: &Dev, _: u32, v: u8| {
+                dev.rtc_mut().map(|rtc| {
+                    rtc.cmos_index = v&0x7f; 
+                    rtc.nmi_disabled = v >> 7;
+                });
             });
+    
+            cpu.io.register_write8(0x71, crate::Dev::RTC(weak_store.clone()), Self::cmos_port_write8);
+            cpu.io.register_read8(0x71, crate::Dev::RTC(weak_store.clone()), Self::cmos_port_read8);
         });
-
-        cpu.io.register_write8(0x71, crate::Dev::RTC(weak), Self::cmos_port_write8);
-        cpu.io.register_read8(0x71, crate::Dev::RTC(weak), Self::cmos_port_read8);
-
     }
 
-    fn decode_time(&self, v: u8) -> u8 {
+    fn decode_time(&self, v: u32) -> u32 {
         if self.cmos_b & 4 != 0 {
             v
         } else {
@@ -78,7 +70,7 @@ impl RTC {
         }
     }
 
-    fn bcd_unpack(n: u8) -> u8 {
+    fn bcd_unpack(n: u32) -> u32 {
         let low = n & 0xF;
         let high = n >> 4 & 0xF;
 
@@ -110,10 +102,10 @@ impl RTC {
     }
     
 
-    fn cmos_write(self: &mut RTC, index: usize, v: u8) {
+    pub(crate) fn cmos_write(self: &mut RTC, index: u8, v: u8) {
         dbg_log!("cmos 0x{:02x} <- 0x{:02x}", index, v);
         assert!(index < 128);
-        self.cmos_data[index] =  v;
+        self.cmos_data[index as usize] =  v;
     }
 
     fn cmos_port_read8(dev: &Dev, port: u32) -> u8 {
@@ -142,7 +134,7 @@ impl RTC {
                 }
                 CMOS_RTC_YEAR => {
                     let rtc_time = rtc.rtc_time;
-                    rtc.encode_time(Utc.timestamp_millis(rtc_time).year() % 100 as _)
+                    rtc.encode_time((Utc.timestamp_millis(rtc_time).year() % 100) as u8)
                 }
                 CMOS_STATUS_A => rtc.cmos_a,
                 CMOS_STATUS_B => rtc.cmos_b,
@@ -157,14 +149,14 @@ impl RTC {
                 CMOS_STATUS_D => 0xFF,
                 CMOS_CENTURY => {
                     let rtc_time = rtc.rtc_time;
-                    rtc.encode_time(Utc.timestamp_millis(rtc_time).year() % 100 as _|0)
+                    rtc.encode_time((Utc.timestamp_millis(rtc_time).year() % 100) as u8|0u8)
                 }
                 _ => {
                     dbg_log!("cmos read from index 0x{:02x}", index);
-                    rtc.cmos_data[rtc.cmos_index as _]
+                    rtc.cmos_data[rtc.cmos_index as usize]
                 }
             }
-        }
+        })
     }
 
     fn cmos_port_write8(dev: &Dev, _port: u32, v: u8) {
@@ -183,12 +175,12 @@ impl RTC {
                     }
                     if rtc.cmos_b & 0x20 != 0 {
                         let now = Utc::now();
-                        let secs = rtc.cmos_data[CMOS_RTC_SECONDS_ALARM as _];
-                        let minus = rtc.cmos_data[CMOS_RTC_MINUTES_ALARM as _];
-                        let hours = rtc.cmos_data[CMOS_RTC_HOURS_ALARM as _];
-                        let secs: u32 = rtc.decode_time(secs) as _;
-                        let minus: u32 = rtc.decode_time(minus) as _;
-                        let hours: u32 = rtc.decode_time(hours) as _;
+                        let secs = rtc.cmos_data[CMOS_RTC_SECONDS_ALARM as usize];
+                        let minus = rtc.cmos_data[CMOS_RTC_MINUTES_ALARM as usize];
+                        let hours = rtc.cmos_data[CMOS_RTC_HOURS_ALARM as usize];
+                        let secs: u32 = rtc.decode_time(secs as _);
+                        let minus: u32 = rtc.decode_time(minus as _);
+                        let hours: u32 = rtc.decode_time(hours as _);
                         let alarm_date = Utc.ymd(now.year(), now.month(), now.day()).and_hms(hours, minus, secs);
                         let ms_from_now = alarm_date.timestamp_millis() - now.timestamp_millis();
                         dbg_log!("RTC alarm scheduled for {} hh:mm:ss={}:{}:{} ms_from_now={}",

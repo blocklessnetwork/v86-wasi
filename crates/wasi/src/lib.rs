@@ -2,10 +2,12 @@
 mod log;
 
 use core::slice;
+use std::rc::Weak;
 
 use mem::add_mem_to_linker;
+use rtc::RTC;
 use wasmtime::*;
-mod consts;
+pub(crate)mod consts;
 mod cpu;
 mod dev;
 mod emulator;
@@ -19,6 +21,34 @@ pub use cpu::CPU;
 pub use emulator::Emulator;
 
 pub use dev::Dev;
+
+trait EmulatorTrait {
+
+    fn cpu_mut(&self) -> Option<&mut CPU>;
+    fn rtc_mut(&self) -> Option<&mut RTC>;
+    
+    fn emulator(&self) -> &mut Emulator;
+}
+
+impl EmulatorTrait for Weak<Store<Emulator>> {
+
+    #[inline]
+    fn cpu_mut(&self) -> Option<&mut CPU> {
+        let emu = self.emulator();
+        emu.cpu_mut()
+    }
+
+    #[inline]
+    fn emulator(&self) -> &mut Emulator {
+        unsafe {(*(self.as_ptr() as *mut Store<_>)).data_mut()}
+    }
+
+    #[inline]
+    fn rtc_mut(&self) -> Option<&mut RTC> {
+        let emu = self.emulator();
+        emu.cpu_mut().map(|cpu| &mut cpu.rtc)
+    }
+}
 
 pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
     linker

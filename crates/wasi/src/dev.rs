@@ -1,23 +1,29 @@
-use std::{cell::Cell, rc::Weak};
+use std::{rc::Weak};
 
-use crate::rtc::RTC;
+use wasmtime::Store;
+
+use crate::{rtc::RTC, Emulator, EmulatorTrait, CPU};
 
 pub enum Dev {
     Empty,
-    Cpu(),
-    RTC(Weak<Cell<RTC>>),
+    CPU(Weak<Store<Emulator>>),
+    RTC(Weak<Store<Emulator>>),
 }
 
 impl Dev {
-    pub fn rtc_mut(self: &Dev) -> Option<&mut RTC> {
+    pub(crate) fn rtc_mut(self: &Dev) -> Option<&mut RTC> {
         match *self {
-            Dev::RTC(ref rtc) => {
-                if rtc.weak_count() == 0 {
-                    None
-                } else {
-                    let cell = rtc.as_ptr();
-                    unsafe {Some(&mut (*(*cell).as_ptr()))}
-                }
+            Dev::RTC(ref e) => {
+                e.rtc_mut()
+            },
+            _ => None,
+        }
+    }
+
+    pub(crate) fn cpu_mut(self: &Dev) -> Option<&mut CPU> {
+        match *self {
+            Dev::CPU(ref e) => {
+                e.cpu_mut()
             },
             _ => None,
         }
