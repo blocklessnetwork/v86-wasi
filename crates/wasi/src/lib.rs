@@ -4,7 +4,8 @@ mod log;
 use core::slice;
 use std::rc::Weak;
 
-const ALL_DEBUG: bool = false;
+const ALL_DEBUG: bool = true;
+const LOG_ALL_IO: bool = false;
 
 use mem::add_mem_to_linker;
 use rtc::RTC;

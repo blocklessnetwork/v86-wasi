@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use std::{collections::HashMap, marker::PhantomData, ops::Add, rc::Weak};
 use wasmtime::{AsContext, AsContextMut, Memory, Store};
 
-use crate::{Dev, ALL_DEBUG, Emulator, EmulatorTrait, MMAP_BLOCK_SIZE, MMAP_BLOCK_BITS};
+use crate::{Dev, Emulator, EmulatorTrait, MMAP_BLOCK_SIZE, MMAP_BLOCK_BITS, LOG_ALL_IO};
 
 pub(crate) trait MemAccessTrait<T> {
     fn read(&self, store: impl AsContext, idx: u32) -> T;
@@ -209,7 +209,7 @@ impl IO {
 
     pub fn io_port_read8(&self, port: u32) -> u8 {
         let iops = &self.ports[port as usize];
-        if iops.read8 as *const () == Self::empty_read8 as *const () || ALL_DEBUG {
+        if iops.read8 as *const () == Self::empty_read8 as *const () || LOG_ALL_IO {
             dbg_log!(
                 "read8 port  #{:02x} {}",
                 port,
@@ -222,7 +222,7 @@ impl IO {
 
     pub fn io_port_read16(&self, port: u32) -> u16 {
         let iops = &self.ports[port as usize];
-        if iops.read16 as *const () == Self::empty_read16 as *const () || ALL_DEBUG {
+        if iops.read16 as *const () == Self::empty_read16 as *const () || LOG_ALL_IO {
             dbg_log!(
                 "read16 port  #{:02x} {}",
                 port,
@@ -235,7 +235,7 @@ impl IO {
 
     pub fn io_port_read32(&self, port: u32) -> u32 {
         let iops = &self.ports[port as usize];
-        if iops.read32 as *const () == Self::empty_read32 as *const () || ALL_DEBUG {
+        if iops.read32 as *const () == Self::empty_read32 as *const () || LOG_ALL_IO {
             dbg_log!(
                 "read32 port #{:02x} {}",
                 port,
@@ -248,7 +248,7 @@ impl IO {
 
     pub fn io_port_write8(&self, port: u32, data: u8) {
         let iops = &self.ports[port as usize];
-        if iops.write8 as *const () == Self::empty_write8 as *const () || ALL_DEBUG {
+        if iops.write8 as *const () == Self::empty_write8 as *const () || LOG_ALL_IO {
             dbg_log!(
                 "write8 port  #{:02x} <- 0x{:02x} {}",
                 port,
@@ -261,7 +261,7 @@ impl IO {
 
     pub fn io_port_write16(&self, port: u32, data: u16) {
         let iops = &self.ports[port as usize];
-        if iops.write16 as *const () == Self::empty_write16 as *const () || ALL_DEBUG {
+        if iops.write16 as *const () == Self::empty_write16 as *const () || LOG_ALL_IO {
             dbg_log!(
                 "write16 port  #{:02x} <- 0x{:02x} {}",
                 port,
@@ -274,7 +274,7 @@ impl IO {
 
     pub fn io_port_write32(&self, port: u32, data: u32) {
         let iops = &self.ports[port as usize];
-        if iops.write32 as *const () == Self::empty_write32 as *const () || ALL_DEBUG {
+        if iops.write32 as *const () == Self::empty_write32 as *const () || LOG_ALL_IO {
             dbg_log!(
                 "write32 port  #{:02x} <- 0x{:02x} {}",
                 port,
