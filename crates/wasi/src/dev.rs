@@ -2,7 +2,7 @@ use std::rc::Weak;
 
 use wasmtime::Store;
 
-use crate::{rtc::RTC, Emulator, EmulatorTrait, CPU};
+use crate::{rtc::RTC, Emulator, EmulatorTrait, CPU, debug::Debug};
 
 pub enum Dev {
     Empty,
@@ -15,6 +15,10 @@ impl Dev {
             Dev::Emulator(ref e) => e.rtc_mut(),
             _ => None,
         }
+    }
+
+    pub(crate) fn debug_mut(self: &Dev) -> Option<&mut Debug> {
+        self.cpu_mut().map(|cpu| &mut cpu.debug)
     }
 
     pub(crate) fn cpu_mut(self: &Dev) -> Option<&mut CPU> {

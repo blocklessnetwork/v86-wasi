@@ -10,7 +10,7 @@ use crate::{
     emulator::InnerEmulator,
     io::{MemAccess, MemAccessTrait, IO, MMapFn},
     rtc::RTC,
-    Dev, Emulator, Setting, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME,
+    Dev, Emulator, Setting, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, debug::Debug,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -254,6 +254,7 @@ pub struct CPU {
     vm_opers: VMOpers,
     pub(crate) mmap_fn: MMapFn,
     a20_byte: u8,
+    pub(crate) debug: Debug,
     pub(crate) io: IO,
 }
 
@@ -273,6 +274,7 @@ impl CPU {
         let rtc = RTC::new(store.clone());
         Self {
             inst,
+            debug: Debug::new(store.clone()),
             store: store.clone(),
             memory,
             a20_byte: 0,
@@ -432,6 +434,7 @@ impl CPU {
     fn init_io(&mut self) {
         let sz: usize = self.read_mem_size() as _;
         self.mmap_fn.init(sz);
+        self.io.init();
     }
 
     pub fn init(&mut self) {
@@ -440,9 +443,11 @@ impl CPU {
             .emulator_mut()
             .map_or(0, |emu| emu.setting().memory_size);
         self.create_memory(memory_size);
+        self.debug.init();
         self.init_io();
         self.reset_cpu();
         self.load_bios();
+        
 
         self.io
             .register_read8(0xB3, Dev::Empty, |_: &Dev, _: u32| -> u8 {

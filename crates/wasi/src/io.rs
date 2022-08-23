@@ -293,7 +293,7 @@ impl IO {
 
     pub(crate) fn mmap_register(&mut self, addr: u32, size: usize, r8: Rd8Fn, w8: Wr8Fn, r32: Rd32Fn, w32: Wr32Fn) {
         dbg_log!("mmap_register addr=0x{:x}  size={:x}", addr >> 0, size);
-        assert!(((addr & MMAP_BLOCK_SIZE as u32)- 1) == 0);
+        assert!((addr & MMAP_BLOCK_SIZE as u32).saturating_sub(1) == 0);
         assert!(size > 0 && (size & MMAP_BLOCK_SIZE - 1) == 0);
         let r32 = if r32 as *const () == Self::empty_read8 as *const () {
             Self::mmap_read32_shim

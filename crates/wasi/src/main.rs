@@ -8,7 +8,7 @@ fn main() {
     conf.cache_config_load_default().unwrap();
     let engine = Engine::new(&conf).unwrap();
     let mut setting = Setting::new();
-    setting.bios_file("arch/seabios.bin".into());
+    setting.bios_file("arch/seabios-debug.bin".into());
     let mut emulator = Emulator::new(setting);
     let mut store = Store::new(&engine, emulator.clone());
     let module = Module::from_file(&engine, "target/v86-debug.wasm").unwrap();

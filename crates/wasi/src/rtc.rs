@@ -165,8 +165,9 @@ impl RTC {
                     rtc.encode_time((Utc.timestamp_millis(rtc_time).year() % 100) as u8 | 0u8)
                 }
                 _ => {
-                    dbg_log!("cmos read from index 0x{:02x}", index);
-                    rtc.cmos_data[rtc.cmos_index as usize]
+                    let data = rtc.cmos_data[rtc.cmos_index as usize];
+                    dbg_log!("cmos read from index 0x{:02x}: data: {:02x}", index, data);
+                    data
                 }
             }
         })
