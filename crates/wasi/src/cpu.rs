@@ -3,12 +3,14 @@
 // https://www-ssl.intel.com/content/www/us/en/processors/architectures-software-developer-manuals.html
 // http://ref.x86asm.net/geek32.html
 
-use std::{rc::Weak, cell::Cell, cmp::min_by};
+use std::{cell::Cell, cmp::min_by, rc::Weak};
 
 use crate::{
-    io::{MemAccess, MemAccessTrait, IO},
     consts::*,
-    Emulator, MMAP_BLOCK_SIZE, Setting, FLAG_INTERRUPT, emulator::InnerEmulator, TIME_PER_FRAME, Dev, rtc::RTC,
+    emulator::InnerEmulator,
+    io::{MemAccess, MemAccessTrait, IO, MMapFn},
+    rtc::RTC,
+    Dev, Emulator, Setting, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -63,9 +65,10 @@ struct IOMap {
 }
 
 impl IOMap {
-
     fn mem8_write_slice(&mut self, store: impl AsContextMut, offset: usize, bs: &[u8]) {
-        self.mem8.as_mut().map(|mem8| mem8.write_slice(store, offset, bs));
+        self.mem8
+            .as_mut()
+            .map(|mem8| mem8.write_slice(store, offset, bs));
     }
 
     fn new(memory: Memory) -> Self {
@@ -230,11 +233,15 @@ impl VMOpers {
     }
 
     fn reset_cpu(&self, store: &mut impl AsContextMut) {
-        self.typed_reset_cpu.call(store.as_context_mut(), ()).unwrap()
+        self.typed_reset_cpu
+            .call(store.as_context_mut(), ())
+            .unwrap()
     }
 
-    fn set_tsc(&self, store: &mut impl AsContextMut,low: u32, hig: u32) {
-        self.typed_set_tsc.call(store.as_context_mut(), (low, hig)).unwrap()
+    fn set_tsc(&self, store: &mut impl AsContextMut, low: u32, hig: u32) {
+        self.typed_set_tsc
+            .call(store.as_context_mut(), (low, hig))
+            .unwrap()
     }
 }
 
@@ -245,74 +252,114 @@ pub struct CPU {
     iomap: IOMap,
     pub(crate) rtc: RTC,
     vm_opers: VMOpers,
-    pub io: IO,
+    pub(crate) mmap_fn: MMapFn,
+    a20_byte: u8,
+    pub(crate) io: IO,
 }
 
 impl CPU {
-
     #[inline(always)]
     fn store_mut(&self) -> Option<&'static mut Store<Emulator>> {
         if self.store.weak_count() == 0 {
             None
         } else {
-            Some(unsafe{&mut *(self.store.as_ptr() as *mut Store<Emulator>)})
+            Some(unsafe { &mut *(self.store.as_ptr() as *mut Store<Emulator>) })
         }
     }
 
     pub fn new(inst: Instance, store: Weak<Store<Emulator>>) -> Self {
-        let s = unsafe{&mut *(store.as_ptr() as *mut Store<Emulator>)};
+        let s = unsafe { &mut *(store.as_ptr() as *mut Store<Emulator>) };
         let memory = inst.get_memory(s.as_context_mut(), "memory").unwrap();
         let rtc = RTC::new(store.clone());
         Self {
             inst,
-            store,
+            store: store.clone(),
             memory,
+            a20_byte: 0,
+            mmap_fn: MMapFn::new(),
             rtc,
             vm_opers: VMOpers::new(&inst, s),
             iomap: IOMap::new(memory),
-            io: IO::new(),
+            io: IO::new(store),
         }
     }
 
     #[inline(always)]
+    pub fn mmap_read8(&mut self, addr: u32) -> u8 {
+        let mfn = self.mmap_fn.memory_map_read8[(addr >> MMAP_BLOCK_BITS) as usize];
+        let dev = Dev::Emulator(self.store.clone());
+        (mfn)(&dev, addr)
+    }
+
+    #[inline(always)]
+    pub fn mmap_read16(&mut self, addr: u32) -> u16 {
+        let mfn = self.mmap_fn.memory_map_read8[(addr >> MMAP_BLOCK_BITS) as usize];
+        let dev = Dev::Emulator(self.store.clone());
+        let value = mfn(&dev, addr) as u16 | (mfn(&dev, addr + 1 | 0) as u16) << 8;
+        value
+    }
+
+    #[inline(always)]
+    pub fn mmap_read32(&mut self, addr: u32) -> u32 {
+        let mfn = self.mmap_fn.memory_map_read32[(addr >> MMAP_BLOCK_BITS) as usize];
+        let dev = Dev::Emulator(self.store.clone());
+        mfn(&dev, addr)
+    }
+
+    #[inline(always)]
+    pub fn mmap_write8(&mut self, addr: u32, value: u8) {
+        let mfn = self.mmap_fn.memory_map_write8[(addr >> MMAP_BLOCK_BITS) as usize];
+        let dev = Dev::Emulator(self.store.clone());
+        (mfn)(&dev, addr, value);
+    }
+
+    #[inline(always)]
+    pub fn mmap_write16(&mut self, addr: u32, value: u16){
+        let mfn = self.mmap_fn.memory_map_write8[(addr >> MMAP_BLOCK_BITS) as usize];
+        let dev = Dev::Emulator(self.store.clone());
+        mfn(&dev, addr, (value & 0xFF) as u8);
+        mfn(&dev, addr+1, (value >> 8) as u8);
+    }
+
+    #[inline(always)]
+    pub fn mmap_write32(&mut self, addr: u32, value: u32) {
+        let mfn = self.mmap_fn.memory_map_write32[(addr >> MMAP_BLOCK_BITS) as usize];
+        let dev = Dev::Emulator(self.store.clone());
+        mfn(&dev, addr, value)
+    }
+
+    #[inline(always)]
     fn read8(&mut self, addr: u32) -> i32 {
-        self.store_mut().map_or(0, |store| {
-            self.vm_opers.read8(store, addr)
-        })
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.read8(store, addr))
     }
 
     #[inline(always)]
     fn read16(&mut self, addr: u32) -> i32 {
-        self.store_mut().map_or(0, |store| {
-            self.vm_opers.read16(store, addr)
-        })
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.read16(store, addr))
     }
 
     fn read32s(&mut self, addr: u32) -> i32 {
-        self.store_mut().map_or(0, |store| {
-            self.vm_opers.read32s(store, addr)
-        })
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.read32s(store, addr))
     }
 
     fn read_slice(&mut self, val: &mut [u8], offset: usize) {
-        self.store_mut().map(|store| {
-            self.memory.read(store, offset, val).unwrap()
-        });
+        self.store_mut()
+            .map(|store| self.memory.read(store, offset, val).unwrap());
     }
 
     #[inline(always)]
     fn allocate_memory(&mut self, addr: u32) -> u32 {
-        self.store_mut().map_or(0, |store| {
-            self.vm_opers.allocate_memory(store, addr)
-        })
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.allocate_memory(store, addr))
     }
 
     #[inline(always)]
     fn write_mem_size(&mut self, size: u32) {
         self.store_mut().map(|s| {
-            self.iomap
-                .memory_size_io
-                .write(s, 0u32, size as _);
+            self.iomap.memory_size_io.write(s, 0u32, size as _);
         });
     }
 
@@ -323,10 +370,9 @@ impl CPU {
     }
 
     #[inline(always)]
-    fn read_mem_size(&mut self) -> u32 {
-        self.store_mut().map_or(0, |store| {
-            self.iomap.memory_size_io.read(store, 0u32)
-        })
+    pub(crate) fn read_mem_size(&mut self) -> u32 {
+        self.store_mut()
+            .map_or(0, |store| self.iomap.memory_size_io.read(store, 0u32))
     }
 
     fn reset_cpu(&mut self) {
@@ -335,7 +381,7 @@ impl CPU {
         });
     }
 
-    fn set_tsc(&mut self,low: u32, hig: u32) {
+    fn set_tsc(&mut self, low: u32, hig: u32) {
         self.store_mut().map(|store| {
             self.vm_opers.set_tsc(store, low, hig);
         });
@@ -360,16 +406,19 @@ impl CPU {
         self.iomap.mem32s = Some(MemAccess::new(offset as _, size >> 2, self.memory));
     }
 
-    fn load_bios(&mut self, setting: &Setting) {
-        let bios = setting.load_bios_file().expect("Warning: No BIOS");
+    fn load_bios(&mut self) {
+        let bios = self
+            .emulator_mut()
+            .map(|emu| emu.setting().load_bios_file())
+            .flatten();
+        let bios = bios.expect("Warning: No BIOS");
         let offset = 0x100000 - bios.len();
         dbg_log!("load bois to: {}", offset);
         self.store_mut().map(|store| {
             self.iomap.mem8_write_slice(store, offset, &bios);
         });
-        #[cfg(feature="check_bios")]
+        #[cfg(feature = "check_bios")]
         self.check_bios(&bios, offset);
-        
     }
 
     fn check_bios(&mut self, bios: &[u8], off: usize) {
@@ -378,23 +427,40 @@ impl CPU {
         assert!(in_m == bios);
     }
 
-    pub fn init(&mut self,  setting: &Setting) {
-        self.set_tsc(0, 0);
-        self.create_memory(1024 * 1024 * 64);
-        self.reset_cpu();
-        self.load_bios(setting);
+    
 
-        self.io.register_read8(0xB3, Dev::Empty, |_: &Dev, _: u32| -> u8 {
-            dbg_log!("port 0xB3 read");
-            0
-        });
-        self.io.register_read8(0x92, Dev::Empty, |_: &Dev, _: u32| -> u8 {
-            dbg_log!("port 0x92 read");
-            0
-        });
-        self.io.register_write8(0x92, Dev::Empty, |_: &Dev, _: u32, v: u8| {
-            dbg_log!("port 0x92 write {}", v);
-        });
+    fn init_io(&mut self) {
+        let sz: usize = self.read_mem_size() as _;
+        self.mmap_fn.init(sz);
+    }
+
+    pub fn init(&mut self) {
+        self.set_tsc(0, 0);
+        let memory_size = self
+            .emulator_mut()
+            .map_or(0, |emu| emu.setting().memory_size);
+        self.create_memory(memory_size);
+        self.init_io();
+        self.reset_cpu();
+        self.load_bios();
+
+        self.io
+            .register_read8(0xB3, Dev::Empty, |_: &Dev, _: u32| -> u8 {
+                dbg_log!("port 0xB3 read");
+                0
+            });
+        self.io.register_read8(
+            0x92,
+            Dev::Emulator(self.store.clone()),
+            |d: &Dev, _: u32| -> u8 { d.cpu_mut().map_or(0, |cpu| cpu.a20_byte) },
+        );
+        self.io.register_write8(
+            0x92,
+            Dev::Emulator(self.store.clone()),
+            |d: &Dev, _: u32, v: u8| {
+                d.cpu_mut().map(|cpu| cpu.a20_byte = v);
+            },
+        );
         //TODO: IO 0x511
 
         self.rtc.init();
@@ -404,14 +470,13 @@ impl CPU {
     }
 
     fn in_hlt(&mut self) -> bool {
-        self.store_mut().map_or(false, |store| {
-            self.iomap.in_hlt_io.read(store, 1) > 0
-        })
+        self.store_mut()
+            .map_or(false, |store| self.iomap.in_hlt_io.read(store, 1) > 0)
     }
 
     fn handle_irqs(&mut self) {
         if self.has_interrupt() {
-            //TODO: 
+            //TODO:
         }
     }
 
@@ -422,9 +487,7 @@ impl CPU {
 
     #[inline(always)]
     fn emulator_mut(&self) -> Option<&mut Emulator> {
-        self.store_mut().map(|store| {
-            store.data_mut()
-        })
+        self.store_mut().map(|store| store.data_mut())
     }
 
     #[inline(always)]
@@ -448,9 +511,8 @@ impl CPU {
     }
 
     fn get_eflags_no_arith(&self) -> i32 {
-        self.store_mut().map_or(0, |store| {
-            self.vm_opers.get_eflags_no_arith(store)
-        })
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.get_eflags_no_arith(store))
     }
 
     fn do_many_cycles(&mut self) {
@@ -465,7 +527,7 @@ impl CPU {
                 return t;
             }
         }
-        let start  = self.microtick();
+        let start = self.microtick();
         let mut now = start;
         while now - start < TIME_PER_FRAME as _ {
             self.do_many_cycles();
@@ -473,13 +535,13 @@ impl CPU {
             let t = self.run_hardware_timers(now);
             self.handle_irqs();
             if self.in_hlt() {
-                return t
+                return t;
             }
         }
         return 0;
     }
 
-    pub(crate)fn fill_cmos(&mut self) {
+    pub(crate) fn fill_cmos(&mut self) {
         let boot_order: u32 = 0x213;
         // Used by seabios to determine the boot order
         //   Nibble
@@ -489,33 +551,40 @@ impl CPU {
         //   4: BEVPrio
         // bootflag 1, high nibble, lowest priority
         // Low nibble: Disable floppy signature check (1)
-        self.rtc.cmos_write(CMOS_BIOS_BOOTFLAG1 , 1 | ((boot_order >> 4) & 0xF0) as u8);
+        self.rtc
+            .cmos_write(CMOS_BIOS_BOOTFLAG1, 1 | ((boot_order >> 4) & 0xF0) as u8);
 
         // bootflag 2, both nibbles, high and middle priority
-        self.rtc.cmos_write(CMOS_BIOS_BOOTFLAG2, (boot_order & 0xFF) as u8);
+        self.rtc
+            .cmos_write(CMOS_BIOS_BOOTFLAG2, (boot_order & 0xFF) as u8);
 
         self.rtc.cmos_write(CMOS_MEM_BASE_LOW, (640 & 0xFF) as u8);
         self.rtc.cmos_write(CMOS_MEM_BASE_HIGH, (640 >> 8) as u8);
         let mut memory_above_1m = 0; // in k
-        
-        
+
         let memory_size = self.read_mem_size();
         if memory_size >= 1024 * 1024 {
             memory_above_1m = (memory_size - 1024 * 1024) >> 10;
             memory_above_1m = memory_above_1m.min(0xFFFF);
         }
-        self.rtc.cmos_write(CMOS_MEM_OLD_EXT_LOW, (memory_above_1m & 0xFF) as u8);
-        self.rtc.cmos_write(CMOS_MEM_OLD_EXT_HIGH, (memory_above_1m >> 8 & 0xFF) as u8);
-        self.rtc.cmos_write(CMOS_MEM_EXTMEM_LOW, (memory_above_1m & 0xFF) as u8);
-        self.rtc.cmos_write(CMOS_MEM_EXTMEM_HIGH, (memory_above_1m >> 8 & 0xFF) as u8);
+        self.rtc
+            .cmos_write(CMOS_MEM_OLD_EXT_LOW, (memory_above_1m & 0xFF) as u8);
+        self.rtc
+            .cmos_write(CMOS_MEM_OLD_EXT_HIGH, (memory_above_1m >> 8 & 0xFF) as u8);
+        self.rtc
+            .cmos_write(CMOS_MEM_EXTMEM_LOW, (memory_above_1m & 0xFF) as u8);
+        self.rtc
+            .cmos_write(CMOS_MEM_EXTMEM_HIGH, (memory_above_1m >> 8 & 0xFF) as u8);
         let mut memory_above_16m = 0; // in 64k blocks
         let memory_size = self.read_mem_size();
         if memory_size >= 16 * 1024 * 1024 {
             memory_above_16m = (memory_size - 16 * 1024 * 1024) >> 16;
             memory_above_16m = memory_above_16m.min(0xFFFF);
         }
-        self.rtc.cmos_write(CMOS_MEM_EXTMEM2_LOW, (memory_above_16m & 0xFF) as u8);
-        self.rtc.cmos_write(CMOS_MEM_EXTMEM2_HIGH, (memory_above_16m >> 8 & 0xFF) as u8);
+        self.rtc
+            .cmos_write(CMOS_MEM_EXTMEM2_LOW, (memory_above_16m & 0xFF) as u8);
+        self.rtc
+            .cmos_write(CMOS_MEM_EXTMEM2_HIGH, (memory_above_16m >> 8 & 0xFF) as u8);
 
         // memory above 4G (not supported by this emulator)
         self.rtc.cmos_write(CMOS_MEM_HIGHMEM_LOW, 0);
@@ -527,8 +596,13 @@ impl CPU {
         self.rtc.cmos_write(CMOS_BIOS_SMP_COUNT, 0);
 
         //TODO: fast boot
-        if false {
+
+        let fast_boot = self
+            .emulator_mut()
+            .map_or(false, |emu| emu.setting().fast_boot);
+        if fast_boot {
             self.rtc.cmos_write(0x3f, 0x01);
-        } 
+        }
     }
+
 }

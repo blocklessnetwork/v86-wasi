@@ -4,10 +4,12 @@ mod log;
 use core::slice;
 use std::rc::Weak;
 
+const ALL_DEBUG: bool = true;
+
 use mem::add_mem_to_linker;
 use rtc::RTC;
 use wasmtime::*;
-pub(crate)mod consts;
+pub(crate) mod consts;
 mod cpu;
 mod dev;
 mod emulator;
@@ -15,32 +17,42 @@ mod io;
 mod mem;
 mod rtc;
 mod setting;
-pub use setting::*;
 pub use consts::*;
 pub use cpu::CPU;
 pub use emulator::Emulator;
+pub use setting::*;
 
 pub use dev::Dev;
 
 trait EmulatorTrait {
-
     fn cpu_mut(&self) -> Option<&mut CPU>;
+    fn cpu(&self) -> Option<&CPU>;
     fn rtc_mut(&self) -> Option<&mut RTC>;
-    
-    fn emulator(&self) -> &mut Emulator;
+    fn emulator(&self) -> &Emulator;
+    fn emulator_mut(&self) -> &mut Emulator;
 }
 
 impl EmulatorTrait for Weak<Store<Emulator>> {
-
     #[inline]
     fn cpu_mut(&self) -> Option<&mut CPU> {
-        let emu = self.emulator();
+        let emu = self.emulator_mut();
         emu.cpu_mut()
     }
 
     #[inline]
-    fn emulator(&self) -> &mut Emulator {
-        unsafe {(*(self.as_ptr() as *mut Store<_>)).data_mut()}
+    fn cpu(&self) -> Option<&CPU> {
+        let emu = self.emulator();
+        emu.cpu()
+    }
+
+    #[inline]
+    fn emulator_mut(&self) -> &mut Emulator {
+        unsafe { (*(self.as_ptr() as *mut Store<_>)).data_mut() }
+    }
+
+    #[inline]
+    fn emulator(&self) -> &Emulator {
+        unsafe { (*(self.as_ptr() as *mut Store<_>)).data() }
     }
 
     #[inline]
@@ -166,9 +178,8 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
             "io_port_read8",
             move |mut caller: Caller<'_, Emulator>, port: i32| -> i32 {
                 let emu = caller.data_mut();
-                emu.cpu_mut().map_or(0, |cpu| {
-                    cpu.io.io_port_read8(port as _) as _
-                })
+                emu.cpu_mut()
+                    .map_or(0, |cpu| cpu.io.io_port_read8(port as _) as _)
             },
         )
         .unwrap();
@@ -179,9 +190,8 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
             "io_port_read16",
             move |mut caller: Caller<'_, Emulator>, port: i32| -> i32 {
                 let emu = caller.data_mut();
-                emu.cpu_mut().map_or(0, |cpu| {
-                    cpu.io.io_port_read16(port as _) as _
-                })
+                emu.cpu_mut()
+                    .map_or(0, |cpu| cpu.io.io_port_read16(port as _) as _)
             },
         )
         .unwrap();
@@ -192,9 +202,8 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
             "io_port_read32",
             move |mut caller: Caller<'_, Emulator>, port: i32| -> i32 {
                 let emu = caller.data_mut();
-                emu.cpu_mut().map_or(0, |cpu| {
-                    cpu.io.io_port_read32(port as _) as _
-                })
+                emu.cpu_mut()
+                    .map_or(0, |cpu| cpu.io.io_port_read32(port as _) as _)
             },
         )
         .unwrap();
@@ -216,8 +225,11 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "io_port_write16",
-            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v: i32| {
-                panic!("env io_port_write16 call.");
+            move |mut caller: Caller<'_, Emulator>, port: i32, data: i32| {
+                let emu = caller.data_mut();
+                emu.cpu_mut().map(|cpu| {
+                    cpu.io.io_port_write16(port as _, data as _);
+                });
             },
         )
         .unwrap();
@@ -226,8 +238,11 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "io_port_write32",
-            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v: i32| {
-                panic!("env io_port_write32 call.");
+            move |mut caller: Caller<'_, Emulator>, port: i32, data: i32| {
+                let emu = caller.data_mut();
+                emu.cpu_mut().map(|cpu| {
+                    cpu.io.io_port_write32(port as _, data as _);
+                });
             },
         )
         .unwrap();
@@ -236,8 +251,11 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "mmap_read8",
-            move |mut _caller: Caller<'_, Emulator>, _off: i32| -> i32 {
-                panic!("env mmap_read8 call.");
+            move |mut caller: Caller<'_, Emulator>, addr: i32| -> i32 {
+                let emu = caller.data_mut();
+                emu.cpu_mut().map_or(0, |cpu| {
+                    cpu.mmap_read8(addr as u32) as i32
+                })
             },
         )
         .unwrap();
@@ -246,8 +264,11 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "mmap_read16",
-            move |mut _caller: Caller<'_, Emulator>, _off: i32| -> i32 {
-                panic!("env mmap_read16 call.");
+            move |mut caller: Caller<'_, Emulator>, addr: i32| -> i32 {
+                let emu = caller.data_mut();
+                emu.cpu_mut().map_or(0, |cpu| {
+                    cpu.mmap_read16(addr as u32) as i32
+                })
             },
         )
         .unwrap();
@@ -256,8 +277,11 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "mmap_read32",
-            move |mut _caller: Caller<'_, Emulator>, _off: i32| -> i32 {
-                panic!("env mmap_read32 call.");
+            move |mut caller: Caller<'_, Emulator>, addr: i32| -> i32 {
+                let emu = caller.data_mut();
+                emu.cpu_mut().map_or(0, |cpu| {
+                    cpu.mmap_read32(addr as u32) as i32
+                })
             },
         )
         .unwrap();
@@ -266,8 +290,11 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "mmap_write8",
-            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v: i32| {
-                panic!("env mmap_write8 call.");
+            move |mut caller: Caller<'_, Emulator>, addr: i32, v: i32| {
+                let emu = caller.data_mut();
+                emu.cpu_mut().map(|cpu| {
+                    cpu.mmap_write8(addr as u32, v as u8);
+                });
             },
         )
         .unwrap();
@@ -276,8 +303,11 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "mmap_write16",
-            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v: i32| {
-                panic!("env mmap_write16 call.");
+            move |mut caller: Caller<'_, Emulator>, addr: i32, v: i32| {
+                let emu = caller.data_mut();
+                emu.cpu_mut().map(|cpu| {
+                    cpu.mmap_write16(addr as u32, v as u16);
+                });
             },
         )
         .unwrap();
@@ -286,8 +316,11 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "mmap_write32",
-            move |mut _caller: Caller<'_, Emulator>, _off: i32, _v: i32| {
-                panic!("env mmap_write32 call.");
+            move |mut caller: Caller<'_, Emulator>, addr: i32, v: i32| {
+                let emu = caller.data_mut();
+                emu.cpu_mut().map(|cpu| {
+                    cpu.mmap_write32(addr as u32, v as u32);
+                });
             },
         )
         .unwrap();

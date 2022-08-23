@@ -30,7 +30,7 @@ CARGO_FLAGS_SAFE=\
 		-C link-args="target/zstddeclib.o" \
 		--verbose
 
-CARGO_FLAGS=$(CARGO_FLAGS_SAFE) -C target-feature=+bulk-memory  
+CARGO_FLAGS=$(CARGO_FLAGS_SAFE) -C target-feature=+bulk-memory   -C overflow-checks=off
 
 RUST_FILES=$(shell find crates/v86/src/ -name '*.rs') \
 	   crates/v86/src/gen/interpreter.rs crates/v86/src/gen/interpreter0f.rs \
@@ -63,13 +63,13 @@ target/v86.wasm: $(RUST_FILES) target/softfloat.o target/zstddeclib.o Cargo.toml
 target/v86-debug.wasm: $(RUST_FILES) target/softfloat.o target/zstddeclib.o Cargo.toml
 	mkdir -p target/
 	-BLOCK_SIZE=K ls -l target/v86-debug.wasm
-	cd  crates/v86 && CARGO_TARGET_PAT=$(V86_TARGET_PATH) cargo rustc $(CARGO_FLAGS) 
+	cd  crates/v86 && CARGO_TARGET_PATH=$(V86_TARGET_PATH) cargo rustc $(CARGO_FLAGS) 
 	mv target/wasm32-unknown-unknown/debug/v86.wasm target/v86-debug.wasm
 	BLOCK_SIZE=K ls -l target/v86-debug.wasm
 
 target/v86-fallback.wasm: $(RUST_FILES) target/softfloat.o target/zstddeclib.o Cargo.toml
 	mkdir -p target/
-	cargo rustc --release $(CARGO_FLAGS_SAFE)
+	cd  crates/v86 && CARGO_TARGET_PATH=$(V86_TARGET_PATH) cargo rustc --release $(CARGO_FLAGS_SAFE)
 	mv target/wasm32-unknown-unknown/release/v86.wasm target/v86-fallback.wasm || true
 
 debug-with-profiler: $(RUST_FILES) target/softfloat.o target/zstddeclib.o Cargo.toml

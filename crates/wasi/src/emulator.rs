@@ -1,8 +1,12 @@
-use std::{cell::Cell, rc::{Rc, Weak}, time};
+use std::{
+    cell::Cell,
+    rc::{Rc, Weak},
+    time,
+};
 
 use wasmtime::{Instance, Store};
 
-use crate::{CPU, Setting, rtc::RTC};
+use crate::{rtc::RTC, Setting, CPU, io::IO};
 
 pub(crate) struct InnerEmulator {
     start_time: time::Instant,
@@ -29,7 +33,7 @@ impl InnerEmulator {
 
     fn start(&mut self) {
         self.cpu.as_mut().map(|c| {
-            c.init(&self.setting);
+            c.init();
             c.main_run();
         });
     }
@@ -43,11 +47,9 @@ pub struct Emulator {
 impl Emulator {
     pub fn new(setting: Setting) -> Self {
         let inner = Rc::new(Cell::new(InnerEmulator::new(setting)));
-        Emulator {
-            inner: inner,
-        }
+        Emulator { inner: inner }
     }
-
+    #[inline(always)]
     pub fn microtick(&self) -> f64 {
         self.inner().microtick()
     }
@@ -57,18 +59,32 @@ impl Emulator {
         self.inner_mut().start();
     }
 
+    #[inline(always)]
     pub fn inner_strong_count(&self) -> usize {
         Rc::strong_count(&self.inner)
     }
 
+    #[inline(always)]
     pub fn cpu_mut(&self) -> Option<&mut CPU> {
         self.inner_mut().cpu.as_mut()
     }
 
+    #[inline(always)]
+    pub fn io_mut(&self) -> Option<&mut IO> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.io)
+    }
+
+    #[inline(always)]
+    pub fn cpu(&self) -> Option<&CPU> {
+        self.inner_mut().cpu.as_ref()
+    }
+
+    #[inline(always)]
     pub(crate) fn rtc_mut(&self) -> Option<&mut RTC> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.rtc)
     }
 
+    #[inline(always)]
     fn inner(&self) -> &InnerEmulator {
         unsafe {
             let rc = &(*self.inner);
@@ -76,10 +92,16 @@ impl Emulator {
         }
     }
 
+    #[inline(always)]
     fn inner_mut(&self) -> &mut InnerEmulator {
         unsafe {
             let rc = &(*self.inner);
             &mut (*rc.as_ptr())
         }
+    }
+
+    #[inline(always)]
+    pub fn setting(&self) -> &Setting {
+        &self.inner().setting
     }
 }

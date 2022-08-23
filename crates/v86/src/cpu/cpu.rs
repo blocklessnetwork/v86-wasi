@@ -2427,6 +2427,7 @@ pub unsafe fn read_imm16() -> OrPageFault<i32> {
         return Ok(read_imm8()? | read_imm8()? << 8);
     } else {
         let data16 = read16((*eip_phys ^ *instruction_pointer) as u32);
+        // dbg_log!("read_imm16 {:x} {:x} {:x}", *eip_phys, data16, *instruction_pointer);
         *instruction_pointer = *instruction_pointer + 2;
         return Ok(data16);
     };
@@ -2997,6 +2998,7 @@ pub unsafe fn cycle_internal() {
         let opcode = return_on_pagefault!(read_imm8());
         *instruction_counter += 1;
         dbg_assert!(*prefixes == 0);
+        // dbg_log!("opcode {:x} peip:{:x}, eip:{:x}", opcode | (*is_32 as i32) << 8,*previous_ip, *instruction_pointer);
         run_instruction(opcode | (*is_32 as i32) << 8);
         dbg_assert!(*prefixes == 0);
     }

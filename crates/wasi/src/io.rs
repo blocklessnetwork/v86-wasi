@@ -1,8 +1,8 @@
 use lazy_static::lazy_static;
-use std::{collections::HashMap, marker::PhantomData, ops::Add};
-use wasmtime::{AsContext, AsContextMut, Memory};
+use std::{collections::HashMap, marker::PhantomData, ops::Add, rc::Weak};
+use wasmtime::{AsContext, AsContextMut, Memory, Store};
 
-use crate::Dev;
+use crate::{Dev, ALL_DEBUG, Emulator, EmulatorTrait, MMAP_BLOCK_SIZE, MMAP_BLOCK_BITS};
 
 pub(crate) trait MemAccessTrait<T> {
     fn read(&self, store: impl AsContext, idx: u32) -> T;
@@ -27,9 +27,6 @@ pub struct MemAccess<T> {
 }
 
 impl<T> MemAccess<T> {
-    
-    
-
     pub fn new(offset: usize, len: u32, mem: Memory) -> Self {
         Self {
             offset,
@@ -43,7 +40,6 @@ impl<T> MemAccess<T> {
 macro_rules! impl_mem_access {
     ($t:ty, $s:literal) => {
         impl MemAccessTrait<$t> for MemAccess<$t> {
-
             #[inline(always)]
             fn offset(&self) -> usize {
                 self.offset
@@ -89,11 +85,35 @@ type Wr8Fn = fn(&Dev, u32, u8);
 type Wr16Fn = fn(&Dev, u32, u16);
 type Wr32Fn = fn(&Dev, u32, u32);
 
+pub(crate) struct MMapFn {
+    pub memory_map_read8: Vec<Rd8Fn>,
+    pub memory_map_read32: Vec<Rd32Fn>,
+    pub memory_map_write8: Vec<Wr8Fn>,
+    pub memory_map_write32: Vec<Wr32Fn>,
+}
+
+impl MMapFn {
+    pub fn new() -> Self {
+        Self {
+            memory_map_read8: Vec::new(),
+            memory_map_read32: Vec::new(),
+            memory_map_write8: Vec::new(),
+            memory_map_write32: Vec::new(),
+        }
+    }
+
+    pub(crate) fn init(&mut self, s: usize) {
+        self.memory_map_read8 = vec![IO::empty_read8; s];
+        self.memory_map_read32 = vec![IO::empty_read32; s];
+        self.memory_map_write8 = vec![IO::empty_write8; s];
+        self.memory_map_write32 = vec![IO::empty_write32; s];
+    }
+}
+
 struct IOps {
     read8: Rd8Fn,
     read16: Rd16Fn,
     read32: Rd32Fn,
-
     write8: Wr8Fn,
     write16: Wr16Fn,
     write32: Wr32Fn,
@@ -103,11 +123,12 @@ struct IOps {
 
 pub struct IO {
     ports: Vec<IOps>,
+    store: Weak<Store<Emulator>>,
 }
 
 impl IO {
     fn empty_read8(_: &Dev, p: u32) -> u8 {
-        dbg_log!("empty_read8: {}",p);
+        dbg_log!("empty_read8: {}", p);
         0xFF
     }
 
@@ -145,12 +166,17 @@ impl IO {
         }
     }
 
-    pub fn new() -> IO {
+    
+
+    pub fn new(store: Weak<Store<Emulator>>) -> IO {
         let mut v = Vec::new();
         for _ in 0..PORTS_SIZE {
             v.push(IO::default_iops());
         }
-        IO { ports: v }
+        IO { 
+            ports: v,
+            store,
+         }
     }
 
     pub fn register_read(&mut self, port: u32, dev: Dev, r8: Rd8Fn, r16: Rd16Fn, r32: Rd32Fn) {
@@ -183,7 +209,7 @@ impl IO {
 
     pub fn io_port_read8(&self, port: u32) -> u8 {
         let iops = &self.ports[port as usize];
-        if iops.read8 as *const () == Self::empty_read8 as *const () {
+        if iops.read8 as *const () == Self::empty_read8 as *const () || ALL_DEBUG {
             dbg_log!(
                 "read8 port  #{:02x} {}",
                 port,
@@ -196,7 +222,7 @@ impl IO {
 
     pub fn io_port_read16(&self, port: u32) -> u16 {
         let iops = &self.ports[port as usize];
-        if iops.read16 as *const () == Self::empty_read16 as *const () {
+        if iops.read16 as *const () == Self::empty_read16 as *const () || ALL_DEBUG {
             dbg_log!(
                 "read16 port  #{:02x} {}",
                 port,
@@ -209,7 +235,7 @@ impl IO {
 
     pub fn io_port_read32(&self, port: u32) -> u32 {
         let iops = &self.ports[port as usize];
-        if iops.read32 as *const () == Self::empty_read32 as *const () {
+        if iops.read32 as *const () == Self::empty_read32 as *const () || ALL_DEBUG {
             dbg_log!(
                 "read32 port #{:02x} {}",
                 port,
@@ -222,7 +248,7 @@ impl IO {
 
     pub fn io_port_write8(&self, port: u32, data: u8) {
         let iops = &self.ports[port as usize];
-        if iops.write8 as *const () == Self::empty_write8 as *const () {
+        if iops.write8 as *const () == Self::empty_write8 as *const () || ALL_DEBUG {
             dbg_log!(
                 "write8 port  #{:02x} <- 0x{:02x} {}",
                 port,
@@ -235,7 +261,7 @@ impl IO {
 
     pub fn io_port_write16(&self, port: u32, data: u16) {
         let iops = &self.ports[port as usize];
-        if iops.write16 as *const () == Self::empty_write16 as *const () {
+        if iops.write16 as *const () == Self::empty_write16 as *const () || ALL_DEBUG {
             dbg_log!(
                 "write16 port  #{:02x} <- 0x{:02x} {}",
                 port,
@@ -248,7 +274,7 @@ impl IO {
 
     pub fn io_port_write32(&self, port: u32, data: u32) {
         let iops = &self.ports[port as usize];
-        if iops.write32 as *const () == Self::empty_write32 as *const () {
+        if iops.write32 as *const () == Self::empty_write32 as *const () || ALL_DEBUG {
             dbg_log!(
                 "write32 port  #{:02x} <- 0x{:02x} {}",
                 port,
@@ -263,6 +289,77 @@ impl IO {
         DEBUG_PORTS
             .get(&addr)
             .map_or_else(String::default, |s| format!("({})", s))
+    }
+
+    pub(crate) fn mmap_register(&mut self, addr: u32, size: usize, r8: Rd8Fn, w8: Wr8Fn, r32: Rd32Fn, w32: Wr32Fn) {
+        dbg_log!("mmap_register addr=0x{:x}  size={:x}", addr >> 0, size);
+        assert!(((addr & MMAP_BLOCK_SIZE as u32)- 1) == 0);
+        assert!(size > 0 && (size & MMAP_BLOCK_SIZE - 1) == 0);
+        let r32 = if r32 as *const () == Self::empty_read8 as *const () {
+            Self::mmap_read32_shim
+        } else {
+            r32
+        };
+
+        let w32 = if w32 as *const () == Self::empty_write32 as *const () {
+            Self::mmap_write32_shim
+        } else {
+            w32
+        };
+        self.store.cpu_mut().map(|cpu| {
+            let mut aligned_addr = addr >> MMAP_BLOCK_BITS;
+            let mut size = size;
+            while size > 0 {
+                cpu.mmap_fn.memory_map_read8[aligned_addr as usize] = r8;
+                cpu.mmap_fn.memory_map_read32[aligned_addr as usize] = r32;
+                cpu.mmap_fn.memory_map_write8[aligned_addr as usize] = w8;
+                cpu.mmap_fn.memory_map_write32[aligned_addr as usize] = w32;
+                size -= MMAP_BLOCK_SIZE;
+                aligned_addr += 1;
+            }
+        });
+        
+    }
+
+    #[inline]
+    fn mmap_write32_shim(dev: &Dev, addr: u32, val: u32)  {
+        let aligned_addr = addr >> MMAP_BLOCK_BITS;
+        dev.cpu_mut().map(|cpu| {
+            let mmp_fn = cpu.mmap_fn.memory_map_write8[aligned_addr as usize];
+            (mmp_fn)(dev, addr, (val & 0xFF) as u8);
+            (mmp_fn)(dev, addr, (val>>8 & 0xFF) as u8);
+            (mmp_fn)(dev, addr, (val>>16 & 0xFF) as u8);
+            (mmp_fn)(dev, addr, (val>>24) as u8);
+        });
+    }
+
+    #[inline]
+    fn mmap_read32_shim(dev: &Dev, addr: u32) -> u32 {
+        let aligned_addr = addr >> MMAP_BLOCK_BITS;
+        dev.cpu_mut().map_or(0, |cpu| {
+            let mmp_fn = cpu.mmap_fn.memory_map_read8[aligned_addr as usize];
+            (mmp_fn)(dev, addr) as u32 | ((mmp_fn)(dev, addr + 1) as u32) << 8  |
+            ((mmp_fn)(dev, addr + 2) as u32) << 16 | ((mmp_fn)(dev, addr + 3) as u32) << 24
+        })
+    }
+
+    pub(crate) fn init(&mut self) {
+        let m_size = self.store.cpu_mut().map(|cpu| {
+            cpu.read_mem_size()
+        }).unwrap();
+        self.mmap_register(m_size, 0x100000000 - m_size as usize, 
+            |_: &Dev, addr: u32| {
+                dbg_log!("Read from unmapped memory space, addr=0x{:x}", addr >> 0);
+                0xFF
+            }, |_: &Dev, addr: u32, v: u8| {
+                dbg_log!("Write to unmapped memory space, addr=0x{:x} value={:x}", addr >> 0, v);
+            }, |_: &Dev, addr: u32| {
+                dbg_log!("Read from unmapped memory space, addr=0x{:x}", addr >> 0);
+                0xFFFFFFFF
+            }, |_: &Dev, addr: u32, v: u32| {
+                dbg_log!("Write to unmapped memory space, addr=0x{:x} value={:x}", addr >> 0, v);
+            }
+        );
     }
 }
 
