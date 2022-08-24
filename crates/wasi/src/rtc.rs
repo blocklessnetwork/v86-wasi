@@ -1,6 +1,5 @@
 use std::{
-    cell::Cell,
-    rc::{Rc, Weak},
+    rc::Weak,
 };
 
 use chrono::{Datelike, TimeZone, Timelike, Utc};
@@ -76,6 +75,7 @@ impl RTC {
         });
     }
 
+    #[inline(always)]
     fn decode_time(&self, v: u32) -> u32 {
         if self.cmos_b & 4 != 0 {
             v
@@ -84,6 +84,7 @@ impl RTC {
         }
     }
 
+    #[inline(always)]
     fn bcd_unpack(n: u32) -> u32 {
         let low = n & 0xF;
         let high = n >> 4 & 0xF;
@@ -94,6 +95,7 @@ impl RTC {
         low + 10 * high
     }
 
+    #[inline(always)]
     fn encode_time(&self, v: u8) -> u8 {
         if self.cmos_b & 4 != 0 {
             v
@@ -115,13 +117,14 @@ impl RTC {
         result
     }
 
+    #[inline(always)]
     pub(crate) fn cmos_write(self: &mut RTC, index: u8, v: u8) {
         dbg_log!("cmos 0x{:02x} <- 0x{:02x}", index, v);
         assert!(index < 128);
         self.cmos_data[index as usize] = v;
     }
 
-    fn cmos_port_read8(dev: &Dev, port: u32) -> u8 {
+    fn cmos_port_read8(dev: &Dev, _port: u32) -> u8 {
         dev.rtc_mut().map_or(0, |rtc| {
             let index = rtc.cmos_index;
             match index {

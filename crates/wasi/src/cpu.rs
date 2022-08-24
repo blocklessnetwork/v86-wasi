@@ -3,14 +3,14 @@
 // https://www-ssl.intel.com/content/www/us/en/processors/architectures-software-developer-manuals.html
 // http://ref.x86asm.net/geek32.html
 
-use std::{cell::Cell, cmp::min_by, rc::Weak};
+use std::rc::Weak;
 
 use crate::{
     consts::*,
-    emulator::InnerEmulator,
-    io::{MemAccess, MemAccessTrait, IO, MMapFn},
+    debug::Debug,
+    io::{MMapFn, MemAccess, MemAccessTrait, IO},
     rtc::RTC,
-    Dev, Emulator, Setting, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, debug::Debug,
+    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, dma::DMA,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -248,7 +248,6 @@ impl VMOpers {
 pub struct CPU {
     memory: Memory,
     store: Weak<Store<Emulator>>,
-    inst: Instance,
     iomap: IOMap,
     pub(crate) rtc: RTC,
     vm_opers: VMOpers,
@@ -256,6 +255,7 @@ pub struct CPU {
     a20_byte: u8,
     pub(crate) debug: Debug,
     pub(crate) io: IO,
+    pub(crate) dma: DMA,
 }
 
 impl CPU {
@@ -273,9 +273,9 @@ impl CPU {
         let memory = inst.get_memory(s.as_context_mut(), "memory").unwrap();
         let rtc = RTC::new(store.clone());
         Self {
-            inst,
             debug: Debug::new(store.clone()),
             store: store.clone(),
+            dma: DMA::new(store.clone()),
             memory,
             a20_byte: 0,
             mmap_fn: MMapFn::new(),
@@ -316,11 +316,11 @@ impl CPU {
     }
 
     #[inline(always)]
-    pub fn mmap_write16(&mut self, addr: u32, value: u16){
+    pub fn mmap_write16(&mut self, addr: u32, value: u16) {
         let mfn = self.mmap_fn.memory_map_write8[(addr >> MMAP_BLOCK_BITS) as usize];
         let dev = Dev::Emulator(self.store.clone());
         mfn(&dev, addr, (value & 0xFF) as u8);
-        mfn(&dev, addr+1, (value >> 8) as u8);
+        mfn(&dev, addr + 1, (value >> 8) as u8);
     }
 
     #[inline(always)]
@@ -429,8 +429,6 @@ impl CPU {
         assert!(in_m == bios);
     }
 
-    
-
     fn init_io(&mut self) {
         let sz: usize = self.read_mem_size() as _;
         self.mmap_fn.init(sz);
@@ -445,9 +443,9 @@ impl CPU {
         self.create_memory(memory_size);
         self.debug.init();
         self.init_io();
+        self.dma.init();
         self.reset_cpu();
         self.load_bios();
-        
 
         self.io
             .register_read8(0xB3, Dev::Empty, |_: &Dev, _: u32| -> u8 {
@@ -609,5 +607,4 @@ impl CPU {
             self.rtc.cmos_write(0x3f, 0x01);
         }
     }
-
 }

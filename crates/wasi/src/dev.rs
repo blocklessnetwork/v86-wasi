@@ -2,11 +2,11 @@ use std::rc::Weak;
 
 use wasmtime::Store;
 
-use crate::{rtc::RTC, Emulator, EmulatorTrait, CPU, debug::Debug};
+use crate::{debug::Debug, rtc::RTC, Emulator, EmulatorTrait, CPU, io::IO, dma::DMA};
 
 pub enum Dev {
     Empty,
-    Emulator(Weak<Store<Emulator>>)
+    Emulator(Weak<Store<Emulator>>),
 }
 
 impl Dev {
@@ -24,6 +24,20 @@ impl Dev {
     pub(crate) fn cpu_mut(self: &Dev) -> Option<&mut CPU> {
         match *self {
             Dev::Emulator(ref e) => e.cpu_mut(),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn io_mut(self: &Dev) -> Option<&mut IO> {
+        match *self {
+            Dev::Emulator(ref e) => e.io_mut(),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn dma_mut(self: &Dev) -> Option<&mut DMA> {
+        match *self {
+            Dev::Emulator(ref e) => e.dma_mut(),
             _ => None,
         }
     }

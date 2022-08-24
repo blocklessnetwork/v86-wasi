@@ -6,7 +6,7 @@ use std::{
 
 use wasmtime::{Instance, Store};
 
-use crate::{rtc::RTC, Setting, CPU, io::IO};
+use crate::{io::IO, rtc::RTC, Setting, CPU, dma::DMA};
 
 pub(crate) struct InnerEmulator {
     start_time: time::Instant,
@@ -65,17 +65,22 @@ impl Emulator {
     }
 
     #[inline(always)]
-    pub fn cpu_mut(&self) -> Option<&mut CPU> {
+    pub(crate) fn cpu_mut(&self) -> Option<&mut CPU> {
         self.inner_mut().cpu.as_mut()
     }
 
     #[inline(always)]
-    pub fn io_mut(&self) -> Option<&mut IO> {
+    pub(crate) fn io_mut(&self) -> Option<&mut IO> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.io)
     }
 
     #[inline(always)]
-    pub fn cpu(&self) -> Option<&CPU> {
+    pub(crate) fn dma_mut(&self) -> Option<&mut DMA> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.dma)
+    }
+
+    #[inline(always)]
+    pub(crate) fn cpu(&self) -> Option<&CPU> {
         self.inner_mut().cpu.as_ref()
     }
 

@@ -7,17 +7,20 @@ use std::rc::Weak;
 const ALL_DEBUG: bool = true;
 const LOG_ALL_IO: bool = false;
 
+use dma::DMA;
+use io::IO;
 use mem::add_mem_to_linker;
 use rtc::RTC;
 use wasmtime::*;
 pub(crate) mod consts;
 mod cpu;
+mod debug;
 mod dev;
+mod dma;
 mod emulator;
 mod io;
 mod mem;
 mod rtc;
-mod debug;
 mod setting;
 pub use consts::*;
 pub use cpu::CPU;
@@ -30,34 +33,46 @@ trait EmulatorTrait {
     fn cpu_mut(&self) -> Option<&mut CPU>;
     fn cpu(&self) -> Option<&CPU>;
     fn rtc_mut(&self) -> Option<&mut RTC>;
+    fn io_mut(&self) -> Option<&mut IO>;
+    fn dma_mut(&self) -> Option<&mut DMA>;
     fn emulator(&self) -> &Emulator;
     fn emulator_mut(&self) -> &mut Emulator;
 }
 
 impl EmulatorTrait for Weak<Store<Emulator>> {
-    #[inline]
+    #[inline(always)]
     fn cpu_mut(&self) -> Option<&mut CPU> {
         let emu = self.emulator_mut();
         emu.cpu_mut()
     }
 
-    #[inline]
+    #[inline(always)]
     fn cpu(&self) -> Option<&CPU> {
         let emu = self.emulator();
         emu.cpu()
     }
 
-    #[inline]
+    #[inline(always)]
+    fn io_mut(&self) -> Option<&mut IO> {
+        self.emulator_mut().io_mut()
+    }
+
+    #[inline(always)]
+    fn dma_mut(&self) -> Option<&mut DMA> {
+        self.emulator_mut().dma_mut()
+    }
+
+    #[inline(always)]
     fn emulator_mut(&self) -> &mut Emulator {
         unsafe { (*(self.as_ptr() as *mut Store<_>)).data_mut() }
     }
 
-    #[inline]
+    #[inline(always)]
     fn emulator(&self) -> &Emulator {
         unsafe { (*(self.as_ptr() as *mut Store<_>)).data() }
     }
 
-    #[inline]
+    #[inline(always)]
     fn rtc_mut(&self) -> Option<&mut RTC> {
         let emu = self.emulator();
         emu.cpu_mut().map(|cpu| &mut cpu.rtc)
@@ -255,9 +270,8 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
             "mmap_read8",
             move |mut caller: Caller<'_, Emulator>, addr: i32| -> i32 {
                 let emu = caller.data_mut();
-                emu.cpu_mut().map_or(0, |cpu| {
-                    cpu.mmap_read8(addr as u32) as i32
-                })
+                emu.cpu_mut()
+                    .map_or(0, |cpu| cpu.mmap_read8(addr as u32) as i32)
             },
         )
         .unwrap();
@@ -268,9 +282,8 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
             "mmap_read16",
             move |mut caller: Caller<'_, Emulator>, addr: i32| -> i32 {
                 let emu = caller.data_mut();
-                emu.cpu_mut().map_or(0, |cpu| {
-                    cpu.mmap_read16(addr as u32) as i32
-                })
+                emu.cpu_mut()
+                    .map_or(0, |cpu| cpu.mmap_read16(addr as u32) as i32)
             },
         )
         .unwrap();
@@ -281,9 +294,8 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
             "mmap_read32",
             move |mut caller: Caller<'_, Emulator>, addr: i32| -> i32 {
                 let emu = caller.data_mut();
-                emu.cpu_mut().map_or(0, |cpu| {
-                    cpu.mmap_read32(addr as u32) as i32
-                })
+                emu.cpu_mut()
+                    .map_or(0, |cpu| cpu.mmap_read32(addr as u32) as i32)
             },
         )
         .unwrap();

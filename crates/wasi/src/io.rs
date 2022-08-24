@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use std::{collections::HashMap, marker::PhantomData, ops::Add, rc::Weak};
 use wasmtime::{AsContext, AsContextMut, Memory, Store};
 
-use crate::{Dev, Emulator, EmulatorTrait, MMAP_BLOCK_SIZE, MMAP_BLOCK_BITS, LOG_ALL_IO};
+use crate::{Dev, Emulator, EmulatorTrait, LOG_ALL_IO, MMAP_BLOCK_BITS, MMAP_BLOCK_SIZE};
 
 pub(crate) trait MemAccessTrait<T> {
     fn read(&self, store: impl AsContext, idx: u32) -> T;
@@ -166,17 +166,12 @@ impl IO {
         }
     }
 
-    
-
     pub fn new(store: Weak<Store<Emulator>>) -> IO {
         let mut v = Vec::new();
         for _ in 0..PORTS_SIZE {
             v.push(IO::default_iops());
         }
-        IO { 
-            ports: v,
-            store,
-         }
+        IO { ports: v, store }
     }
 
     pub fn register_read(&mut self, port: u32, dev: Dev, r8: Rd8Fn, r16: Rd16Fn, r32: Rd32Fn) {
@@ -291,7 +286,15 @@ impl IO {
             .map_or_else(String::default, |s| format!("({})", s))
     }
 
-    pub(crate) fn mmap_register(&mut self, addr: u32, size: usize, r8: Rd8Fn, w8: Wr8Fn, r32: Rd32Fn, w32: Wr32Fn) {
+    pub(crate) fn mmap_register(
+        &mut self,
+        addr: u32,
+        size: usize,
+        r8: Rd8Fn,
+        w8: Wr8Fn,
+        r32: Rd32Fn,
+        w32: Wr32Fn,
+    ) {
         dbg_log!("mmap_register addr=0x{:x}  size={:x}", addr >> 0, size);
         assert!((addr & MMAP_BLOCK_SIZE as u32).saturating_sub(1) == 0);
         assert!(size > 0 && (size & MMAP_BLOCK_SIZE - 1) == 0);
@@ -318,18 +321,17 @@ impl IO {
                 aligned_addr += 1;
             }
         });
-        
     }
 
     #[inline]
-    fn mmap_write32_shim(dev: &Dev, addr: u32, val: u32)  {
+    fn mmap_write32_shim(dev: &Dev, addr: u32, val: u32) {
         let aligned_addr = addr >> MMAP_BLOCK_BITS;
         dev.cpu_mut().map(|cpu| {
             let mmp_fn = cpu.mmap_fn.memory_map_write8[aligned_addr as usize];
             (mmp_fn)(dev, addr, (val & 0xFF) as u8);
-            (mmp_fn)(dev, addr, (val>>8 & 0xFF) as u8);
-            (mmp_fn)(dev, addr, (val>>16 & 0xFF) as u8);
-            (mmp_fn)(dev, addr, (val>>24) as u8);
+            (mmp_fn)(dev, addr, (val >> 8 & 0xFF) as u8);
+            (mmp_fn)(dev, addr, (val >> 16 & 0xFF) as u8);
+            (mmp_fn)(dev, addr, (val >> 24) as u8);
         });
     }
 
@@ -338,27 +340,40 @@ impl IO {
         let aligned_addr = addr >> MMAP_BLOCK_BITS;
         dev.cpu_mut().map_or(0, |cpu| {
             let mmp_fn = cpu.mmap_fn.memory_map_read8[aligned_addr as usize];
-            (mmp_fn)(dev, addr) as u32 | ((mmp_fn)(dev, addr + 1) as u32) << 8  |
-            ((mmp_fn)(dev, addr + 2) as u32) << 16 | ((mmp_fn)(dev, addr + 3) as u32) << 24
+            (mmp_fn)(dev, addr) as u32
+                | ((mmp_fn)(dev, addr + 1) as u32) << 8
+                | ((mmp_fn)(dev, addr + 2) as u32) << 16
+                | ((mmp_fn)(dev, addr + 3) as u32) << 24
         })
     }
 
     pub(crate) fn init(&mut self) {
-        let m_size = self.store.cpu_mut().map(|cpu| {
-            cpu.read_mem_size()
-        }).unwrap();
-        self.mmap_register(m_size, 0x100000000 - m_size as usize, 
+        let m_size = self.store.cpu_mut().map(|cpu| cpu.read_mem_size()).unwrap();
+        self.mmap_register(
+            m_size,
+            0x100000000 - m_size as usize,
             |_: &Dev, addr: u32| {
                 dbg_log!("Read from unmapped memory space, addr=0x{:x}", addr >> 0);
                 0xFF
-            }, |_: &Dev, addr: u32, v: u8| {
-                dbg_log!("Write to unmapped memory space, addr=0x{:x} value={:x}", addr >> 0, v);
-            }, |_: &Dev, addr: u32| {
+            },
+            |_: &Dev, addr: u32, v: u8| {
+                dbg_log!(
+                    "Write to unmapped memory space, addr=0x{:x} value={:x}",
+                    addr >> 0,
+                    v
+                );
+            },
+            |_: &Dev, addr: u32| {
                 dbg_log!("Read from unmapped memory space, addr=0x{:x}", addr >> 0);
                 0xFFFFFFFF
-            }, |_: &Dev, addr: u32, v: u32| {
-                dbg_log!("Write to unmapped memory space, addr=0x{:x} value={:x}", addr >> 0, v);
-            }
+            },
+            |_: &Dev, addr: u32, v: u32| {
+                dbg_log!(
+                    "Write to unmapped memory space, addr=0x{:x} value={:x}",
+                    addr >> 0,
+                    v
+                );
+            },
         );
     }
 }
