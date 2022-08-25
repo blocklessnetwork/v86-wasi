@@ -44,28 +44,18 @@ impl DMA {
     pub(crate) fn init(&mut self) {
         
         self.store.io_mut().map(|io| {
-            macro_rules! io_port_addr_write_bind {
-                ($addr: literal, $ch: literal) => {
+            macro_rules! io_write_bind {
+                ($addr: literal, $ch: literal, $fun: expr, $type: ty) => {
                     io.register_write8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32, val: u8| {
                         dev.dma_mut().map(|dma| {
-                            dma.port_addr_write($ch, val as u16);
+                            $fun(dma, $ch, val as $type);
                         });
                     });
                 };
             }
 
-            macro_rules! io_port_count_write_bind {
-                ($addr: literal, $ch: literal) => {
-                    io.register_write8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32, val: u8| {
-                        dev.dma_mut().map(|dma| {
-                            dma.port_count_write($ch, val as u16);
-                        });
-                    });
-                };
-            }
-
-            macro_rules! io_port_addr_read_bind {
-                ($addr: literal, $ch: literal) => {
+            macro_rules! io_read_bind {
+                ($addr: literal, $ch: literal, $fun: expr) => {
                     io.register_read8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32| {
                         dev.dma_mut().map_or(0, |dma| {
                             dma.port_addr_read($ch)
@@ -73,93 +63,7 @@ impl DMA {
                     });
                 };
             }
-            macro_rules! io_port_count_read_bind {
-                ($addr: literal, $ch: literal) => {
-                    io.register_read8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32| {
-                        dev.dma_mut().map_or(0, |dma| {
-                            dma.port_count_read($ch)
-                        })
-                    });
-                };
-            }
 
-            macro_rules! io_port_page_write_bind {
-                ($addr: literal, $ch: literal) => {
-                    io.register_write8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32, val: u8| {
-                        dev.dma_mut().map(|dma| {
-                            dma.port_page_write($ch, val);
-                        });
-                    });
-                };
-            }
-
-            macro_rules! io_port_page_read_bind {
-                ($addr: literal, $ch: literal) => {
-                    io.register_read8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32| {
-                        dev.dma_mut().map_or(0, |dma| {
-                            dma.port_page_read($ch)
-                        })
-                    });
-                };
-            }
-
-            macro_rules! io_port_pagehi_write_bind {
-                ($addr: literal, $ch: literal) => {
-                    io.register_write8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32, val: u8| {
-                        dev.dma_mut().map(|dma| {
-                            dma.port_pagehi_write($ch, val);
-                        });
-                    });
-                };
-            }
-
-            macro_rules! io_port_pagehi_read_bind {
-                ($addr: literal, $ch: literal) => {
-                    io.register_read8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32| {
-                        dev.dma_mut().map_or(0, |dma| {
-                            dma.port_pagehi_read($ch)
-                        })
-                    });
-                };
-            }
-
-            macro_rules! io_port_singlemask_write_bind {
-                ($addr: literal, $ch: literal) => {
-                    io.register_write8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32, val: u8| {
-                        dev.dma_mut().map(|dma| {
-                            dma.port_singlemask_write($ch, val);
-                        });
-                    });
-                };
-            }
-
-            macro_rules! io_port_multimask_write_bind {
-                ($addr: literal, $ch: literal) => {
-                    io.register_write8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32, val: u8| {
-                        dev.dma_mut().map(|dma| {
-                            dma.port_multimask_write($ch, val);
-                        });
-                    });
-                };
-            }
-            macro_rules! io_port_multimask_read_bind {
-                ($addr: literal, $ch: literal) => {
-                    io.register_read8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32| {
-                        dev.dma_mut().map_or(0, |dma| {
-                            dma.port_multimask_read($ch)
-                        })
-                    });
-                };
-            }
-            macro_rules! io_port_mode_write_bind {
-                ($addr: literal, $ch: literal) => {
-                    io.register_write8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32, val: u8| {
-                        dev.dma_mut().map(|dma| {
-                            dma.port_mode_write($ch, val);
-                        });
-                    });
-                };
-            }
             macro_rules! io_portc_write_bind {
                 ($addr: literal) => {
                     io.register_write8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32, val: u8| {
@@ -169,86 +73,87 @@ impl DMA {
                     });
                 };
             }
-            io_port_addr_write_bind!(0x00, 0);
-            io_port_addr_write_bind!(0x02, 1);
-            io_port_addr_write_bind!(0x04, 2);
-            io_port_addr_write_bind!(0x06, 3);
-            io_port_count_write_bind!(0x01, 0);
-            io_port_count_write_bind!(0x03, 1);
-            io_port_count_write_bind!(0x05, 2);
-            io_port_count_write_bind!(0x07, 3);
+            io_write_bind!(0x00, 0, Self::port_addr_write, u16);
+            io_write_bind!(0x00, 0, Self::port_addr_write, u16);
+            io_write_bind!(0x02, 1, Self::port_addr_write, u16);
+            io_write_bind!(0x04, 2, Self::port_addr_write, u16);
+            io_write_bind!(0x06, 3, Self::port_addr_write, u16);
+            io_write_bind!(0x01, 0, Self::port_count_write, u16);
+            io_write_bind!(0x03, 1, Self::port_count_write, u16);
+            io_write_bind!(0x05, 2, Self::port_count_write, u16);
+            io_write_bind!(0x07, 3, Self::port_count_write, u16);
 
-            io_port_addr_read_bind!(0x00, 0);
-            io_port_addr_read_bind!(0x02, 1);
-            io_port_addr_read_bind!(0x04, 2);
-            io_port_addr_read_bind!(0x06, 3);
-            io_port_count_read_bind!(0x01, 0);
-            io_port_count_read_bind!(0x03, 1);
-            io_port_count_read_bind!(0x05, 2);
-            io_port_count_read_bind!(0x07, 3);
+            io_read_bind!(0x00, 0, Self::port_addr_read);
+            io_read_bind!(0x02, 1, Self::port_addr_read);
+            io_read_bind!(0x04, 2, Self::port_addr_read);
+            io_read_bind!(0x06, 3, Self::port_addr_read);
+            io_read_bind!(0x01, 0, Self::port_addr_read);
+            io_read_bind!(0x03, 1, Self::port_addr_read);
+            io_read_bind!(0x05, 2, Self::port_addr_read);
+            io_read_bind!(0x07, 3, Self::port_addr_read);
             
-            io_port_addr_write_bind!(0xC0, 4);
-            io_port_addr_write_bind!(0xC4, 5);
-            io_port_addr_write_bind!(0xC8, 6);
-            io_port_addr_write_bind!(0xCC, 7);
-            io_port_count_write_bind!(0xC2, 4);
-            io_port_count_write_bind!(0xC6, 5);
-            io_port_count_write_bind!(0xCA, 6);
-            io_port_count_write_bind!(0xCE, 7);
+            io_write_bind!(0xC0, 4, Self::port_addr_write, u16);
+            io_write_bind!(0xC4, 5, Self::port_addr_write, u16);
+            io_write_bind!(0xC8, 6, Self::port_addr_write, u16);
+            io_write_bind!(0xCC, 7, Self::port_addr_write, u16);
+            io_write_bind!(0xC2, 4, Self::port_count_write, u16);
+            io_write_bind!(0xC6, 5, Self::port_count_write, u16);
+            io_write_bind!(0xCA, 6, Self::port_count_write, u16);
+            io_write_bind!(0xCE, 7, Self::port_count_write, u16);
 
-            io_port_addr_read_bind!(0xC0, 4);
-            io_port_addr_read_bind!(0xC4, 5);
-            io_port_addr_read_bind!(0xC8, 6);
-            io_port_addr_read_bind!(0xCC, 7);
-            io_port_count_read_bind!(0xC2, 4);
-            io_port_count_read_bind!(0xC6, 5);
-            io_port_count_read_bind!(0xCA, 6);
-            io_port_count_read_bind!(0xCE, 7);
+            io_read_bind!(0xC0, 4, Self::port_addr_read);
+            io_read_bind!(0xC4, 5, Self::port_addr_read);
+            io_read_bind!(0xC8, 6, Self::port_addr_read);
+            io_read_bind!(0xCC, 7, Self::port_addr_read);
+            io_read_bind!(0xC2, 4, Self::port_count_read);
+            io_read_bind!(0xC6, 5, Self::port_count_read);
+            io_read_bind!(0xCA, 6, Self::port_count_read);
+            io_read_bind!(0xCE, 7, Self::port_count_read);
 
-            io_port_page_write_bind!(0x87, 0);
-            io_port_page_write_bind!(0x83, 1);
-            io_port_page_write_bind!(0x81, 2);
-            io_port_page_write_bind!(0x82, 3);
-            io_port_page_write_bind!(0x8F, 4);
-            io_port_page_write_bind!(0x8B, 5);
-            io_port_page_write_bind!(0x89, 6);
-            io_port_page_write_bind!(0x8A, 7);
+            io_write_bind!(0x87, 0, Self::port_page_write, u8);
+            io_write_bind!(0x83, 1, Self::port_page_write, u8);
+            io_write_bind!(0x81, 2, Self::port_page_write, u8);
+            io_write_bind!(0x82, 3, Self::port_page_write, u8);
+            io_write_bind!(0x8F, 4, Self::port_page_write, u8);
+            io_write_bind!(0x8B, 5, Self::port_page_write, u8);
+            io_write_bind!(0x89, 6, Self::port_page_write, u8);
+            io_write_bind!(0x8A, 7, Self::port_page_write, u8);
 
-            io_port_page_read_bind!(0x87, 0);
-            io_port_page_read_bind!(0x83, 1);
-            io_port_page_read_bind!(0x81, 2);
-            io_port_page_read_bind!(0x82, 3);
-            io_port_page_read_bind!(0x8F, 4);
-            io_port_page_read_bind!(0x8B, 5);
-            io_port_page_read_bind!(0x89, 6);
-            io_port_page_read_bind!(0x8A, 7);
+            io_read_bind!(0x87, 0, Self::port_page_read);
+            io_read_bind!(0x83, 1, Self::port_page_read);
+            io_read_bind!(0x81, 2, Self::port_page_read);
+            io_read_bind!(0x82, 3, Self::port_page_read);
+            io_read_bind!(0x8F, 4, Self::port_page_read);
+            io_read_bind!(0x8B, 5, Self::port_page_read);
+            io_read_bind!(0x89, 6, Self::port_page_read);
+            io_read_bind!(0x8A, 7, Self::port_page_read);
 
-            io_port_pagehi_write_bind!(0x487, 0);
-            io_port_pagehi_write_bind!(0x483, 1);
-            io_port_pagehi_write_bind!(0x481, 2);
-            io_port_pagehi_write_bind!(0x482, 3);
-            io_port_pagehi_write_bind!(0x48B, 5);
-            io_port_pagehi_write_bind!(0x489, 6);
-            io_port_pagehi_write_bind!(0x48A, 7);
+            io_write_bind!(0x487, 0, Self::port_pagehi_write, u8);
+            io_write_bind!(0x483, 1, Self::port_pagehi_write, u8);
+            io_write_bind!(0x481, 2, Self::port_pagehi_write, u8);
+            io_write_bind!(0x482, 3, Self::port_pagehi_write, u8);
+            io_write_bind!(0x48B, 5, Self::port_pagehi_write, u8);
+            io_write_bind!(0x489, 6, Self::port_pagehi_write, u8);
+            io_write_bind!(0x48A, 7, Self::port_pagehi_write, u8);
 
-            io_port_pagehi_read_bind!(0x487, 0);
-            io_port_pagehi_read_bind!(0x483, 1);
-            io_port_pagehi_read_bind!(0x481, 2);
-            io_port_pagehi_read_bind!(0x482, 3);
-            io_port_pagehi_read_bind!(0x48B, 5);
-            io_port_pagehi_read_bind!(0x489, 6);
-            io_port_pagehi_read_bind!(0x48A, 7);
+            io_read_bind!(0x487, 0, Self::port_pagehi_read);
+            io_read_bind!(0x483, 1, Self::port_pagehi_read);
+            io_read_bind!(0x481, 2, Self::port_pagehi_read);
+            io_read_bind!(0x482, 3, Self::port_pagehi_read);
+            io_read_bind!(0x48B, 5, Self::port_pagehi_read);
+            io_read_bind!(0x489, 6, Self::port_pagehi_read);
+            io_read_bind!(0x48A, 7, Self::port_pagehi_read);
 
-            io_port_singlemask_write_bind!(0x0A, 0);
-            io_port_singlemask_write_bind!(0xD4, 4);
-            io_port_multimask_write_bind!(0x0F, 0);
-            io_port_multimask_write_bind!(0xDE, 4);
+            io_write_bind!(0x0A, 0, Self::port_singlemask_write, u8);
+            io_write_bind!(0xD4, 4, Self::port_singlemask_write, u8);
+            io_write_bind!(0x0F, 0, Self::port_multimask_write, u8);
+            io_write_bind!(0xDE, 4, Self::port_multimask_write, u8);
 
-            io_port_multimask_read_bind!(0x0F, 0);
-            io_port_multimask_read_bind!(0xDE, 4);
+            io_read_bind!(0x0F, 0, Self::port_multimask_read);
+            io_read_bind!(0xDE, 4, Self::port_multimask_read);
             
-            io_port_mode_write_bind!(0x0B, 0);
-            io_port_mode_write_bind!(0xD6, 4);
+            io_write_bind!(0x0B, 0, Self::port_mode_write, u8);
+            io_write_bind!(0xD6, 4, Self::port_mode_write, u8);
 
             io_portc_write_bind!(0x0C);
             io_portc_write_bind!(0xD8);
