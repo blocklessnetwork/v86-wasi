@@ -160,7 +160,7 @@ impl DMA {
         });
     }
 
-    fn portc_write (&mut self, data_byte: u8) {
+    fn portc_write (&mut self, _data_byte: u8) {
         dbg_log!("flipflop reset");
         self.lsb_msb_flipflop = 0;
     }
