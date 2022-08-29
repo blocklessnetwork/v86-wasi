@@ -152,6 +152,7 @@ struct VMOpers {
     typed_allocate_memory: TypedFunc<u32, u32>,
     typed_do_many_cycles_native: TypedFunc<(), ()>,
     typed_set_tsc: TypedFunc<(u32, u32), ()>,
+    typed_pic_call_irq: TypedFunc<i32, ()>,
 }
 
 impl VMOpers {
@@ -186,6 +187,9 @@ impl VMOpers {
         let typed_set_tsc = inst
             .get_typed_func(store.as_context_mut(), "set_tsc")
             .unwrap();
+        let typed_pic_call_irq = inst
+            .get_typed_func(store.as_context_mut(), "pic_call_irq")
+            .unwrap();
         Self {
             typed_read8,
             typed_read16,
@@ -194,6 +198,7 @@ impl VMOpers {
             typed_write16,
             typed_write32,
             typed_reset_cpu,
+            typed_pic_call_irq,
             typed_allocate_memory,
             typed_get_eflags_no_arith,
             typed_do_many_cycles_native,
@@ -232,15 +237,21 @@ impl VMOpers {
         self.typed_do_many_cycles_native.call(store, ()).unwrap();
     }
 
-    fn reset_cpu(&self, store: &mut impl AsContextMut) {
+    fn reset_cpu(&self, store: impl AsContextMut) {
         self.typed_reset_cpu
-            .call(store.as_context_mut(), ())
+            .call(store, ())
             .unwrap()
     }
 
-    fn set_tsc(&self, store: &mut impl AsContextMut, low: u32, hig: u32) {
+    fn pic_call_irq(&self, store: impl AsContextMut, interrupt_nr: i32) {
+        self.typed_pic_call_irq
+            .call(store, interrupt_nr)
+            .unwrap();
+    }
+
+    fn set_tsc(&self, store: impl AsContextMut, low: u32, hig: u32) {
         self.typed_set_tsc
-            .call(store.as_context_mut(), (low, hig))
+            .call(store, (low, hig))
             .unwrap()
     }
 }
@@ -364,6 +375,12 @@ impl CPU {
     fn write_mem_size(&mut self, size: u32) {
         self.store_mut().map(|s| {
             self.iomap.memory_size_io.write(s, 0u32, size as _);
+        });
+    }
+
+    pub fn pic_call_irq(&mut self, interrupt_nr: i32) {
+        self.store_mut().map(|store| {
+            self.vm_opers.pic_call_irq(store.as_context_mut(), interrupt_nr);
         });
     }
 

@@ -4,8 +4,27 @@ use crate::{Emulator, EmulatorTrait, Dev};
 
 const PIC_LOG_VERBOSE: bool = false;
 
+lazy_static::lazy_static! {
+    static ref INT_LOG2_TABLE: [i8; 256] = {
+        let mut table = [0; 256];
+        let mut b = -2;
+        for i in 0..256 {
+            if (i & i - 1) == 0 {
+                b += 1;
+            }
+            table[i] = b;
+        }
+        table
+    }; 
+}
+
+#[inline(always)]
+fn int_log2_byte(i: u8) -> i8 {
+    INT_LOG2_TABLE[i as usize]
+}
 
 struct InnerPIC {
+    store: Weak<Store<Emulator>>,
     is_master: bool,
     irq_mask: u8,
     name: &'static str,
@@ -13,9 +32,8 @@ struct InnerPIC {
     isr: u8,
     irr: u8,
     irq_value: u8,
-    requested_irq: i32,
+    requested_irq: i8,
     expect_icw4: bool,
-    store: Weak<Store<Emulator>>,
     state: u8,
     read_isr: bool,
     auto_eoi: u8,
@@ -210,7 +228,7 @@ impl InnerPIC {
                 }
                 self.check_irqs();
             }
-        } else if(self.state == 1) {
+        } else if self.state == 1 {
             // icw2
             self.irq_map = data_byte;
             dbg_log!("interrupts are mapped to 0x{:x} ({})", self.irq_map, self.name);
@@ -239,10 +257,10 @@ impl InnerPIC {
         self.elcr = value;
     }
 
-
     fn check_irqs(&mut self) {
         
     }
+
     fn check_master_irqs(&mut self) {
         if self.requested_irq >= 0 {
             if PIC_LOG_VERBOSE {
@@ -251,7 +269,7 @@ impl InnerPIC {
             self.store.cpu_mut().map(|cpu| {
                 cpu.handle_irqs()
             });
-            return
+            return;
         }
         let enabled_irr: i8 = (self.irr & self.irq_mask) as i8;
         if enabled_irr == 0 {
@@ -263,14 +281,239 @@ impl InnerPIC {
                     self.isr,
                 );
             }
-            return
+            return;
         }
-        let irq_mask = enabled_irr & -enabled_irr;
+        let irq_mask: u8 = (enabled_irr & -enabled_irr) as u8;
         let special_mask = if self.special_mask_mode {
             self.irq_mask
         } else {
             0xFF
         };
+        let isr:i8 = self.isr as i8;
+        if self.isr > 0 && ((isr & -isr) as u8 & special_mask) <= irq_mask {
+            dbg_log!(
+                "master> higher prio: isr=0x{:02x} mask=0x{:02x} irq=0x{:02x}",
+                self.isr, 
+                self.irq_mask & 0xff, 
+                self.irq_mask
+            );
+            return;
+        }
+        assert!(irq_mask != 0);
+        let irq_number = int_log2_byte(irq_mask);
+        assert!(irq_mask == (1 << irq_number));
+        if PIC_LOG_VERBOSE {
+            dbg_log!("master> request irq {}", irq_number);
+        }
+        self.requested_irq = irq_number;
+        self.store.cpu_mut().map(|cpu| {
+            cpu.handle_irqs();
+        });
+    }
+
+    fn acknowledge_irq(&mut self) {
+        if self.is_master {
+            self.acknowledge_master_irq();
+        } else {
+            self.acknowledge_slave_irq();
+        }
+    }
+
+    fn acknowledge_master_irq(&mut self) {
+        if self.requested_irq == -1 {
+            return;
+        }
+
+        if self.irr == 0 {
+            if PIC_LOG_VERBOSE {
+                dbg_log!("master> spurious requested={}",self.requested_irq);
+            }
+            self.requested_irq = -1;
+            return;
+        }
+        assert!(self.irr > 0); // spurious
+        assert!(self.requested_irq >= 0);
+        let irq_mask = 1 << self.requested_irq;
+
+         // not in level mode
+        if(self.elcr & irq_mask) == 0 {
+            self.irr &= !irq_mask;
+        }
+
+        if self.auto_eoi == 0 {
+            self.isr |= irq_mask;
+        }
+
+        if PIC_LOG_VERBOSE {
+            dbg_log!("master> acknowledge {}", self.requested_irq)
+        }
+        if self.requested_irq == 2 {
+            self.store.pic_mut().map(|pic| {
+                pic.slave.as_mut().map(|inner| {
+                    inner.acknowledge_irq();
+                });
+            });
+        } else {
+            self.store.cpu_mut().map(|cpu| {
+                cpu.pic_call_irq(self.irq_map as i32| self.requested_irq as i32);
+            });
+        }
+        self.requested_irq = -1;
+        self.check_irqs();
+    }
+
+    fn acknowledge_slave_irq(&mut self) {
+        if self.requested_irq == -1 {
+            return;
+        }
+
+        if self.irr == 0 {
+            if PIC_LOG_VERBOSE {
+                dbg_log!("slave > spurious requested={}", self.requested_irq);
+                self.requested_irq = -1;
+                self.store.cpu_mut().map(|cpu| {
+                    cpu.pic_call_irq((self.irq_map | 7) as i32);
+                });
+                self.store.pic_mut().map(|pic| {
+                    pic.master.as_mut().map(|inner|{
+                        inner.irq_value &= !(1 << 2);
+                    });
+                });
+                return;
+            }
+
+            assert!(self.irr > 0); // spurious
+            assert!(self.requested_irq >= 0);
+
+            let irq_mask = 1 << self.requested_irq;
+            // not in level mode
+            if (self.elcr & irq_mask) == 0 {
+                self.irr &= !irq_mask;
+            }
+
+            if self.auto_eoi == 0 {
+                self.isr |= irq_mask;
+            }
+
+            self.store.pic_mut().map(|pic| {
+                pic.master.as_mut().map(|inner|{
+                    inner.irq_value &= !(1 << 2);
+                });
+            });
+            if PIC_LOG_VERBOSE {
+                dbg_log!("slave > acknowledge {}", self.requested_irq);
+            }
+            self.store.cpu_mut().map(|cpu| {
+                cpu.pic_call_irq(self.irq_map as i32| self.requested_irq as i32);
+            });
+            self.requested_irq = -1;
+            self.check_irqs();
+        }
+    }
+
+    fn set_irq(&mut self, irq_number: u8) {
+        if self.is_master {
+            self.set_master_irq(irq_number);
+        } else {
+            self.set_slave_irq(irq_number);
+        }
+    }
+
+    fn set_slave_irq(&mut self, irq_number: u8) {
+        assert!(irq_number >= 0 && irq_number < 8);
+        let irq_mask = 1 << irq_number;
+        if (self.irq_value & irq_mask) == 0 {
+            if PIC_LOG_VERBOSE {
+                dbg_log!("slave > set irq {}", irq_number);
+            }
+            self.irr |= irq_mask;
+            self.irq_value |= irq_mask;
+            self.check_irqs();
+        } else {
+            if PIC_LOG_VERBOSE {
+                dbg_log!("slave > set irq {}: already set!", irq_number);
+            }
+        }
+    }
+
+    fn set_master_irq(&mut self, irq_number: u8) {
+        assert!(irq_number >= 0 && irq_number < 16);
+        if irq_number >= 8 {
+            self.store.pic_mut().map(|pic| {
+                pic.slave.as_mut().map(|inner| {
+                    inner.set_irq(irq_number - 8)
+                });
+            });
+            return;
+        }
+
+        let irq_mask = 1 << irq_number;
+        if (self.irq_value & irq_mask) == 0 {
+            if PIC_LOG_VERBOSE {
+                dbg_log!("master> set irq {}", irq_number);
+            }
+            self.irr |= irq_mask;
+            self.irq_value |= irq_mask;
+            self.check_irqs();
+        } else {
+            if PIC_LOG_VERBOSE {
+                dbg_log!("master> set irq {}: already set!", irq_number);
+            }
+        }
+    }
+
+    fn check_slave_irqs(&mut self) {
+        if self.requested_irq >= 0 {
+            if PIC_LOG_VERBOSE {
+                dbg_log!("slave > Already requested irq:  {}", self.requested_irq);
+            }
+            self.store.cpu_mut().map(|cpu| {
+                cpu.handle_irqs();
+            });
+            return;
+        }
+
+        let enabled_irr: i8 = (self.irr & self.irq_mask) as i8;
+
+        if enabled_irr == 0 {
+            if PIC_LOG_VERBOSE {
+                dbg_log!(
+                    "slave > no unmasked irrs. irr=0x{:02x} mask=0x{:02x} isr=0x{:02x}", 
+                    self.irr, 
+                    self.irq_mask & 0xff,
+                    self.isr
+                );
+            }
+            return;
+        }
+
+        let irq_mask = (enabled_irr & -enabled_irr ) as u8;
+        let special_mask = if self.special_mask_mode {
+            self.irq_mask
+        } else {
+            0xFF
+        };
+        let isr:i8 = self.isr as i8;
+        if self.isr > 0 && ((isr & -isr) as u8 & special_mask) <= irq_mask {
+            // wait for eoi of higher or same priority interrupt
+            dbg_log!(
+                "slave > higher prio: isr=0x{:02x} irq=0x{:02x}",
+                self.isr, 
+                self.irq_mask 
+            );
+            return;
+        }
+
+        assert!(irq_mask != 0);
+        let irq_number = int_log2_byte(irq_mask);
+        assert!(irq_mask == (1 << irq_number));
+        if PIC_LOG_VERBOSE {
+            dbg_log!("slave> request irq {}", irq_number);
+        }
+        self.requested_irq = irq_number;
+        self.store.pic_mut().map(|pic| {
+            pic.master.as_mut().map(|inner| inner.set_irq(2))
+        });
     }
 
 }
