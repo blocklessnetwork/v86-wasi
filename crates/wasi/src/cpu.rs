@@ -463,6 +463,7 @@ impl CPU {
         self.debug.init();
         self.init_io();
         self.dma.init();
+        self.pic.init();
         self.reset_cpu();
         self.load_bios();
 
