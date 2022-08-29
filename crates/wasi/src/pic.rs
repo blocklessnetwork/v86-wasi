@@ -84,7 +84,7 @@ impl InnerPIC {
 
             io.register_write8(io_base|1, crate::Dev::Emulator(self.store.clone()), |dev: &Dev, port: u32, w8: u8| {
                 dev.pic_mut().map(|pic| {
-                    let inner = if port == MASTER_IO_BASE {
+                    let inner = if port == MASTER_IO_BASE|1 {
                         pic.master.as_mut()
                     } else {
                         pic.slave.as_mut()
@@ -95,7 +95,7 @@ impl InnerPIC {
 
             io.register_read8(io_base|1, crate::Dev::Emulator(self.store.clone()), |dev: &Dev, port: u32| {
                 dev.pic_mut().map_or(0, |pic| {
-                    let inner = if port == MASTER_IO_BASE {
+                    let inner = if port == MASTER_IO_BASE|1 {
                         pic.master.as_mut()
                     } else {
                         pic.slave.as_mut()
@@ -106,7 +106,7 @@ impl InnerPIC {
 
             io.register_write8(iobase_high, crate::Dev::Emulator(self.store.clone()), |dev: &Dev, port: u32, w8: u8| {
                 dev.pic_mut().map(|pic| {
-                    let inner = if port == MASTER_IO_BASE {
+                    let inner = if port == MASTER_IOBASE_HIGH {
                         pic.master.as_mut()
                     } else {
                         pic.slave.as_mut()
@@ -117,7 +117,7 @@ impl InnerPIC {
 
             io.register_read8(iobase_high, crate::Dev::Emulator(self.store.clone()), |dev: &Dev, port: u32| {
                 dev.pic_mut().map_or(0, |pic| {
-                    let inner = if port == MASTER_IO_BASE {
+                    let inner = if port == MASTER_IOBASE_HIGH {
                         pic.master.as_mut()
                     } else {
                         pic.slave.as_mut()
