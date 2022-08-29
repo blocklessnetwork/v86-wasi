@@ -10,7 +10,7 @@ use crate::{
     debug::Debug,
     io::{MMapFn, MemAccess, MemAccessTrait, IO},
     rtc::RTC,
-    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, dma::DMA,
+    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, dma::DMA, pic::PIC,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -256,6 +256,7 @@ pub struct CPU {
     pub(crate) debug: Debug,
     pub(crate) io: IO,
     pub(crate) dma: DMA,
+    pub(crate) pic: PIC,
 }
 
 impl CPU {
@@ -282,7 +283,8 @@ impl CPU {
             rtc,
             vm_opers: VMOpers::new(&inst, s),
             iomap: IOMap::new(memory),
-            io: IO::new(store),
+            io: IO::new(store.clone()),
+            pic: PIC::new(store),
         }
     }
 
@@ -477,7 +479,7 @@ impl CPU {
             .map_or(false, |store| self.iomap.in_hlt_io.read(store, 1) > 0)
     }
 
-    fn handle_irqs(&mut self) {
+    pub fn handle_irqs(&mut self) {
         if self.has_interrupt() {
             //TODO:
         }

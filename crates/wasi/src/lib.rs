@@ -10,12 +10,14 @@ const LOG_ALL_IO: bool = false;
 use dma::DMA;
 use io::IO;
 use mem::add_mem_to_linker;
+use pic::PIC;
 use rtc::RTC;
 use wasmtime::*;
 pub(crate) mod consts;
 mod cpu;
 mod debug;
 mod dev;
+mod pic;
 mod dma;
 mod emulator;
 mod io;
@@ -35,11 +37,23 @@ trait EmulatorTrait {
     fn rtc_mut(&self) -> Option<&mut RTC>;
     fn io_mut(&self) -> Option<&mut IO>;
     fn dma_mut(&self) -> Option<&mut DMA>;
+    fn pic_mut(&self) -> Option<&mut PIC>;
+    fn pic(&self) -> Option<&PIC>;
     fn emulator(&self) -> &Emulator;
     fn emulator_mut(&self) -> &mut Emulator;
 }
 
 impl EmulatorTrait for Weak<Store<Emulator>> {
+    #[inline(always)]
+    fn pic_mut(&self) -> Option<&mut PIC> {
+        self.emulator_mut().pic_mut()
+    }
+
+    #[inline(always)]
+    fn pic(&self) -> Option<&PIC> {
+        self.emulator_mut().pic()
+    }
+
     #[inline(always)]
     fn cpu_mut(&self) -> Option<&mut CPU> {
         let emu = self.emulator_mut();
