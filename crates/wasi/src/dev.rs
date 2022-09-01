@@ -2,8 +2,9 @@ use std::rc::Weak;
 
 use wasmtime::Store;
 
-use crate::{debug::Debug, rtc::RTC, Emulator, EmulatorTrait, CPU, io::IO, dma::DMA, pic::PIC};
+use crate::{debug::Debug, dma::DMA, io::IO, pic::PIC, rtc::RTC, Emulator, EmulatorTrait, CPU};
 
+#[derive(Clone)]
 pub enum Dev {
     Empty,
     Emulator(Weak<Store<Emulator>>),

@@ -2,7 +2,7 @@ use std::rc::Weak;
 
 use wasmtime::Store;
 
-use crate::{Emulator, EmulatorTrait, Dev};
+use crate::{Dev, Emulator, EmulatorTrait};
 
 pub(crate) struct DMA {
     store: Weak<Store<Emulator>>,
@@ -16,13 +16,9 @@ pub(crate) struct DMA {
     channel_mode: Vec<u8>,
     unmask_listeners: Vec<()>,
     lsb_msb_flipflop: u8,
-
 }
 
-
-
 impl DMA {
-
     pub(crate) fn new(store: Weak<Store<Emulator>>) -> Self {
         Self {
             store,
@@ -39,38 +35,45 @@ impl DMA {
         }
     }
 
-    
-
     pub(crate) fn init(&mut self) {
-        
         self.store.io_mut().map(|io| {
             macro_rules! io_write_bind {
                 ($addr: literal, $ch: literal, $fun: expr, $type: ty) => {
-                    io.register_write8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32, val: u8| {
-                        dev.dma_mut().map(|dma| {
-                            $fun(dma, $ch, val as $type);
-                        });
-                    });
+                    io.register_write8(
+                        $addr,
+                        Dev::Emulator(self.store.clone()),
+                        |dev: &Dev, _addr: u32, val: u8| {
+                            dev.dma_mut().map(|dma| {
+                                $fun(dma, $ch, val as $type);
+                            });
+                        },
+                    );
                 };
             }
 
             macro_rules! io_read_bind {
                 ($addr: literal, $ch: literal, $fun: expr) => {
-                    io.register_read8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32| {
-                        dev.dma_mut().map_or(0, |dma| {
-                            dma.port_addr_read($ch)
-                        })
-                    });
+                    io.register_read8(
+                        $addr,
+                        Dev::Emulator(self.store.clone()),
+                        |dev: &Dev, _addr: u32| {
+                            dev.dma_mut().map_or(0, |dma| dma.port_addr_read($ch))
+                        },
+                    );
                 };
             }
 
             macro_rules! io_portc_write_bind {
                 ($addr: literal) => {
-                    io.register_write8($addr, Dev::Emulator(self.store.clone()), |dev: &Dev, _addr: u32, val: u8| {
-                        dev.dma_mut().map(|dma| {
-                            dma.portc_write(val);
-                        });
-                    });
+                    io.register_write8(
+                        $addr,
+                        Dev::Emulator(self.store.clone()),
+                        |dev: &Dev, _addr: u32, val: u8| {
+                            dev.dma_mut().map(|dma| {
+                                dma.portc_write(val);
+                            });
+                        },
+                    );
                 };
             }
             io_write_bind!(0x00, 0, Self::port_addr_write, u16);
@@ -91,7 +94,7 @@ impl DMA {
             io_read_bind!(0x03, 1, Self::port_addr_read);
             io_read_bind!(0x05, 2, Self::port_addr_read);
             io_read_bind!(0x07, 3, Self::port_addr_read);
-            
+
             io_write_bind!(0xC0, 4, Self::port_addr_write, u16);
             io_write_bind!(0xC4, 5, Self::port_addr_write, u16);
             io_write_bind!(0xC8, 6, Self::port_addr_write, u16);
@@ -151,7 +154,7 @@ impl DMA {
 
             io_read_bind!(0x0F, 0, Self::port_multimask_read);
             io_read_bind!(0xDE, 4, Self::port_multimask_read);
-            
+
             io_write_bind!(0x0B, 0, Self::port_mode_write, u8);
             io_write_bind!(0xD6, 4, Self::port_mode_write, u8);
 
@@ -160,7 +163,7 @@ impl DMA {
         });
     }
 
-    fn portc_write (&mut self, _data_byte: u8) {
+    fn portc_write(&mut self, _data_byte: u8) {
         dbg_log!("flipflop reset");
         self.lsb_msb_flipflop = 0;
     }
@@ -190,11 +193,7 @@ impl DMA {
 
     fn port_singlemask_write(&mut self, channel_offset: usize, data_byte: u8) {
         let channel = (data_byte & 0x3) as usize + channel_offset;
-        let value = if data_byte & 0x4 > 0 {
-            1
-        } else {
-            0
-        };
+        let value = if data_byte & 0x4 > 0 { 1 } else { 0 };
         dbg_log!("singlechannel mask write [{}] = {}", channel, value);
         self.update_mask(channel, value);
     }
@@ -211,13 +210,12 @@ impl DMA {
         }
     }
 
-
     fn port_pagehi_write(&mut self, channel: usize, data_byte: u8) {
         dbg_log!("pagehi write [{}] = 0x{:x}", channel, data_byte);
         self.channel_pagehi[channel] = data_byte;
     }
 
-    fn  port_pagehi_read(&self, channel: usize) -> u8 {
+    fn port_pagehi_read(&self, channel: usize) -> u8 {
         dbg_log!("pagehi read [{}]", channel);
         self.channel_pagehi[channel]
     }
@@ -227,13 +225,13 @@ impl DMA {
         self.channel_page[channel] = data_byte;
     }
 
-    fn  port_page_read(&self, channel: usize) -> u8 {
+    fn port_page_read(&self, channel: usize) -> u8 {
         dbg_log!("page read [{}]", channel);
         self.channel_page[channel]
     }
 
     fn port_addr_write(&mut self, channel: usize, data_byte: u16) {
-        dbg_log!("addr write [{}] = 0x{:x}", channel ,data_byte);
+        dbg_log!("addr write [{}] = 0x{:x}", channel, data_byte);
         self.channel_addr[channel] =
             self.flipflop_get(self.channel_addr[channel], data_byte, false);
         self.channel_addr_init[channel] =
@@ -241,7 +239,7 @@ impl DMA {
     }
 
     fn port_count_write(&mut self, channel: usize, data_byte: u16) {
-        dbg_log!("count write [{}] = 0x{:x}", channel ,data_byte);
+        dbg_log!("count write [{}] = 0x{:x}", channel, data_byte);
         self.channel_count[channel] =
             self.flipflop_get(self.channel_count[channel], data_byte, false);
         self.channel_count_init[channel] =
@@ -249,12 +247,20 @@ impl DMA {
     }
 
     fn port_addr_read(&mut self, channel: usize) -> u8 {
-        dbg_log!("addr read [{}] -> 0x{:x}", channel, self.channel_addr[channel]);
+        dbg_log!(
+            "addr read [{}] -> 0x{:x}",
+            channel,
+            self.channel_addr[channel]
+        );
         self.flipflop_read(self.channel_addr[channel])
     }
 
     fn port_count_read(&mut self, channel: usize) -> u8 {
-        dbg_log!("count read [{}] -> 0x{:x}", channel, self.channel_count[channel]);
+        dbg_log!(
+            "count read [{}] -> 0x{:x}",
+            channel,
+            self.channel_count[channel]
+        );
         self.flipflop_read(self.channel_count[channel])
     }
 
@@ -277,5 +283,4 @@ impl DMA {
             ((dword >> 8) & 0xFF) as u8
         }
     }
-
 }

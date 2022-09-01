@@ -17,11 +17,12 @@ pub(crate) mod consts;
 mod cpu;
 mod debug;
 mod dev;
-mod pic;
 mod dma;
 mod emulator;
 mod io;
 mod mem;
+mod pci;
+mod pic;
 mod rtc;
 mod setting;
 pub use consts::*;
@@ -39,6 +40,7 @@ trait EmulatorTrait {
     fn dma_mut(&self) -> Option<&mut DMA>;
     fn pic_mut(&self) -> Option<&mut PIC>;
     fn pic(&self) -> Option<&PIC>;
+    fn io(&self) -> Option<&IO>;
     fn emulator(&self) -> &Emulator;
     fn emulator_mut(&self) -> &mut Emulator;
 }
@@ -69,6 +71,11 @@ impl EmulatorTrait for Weak<Store<Emulator>> {
     #[inline(always)]
     fn io_mut(&self) -> Option<&mut IO> {
         self.emulator_mut().io_mut()
+    }
+
+    #[inline(always)]
+    fn io(&self) -> Option<&IO> {
+        self.emulator().io()
     }
 
     #[inline(always)]

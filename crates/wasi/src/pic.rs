@@ -1,6 +1,6 @@
+use crate::{Dev, Emulator, EmulatorTrait};
 use std::rc::Weak;
 use wasmtime::Store;
-use crate::{Emulator, EmulatorTrait, Dev};
 
 const PIC_LOG_VERBOSE: bool = false;
 
@@ -15,7 +15,7 @@ lazy_static::lazy_static! {
             table[i] = b;
         }
         table
-    }; 
+    };
 }
 
 #[inline(always)]
@@ -43,11 +43,7 @@ struct InnerPIC {
 
 impl InnerPIC {
     fn new(store: Weak<Store<Emulator>>, is_master: bool) -> Self {
-        let name = if is_master {
-            "master"
-        } else {
-            "slave"
-        };
+        let name = if is_master { "master" } else { "slave" };
         Self {
             is_master,
             irq_mask: 0,
@@ -76,83 +72,107 @@ impl InnerPIC {
         const SLAVE_IO_BASE: u32 = 0xA0;
         const MASTER_IOBASE_HIGH: u32 = 0x4D0;
         const SLAVE_IOBASE_HIGH: u32 = 0x4D1;
-        let (io_base, iobase_high)  = if self.is_master {
+        let (io_base, iobase_high) = if self.is_master {
             (MASTER_IO_BASE, MASTER_IOBASE_HIGH)
         } else {
             (SLAVE_IO_BASE, SLAVE_IOBASE_HIGH)
         };
         self.store.io_mut().map(|io| {
-            io.register_write8(io_base, crate::Dev::Emulator(self.store.clone()), |dev: &Dev, port: u32, w8: u8| {
-                dev.pic_mut().map(|pic| {
-                    let inner = if port == MASTER_IO_BASE {
-                        &mut pic.master
-                    } else {
-                        &mut pic.slave
-                    };
-                    inner.port20_write(w8);
-                });
-            });
+            io.register_write8(
+                io_base,
+                crate::Dev::Emulator(self.store.clone()),
+                |dev: &Dev, port: u32, w8: u8| {
+                    dev.pic_mut().map(|pic| {
+                        let inner = if port == MASTER_IO_BASE {
+                            &mut pic.master
+                        } else {
+                            &mut pic.slave
+                        };
+                        inner.port20_write(w8);
+                    });
+                },
+            );
 
-            io.register_read8(io_base, crate::Dev::Emulator(self.store.clone()), |dev: &Dev, port: u32| {
-                dev.pic_mut().map_or(0, |pic| {
-                    let inner = if port == MASTER_IO_BASE {
-                        &mut pic.master
-                    } else {
-                        &mut pic.slave
-                    };
-                    inner.port20_read()
-                })
-            });
+            io.register_read8(
+                io_base,
+                crate::Dev::Emulator(self.store.clone()),
+                |dev: &Dev, port: u32| {
+                    dev.pic_mut().map_or(0, |pic| {
+                        let inner = if port == MASTER_IO_BASE {
+                            &mut pic.master
+                        } else {
+                            &mut pic.slave
+                        };
+                        inner.port20_read()
+                    })
+                },
+            );
 
-            io.register_write8(io_base|1, crate::Dev::Emulator(self.store.clone()), |dev: &Dev, port: u32, w8: u8| {
-                dev.pic_mut().map(|pic| {
-                    let inner = if port == MASTER_IO_BASE|1 {
-                        &mut pic.master
-                    } else {
-                        &mut pic.slave
-                    };
-                    inner.port21_write(w8);
-                });
-            });
+            io.register_write8(
+                io_base | 1,
+                crate::Dev::Emulator(self.store.clone()),
+                |dev: &Dev, port: u32, w8: u8| {
+                    dev.pic_mut().map(|pic| {
+                        let inner = if port == MASTER_IO_BASE | 1 {
+                            &mut pic.master
+                        } else {
+                            &mut pic.slave
+                        };
+                        inner.port21_write(w8);
+                    });
+                },
+            );
 
-            io.register_read8(io_base|1, crate::Dev::Emulator(self.store.clone()), |dev: &Dev, port: u32| {
-                dev.pic_mut().map_or(0, |pic| {
-                    let inner = if port == MASTER_IO_BASE|1 {
-                        &mut pic.master
-                    } else {
-                        &mut pic.slave
-                    };
-                    inner.port21_read()
-                })
-            });
+            io.register_read8(
+                io_base | 1,
+                crate::Dev::Emulator(self.store.clone()),
+                |dev: &Dev, port: u32| {
+                    dev.pic_mut().map_or(0, |pic| {
+                        let inner = if port == MASTER_IO_BASE | 1 {
+                            &mut pic.master
+                        } else {
+                            &mut pic.slave
+                        };
+                        inner.port21_read()
+                    })
+                },
+            );
 
-            io.register_write8(iobase_high, crate::Dev::Emulator(self.store.clone()), |dev: &Dev, port: u32, w8: u8| {
-                dev.pic_mut().map(|pic| {
-                    let inner = if port == MASTER_IOBASE_HIGH {
-                        &mut pic.master
-                    } else {
-                        &mut pic.slave
-                    };
-                    inner.port4D0_write(w8);
-                });
-            });
+            io.register_write8(
+                iobase_high,
+                crate::Dev::Emulator(self.store.clone()),
+                |dev: &Dev, port: u32, w8: u8| {
+                    dev.pic_mut().map(|pic| {
+                        let inner = if port == MASTER_IOBASE_HIGH {
+                            &mut pic.master
+                        } else {
+                            &mut pic.slave
+                        };
+                        inner.port4D0_write(w8);
+                    });
+                },
+            );
 
-            io.register_read8(iobase_high, crate::Dev::Emulator(self.store.clone()), |dev: &Dev, port: u32| {
-                dev.pic_mut().map_or(0, |pic| {
-                    let inner = if port == MASTER_IOBASE_HIGH {
-                        &mut pic.master
-                    } else {
-                        &mut pic.slave
-                    };
-                    inner.port4D0_read()
-                })
-            });
+            io.register_read8(
+                iobase_high,
+                crate::Dev::Emulator(self.store.clone()),
+                |dev: &Dev, port: u32| {
+                    dev.pic_mut().map_or(0, |pic| {
+                        let inner = if port == MASTER_IOBASE_HIGH {
+                            &mut pic.master
+                        } else {
+                            &mut pic.slave
+                        };
+                        inner.port4D0_read()
+                    })
+                },
+            );
         });
     }
 
     fn port20_write(&mut self, data_byte: u8) {
-            //dbg_log("20 write: " + h(data_byte), LOG_PIC);
-            if data_byte & 0x10 > 0 {
+        //dbg_log("20 write: " + h(data_byte), LOG_PIC);
+        if data_byte & 0x10 > 0 {
             // icw1
             dbg_log!("icw1 = {:x}", data_byte);
             self.isr = 0;
@@ -169,11 +189,13 @@ impl InnerPIC {
             dbg_log!("ocw3: 0x{:x}", data_byte);
             if data_byte & 2 > 0 {
                 self.read_isr = data_byte & 1 > 0;
-            } if data_byte & 4 >0 {
+            }
+            if data_byte & 4 > 0 {
                 assert!(false, "unimplemented: polling");
-            } if data_byte & 0x40 > 0 {
+            }
+            if data_byte & 0x40 > 0 {
                 self.special_mask_mode = (data_byte & 0x20) == 0x20;
-                dbg_log!("special mask mode: {}" , self.special_mask_mode);
+                dbg_log!("special mask mode: {}", self.special_mask_mode);
             }
         } else {
             // ocw2
@@ -212,46 +234,53 @@ impl InnerPIC {
     }
 
     fn port21_write(&mut self, data_byte: u8) {
-        //dbg_log("21 write: " + h(data_byte), LOG_PIC);
+        // dbg_log!("21 write: 0x{:02x}", data_byte);
         if self.state == 0 {
             if self.expect_icw4 {
                 // icw4
                 self.expect_icw4 = false;
                 self.auto_eoi = data_byte & 2;
                 dbg_log!("icw4: 0x{:0x} autoeoi={}", data_byte, self.auto_eoi);
-    
+
                 if (data_byte & 1) == 0 {
                     assert!(false, "unimplemented: not 8086 mode");
                 }
             } else {
                 // ocw1
                 self.irq_mask = !data_byte;
-    
+
                 if PIC_LOG_VERBOSE {
-                    dbg_log!("interrupt mask: 0x{:x} ({})", self.irq_mask & 0xFF, self.name);
+                    dbg_log!(
+                        "interrupt mask: 0x{:x} ({})",
+                        self.irq_mask & 0xFF,
+                        self.name
+                    );
                 }
                 self.check_irqs();
             }
         } else if self.state == 1 {
             // icw2
             self.irq_map = data_byte;
-            dbg_log!("interrupts are mapped to 0x{:x} ({})", self.irq_map, self.name);
+            dbg_log!(
+                "interrupts are mapped to 0x{:x} ({})",
+                self.irq_map,
+                self.name
+            );
             self.state += 1;
-        }
-        else if self.state == 2 {
+        } else if self.state == 2 {
             // icw3
             self.state = 0;
             dbg_log!("icw3: {}", data_byte);
         }
     }
 
-    fn port21_read(&self) -> u8{
+    fn port21_read(&self) -> u8 {
         dbg_log!("21h read 0x{:x}", !self.irq_mask & 0xff);
         !self.irq_mask & 0xFF
     }
 
     fn port4D0_read(&self) -> u8 {
-        dbg_log!("elcr read: 0x{:02x}", self.elcr );
+        dbg_log!("elcr read: 0x{:02x}", self.elcr);
         self.elcr
     }
 
@@ -274,16 +303,14 @@ impl InnerPIC {
             if PIC_LOG_VERBOSE {
                 dbg_log!("master> Already requested irq: {}", self.requested_irq)
             }
-            self.store.cpu_mut().map(|cpu| {
-                cpu.handle_irqs()
-            });
+            self.store.cpu_mut().map(|cpu| cpu.handle_irqs());
             return;
         }
         let enabled_irr: i8 = (self.irr & self.irq_mask) as i8;
         if enabled_irr == 0 {
             if PIC_LOG_VERBOSE {
                 dbg_log!(
-                    "master> no unmasked irrs. irr=0x{:x} mask=0x{:x} isr=0x{:x}", 
+                    "master> no unmasked irrs. irr=0x{:x} mask=0x{:x} isr=0x{:x}",
                     self.irr,
                     self.irq_mask & 0xff,
                     self.isr,
@@ -297,12 +324,12 @@ impl InnerPIC {
         } else {
             0xFF
         };
-        let isr:i8 = self.isr as i8;
+        let isr: i8 = self.isr as i8;
         if self.isr > 0 && ((isr & -isr) as u8 & special_mask) <= irq_mask {
             dbg_log!(
                 "master> higher prio: isr=0x{:02x} mask=0x{:02x} irq=0x{:02x}",
-                self.isr, 
-                self.irq_mask & 0xff, 
+                self.isr,
+                self.irq_mask & 0xff,
                 self.irq_mask
             );
             return;
@@ -334,7 +361,7 @@ impl InnerPIC {
 
         if self.irr == 0 {
             if PIC_LOG_VERBOSE {
-                dbg_log!("master> spurious requested={}",self.requested_irq);
+                dbg_log!("master> spurious requested={}", self.requested_irq);
             }
             self.requested_irq = -1;
             return;
@@ -343,8 +370,8 @@ impl InnerPIC {
         assert!(self.requested_irq >= 0);
         let irq_mask = 1 << self.requested_irq;
 
-         // not in level mode
-        if(self.elcr & irq_mask) == 0 {
+        // not in level mode
+        if (self.elcr & irq_mask) == 0 {
             self.irr &= !irq_mask;
         }
 
@@ -361,7 +388,7 @@ impl InnerPIC {
             });
         } else {
             self.store.cpu_mut().map(|cpu| {
-                cpu.pic_call_irq(self.irq_map as i32| self.requested_irq as i32);
+                cpu.pic_call_irq(self.irq_map as i32 | self.requested_irq as i32);
             });
         }
         self.requested_irq = -1;
@@ -406,7 +433,7 @@ impl InnerPIC {
                 dbg_log!("slave > acknowledge {}", self.requested_irq);
             }
             self.store.cpu_mut().map(|cpu| {
-                cpu.pic_call_irq(self.irq_map as i32| self.requested_irq as i32);
+                cpu.pic_call_irq(self.irq_map as i32 | self.requested_irq as i32);
             });
             self.requested_irq = -1;
             self.check_irqs();
@@ -478,8 +505,8 @@ impl InnerPIC {
         if enabled_irr == 0 {
             if PIC_LOG_VERBOSE {
                 dbg_log!(
-                    "slave > no unmasked irrs. irr=0x{:02x} mask=0x{:02x} isr=0x{:02x}", 
-                    self.irr, 
+                    "slave > no unmasked irrs. irr=0x{:02x} mask=0x{:02x} isr=0x{:02x}",
+                    self.irr,
                     self.irq_mask & 0xff,
                     self.isr
                 );
@@ -487,19 +514,19 @@ impl InnerPIC {
             return;
         }
 
-        let irq_mask = (enabled_irr & -enabled_irr ) as u8;
+        let irq_mask = (enabled_irr & -enabled_irr) as u8;
         let special_mask = if self.special_mask_mode {
             self.irq_mask
         } else {
             0xFF
         };
-        let isr:i8 = self.isr as i8;
+        let isr: i8 = self.isr as i8;
         if self.isr > 0 && ((isr & -isr) as u8 & special_mask) <= irq_mask {
             // wait for eoi of higher or same priority interrupt
             dbg_log!(
                 "slave > higher prio: isr=0x{:02x} irq=0x{:02x}",
-                self.isr, 
-                self.irq_mask 
+                self.isr,
+                self.irq_mask
             );
             return;
         }
@@ -511,11 +538,8 @@ impl InnerPIC {
             dbg_log!("slave> request irq {}", irq_number);
         }
         self.requested_irq = irq_number;
-        self.store.pic_mut().map(|pic| {
-            pic.master.set_irq(2)
-        });
+        self.store.pic_mut().map(|pic| pic.master.set_irq(2));
     }
-
 }
 
 pub(crate) struct PIC {

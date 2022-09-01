@@ -110,7 +110,8 @@ impl MMapFn {
     }
 }
 
-struct IOps {
+#[derive(Clone)]
+pub(crate) struct IOps {
     read8: Rd8Fn,
     read16: Rd16Fn,
     read32: Rd32Fn,
@@ -122,7 +123,7 @@ struct IOps {
 }
 
 pub struct IO {
-    ports: Vec<IOps>,
+    pub(crate) ports: Vec<IOps>,
     store: Weak<Store<Emulator>>,
 }
 

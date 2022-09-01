@@ -8,9 +8,11 @@ use std::rc::Weak;
 use crate::{
     consts::*,
     debug::Debug,
+    dma::DMA,
     io::{MMapFn, MemAccess, MemAccessTrait, IO},
+    pic::PIC,
     rtc::RTC,
-    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, dma::DMA, pic::PIC,
+    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -238,21 +240,15 @@ impl VMOpers {
     }
 
     fn reset_cpu(&self, store: impl AsContextMut) {
-        self.typed_reset_cpu
-            .call(store, ())
-            .unwrap()
+        self.typed_reset_cpu.call(store, ()).unwrap()
     }
 
     fn pic_call_irq(&self, store: impl AsContextMut, interrupt_nr: i32) {
-        self.typed_pic_call_irq
-            .call(store, interrupt_nr)
-            .unwrap();
+        self.typed_pic_call_irq.call(store, interrupt_nr).unwrap();
     }
 
     fn set_tsc(&self, store: impl AsContextMut, low: u32, hig: u32) {
-        self.typed_set_tsc
-            .call(store, (low, hig))
-            .unwrap()
+        self.typed_set_tsc.call(store, (low, hig)).unwrap()
     }
 }
 
@@ -380,7 +376,8 @@ impl CPU {
 
     pub fn pic_call_irq(&mut self, interrupt_nr: i32) {
         self.store_mut().map(|store| {
-            self.vm_opers.pic_call_irq(store.as_context_mut(), interrupt_nr);
+            self.vm_opers
+                .pic_call_irq(store.as_context_mut(), interrupt_nr);
         });
     }
 
