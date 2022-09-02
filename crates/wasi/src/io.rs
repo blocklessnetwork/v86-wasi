@@ -112,50 +112,50 @@ impl MMapFn {
 
 #[derive(Clone)]
 pub(crate) struct IOps {
-    read8: Rd8Fn,
-    read16: Rd16Fn,
-    read32: Rd32Fn,
-    write8: Wr8Fn,
-    write16: Wr16Fn,
-    write32: Wr32Fn,
+    pub read8: Rd8Fn,
+    pub read16: Rd16Fn,
+    pub read32: Rd32Fn,
+    pub write8: Wr8Fn,
+    pub write16: Wr16Fn,
+    pub write32: Wr32Fn,
 
     dev: Dev,
 }
 
-pub struct IO {
-    pub(crate) ports: Vec<IOps>,
+pub(crate) struct IO {
+    pub ports: Vec<IOps>,
     store: Weak<Store<Emulator>>,
 }
 
 impl IO {
-    fn empty_read8(_: &Dev, p: u32) -> u8 {
+    pub fn empty_read8(_: &Dev, p: u32) -> u8 {
         dbg_log!("empty_read8: {}", p);
         0xFF
     }
 
-    fn empty_read16(_: &Dev, p: u32) -> u16 {
+    pub fn empty_read16(_: &Dev, p: u32) -> u16 {
         dbg_log!("empty_read16: {}", p);
         0xFFFF
     }
 
-    fn empty_read32(_: &Dev, p: u32) -> u32 {
+    pub fn empty_read32(_: &Dev, p: u32) -> u32 {
         dbg_log!("empty_read32: {}", p);
         0xFFFF_FFFF
     }
 
-    fn empty_write8(_: &Dev, p: u32, _: u8) {
+    pub fn empty_write8(_: &Dev, p: u32, _: u8) {
         dbg_log!("empty_write8: {}", p);
     }
 
-    fn empty_write16(_: &Dev, p: u32, _: u16) {
+    pub fn empty_write16(_: &Dev, p: u32, _: u16) {
         dbg_log!("empty_write16: {}", p);
     }
 
-    fn empty_write32(_: &Dev, p: u32, _: u32) {
+    pub fn empty_write32(_: &Dev, p: u32, _: u32) {
         dbg_log!("empty_write32: {}", p);
     }
 
-    fn default_iops() -> IOps {
+    pub(crate) fn default_iops() -> IOps {
         IOps {
             read8: Self::empty_read8,
             read16: Self::empty_read16,

@@ -1,8 +1,8 @@
-use std::rc::Weak;
+use std::{rc::Weak, mem};
 
 use wasmtime::Store;
 
-use crate::{io::IOps, Emulator, EmulatorTrait};
+use crate::{io::IOps, Emulator, EmulatorTrait, IO};
 
 const PCI_CONFIG_ADDRESS: u32 = 0xCF8;
 const PCI_CONFIG_DATA: u32 = 0xCFC;
@@ -306,7 +306,7 @@ impl PCI {
             // dbg_log!("BAR" + bar_nr + " exists=" + (bar ? "y" : "n") + " changed to " +
             //        h(written >>> 0) + " dev=" + h(bdf >> 3, 2) + " (" + device.name + ") ", LOG_PCI);
             if bar.is_some() {
-                let bar = bar.unwrap();
+                let mut bar = bar.unwrap();
                 assert!(
                     (bar.size & bar.size - 1) == 0,
                     "bar size should be power of 2"
@@ -359,7 +359,7 @@ impl PCI {
                         to >> 0,
                         bar.size
                     );
-                    //TODO: self.set_io_bars(bar, from, to);
+                    self.set_io_bars(&mut bar, from, to);
                     self.device_spaces[index].as_mut().map(|s| {
                         s.write_u32(space_addr as usize, written | 1);
                     });
@@ -418,5 +418,48 @@ impl PCI {
                 s.write_u32((addr >> 2) as usize, written);
             });
         }
+    }
+
+    fn set_io_bars(&self, bar: &PICBar, from: u32, to: u32) {
+        let count = bar.size;
+        dbg_log!("Move io bars: from={:x} to={:x} count={}", from, to, count);
+        self.store.io_mut().map(|io| {
+            for i in 0..count {
+                let empty_iops = crate::io::IO::default_iops();
+                let old_idx = (from + i) as usize;
+                let old_entry = mem::replace(&mut io.ports[old_idx], empty_iops);
+
+                if old_entry.read8 as *const () == IO::empty_read8 as *const ()
+                    && old_entry.read16 as *const () == IO::empty_read16 as *const ()
+                    && old_entry.read32 as *const () == IO::empty_read32 as *const ()
+                    && old_entry.write32 as *const () == IO::empty_write32 as *const ()
+                    && old_entry.write16 as *const () == IO::empty_write16 as *const ()
+                    && old_entry.write8 as *const () == IO::empty_write8 as *const ()
+                {
+                    dbg_log!(
+                        "Warning: Bad IO bar: Source not mapped, port=0x{:x}",
+                        from + i
+                    );
+                }
+                let to_idx = (to + i) as usize;
+                let entry = bar.entries[i as usize].clone();
+                let empty_entry = mem::replace(&mut io.ports[to_idx], entry);
+
+                if empty_entry.read8 as *const () == IO::empty_read8 as *const ()
+                    || empty_entry.read16 as *const () == IO::empty_read16 as *const ()
+                    || empty_entry.read32 as *const () == IO::empty_read32 as *const ()
+                    || empty_entry.write8 as *const () == IO::empty_write8 as *const ()
+                    || empty_entry.write16 as *const () == IO::empty_write16 as *const ()
+                    || empty_entry.write32 as *const () == IO::empty_write32 as *const ()
+                {
+                    // These can fail if the os maps an io port in multiple bars (indicating a bug)
+                    // XXX: Fails during restore_state
+                    dbg_log!(
+                        "Warning: Bad IO bar: Target already mapped, port={:x}",
+                        to + i
+                    );
+                }
+            }
+        });
     }
 }
