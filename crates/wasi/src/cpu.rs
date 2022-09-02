@@ -267,7 +267,7 @@ pub struct CPU {
 }
 
 impl CPU {
-    #[inline(always)]
+    #[inline]
     fn store_mut(&self) -> Option<&'static mut Store<Emulator>> {
         if self.store.weak_count() == 0 {
             None
@@ -295,14 +295,14 @@ impl CPU {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn mmap_read8(&mut self, addr: u32) -> u8 {
         let mfn = self.mmap_fn.memory_map_read8[(addr >> MMAP_BLOCK_BITS) as usize];
         let dev = Dev::Emulator(self.store.clone());
         (mfn)(&dev, addr)
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn mmap_read16(&mut self, addr: u32) -> u16 {
         let mfn = self.mmap_fn.memory_map_read8[(addr >> MMAP_BLOCK_BITS) as usize];
         let dev = Dev::Emulator(self.store.clone());
@@ -310,21 +310,21 @@ impl CPU {
         value
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn mmap_read32(&mut self, addr: u32) -> u32 {
         let mfn = self.mmap_fn.memory_map_read32[(addr >> MMAP_BLOCK_BITS) as usize];
         let dev = Dev::Emulator(self.store.clone());
         mfn(&dev, addr)
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn mmap_write8(&mut self, addr: u32, value: u8) {
         let mfn = self.mmap_fn.memory_map_write8[(addr >> MMAP_BLOCK_BITS) as usize];
         let dev = Dev::Emulator(self.store.clone());
         (mfn)(&dev, addr, value);
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn mmap_write16(&mut self, addr: u32, value: u16) {
         let mfn = self.mmap_fn.memory_map_write8[(addr >> MMAP_BLOCK_BITS) as usize];
         let dev = Dev::Emulator(self.store.clone());
@@ -332,20 +332,20 @@ impl CPU {
         mfn(&dev, addr + 1, (value >> 8) as u8);
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn mmap_write32(&mut self, addr: u32, value: u32) {
         let mfn = self.mmap_fn.memory_map_write32[(addr >> MMAP_BLOCK_BITS) as usize];
         let dev = Dev::Emulator(self.store.clone());
         mfn(&dev, addr, value)
     }
 
-    #[inline(always)]
+    #[inline]
     fn read8(&mut self, addr: u32) -> i32 {
         self.store_mut()
             .map_or(0, |store| self.vm_opers.read8(store, addr))
     }
 
-    #[inline(always)]
+    #[inline]
     fn read16(&mut self, addr: u32) -> i32 {
         self.store_mut()
             .map_or(0, |store| self.vm_opers.read16(store, addr))
@@ -361,13 +361,13 @@ impl CPU {
             .map(|store| self.memory.read(store, offset, val).unwrap());
     }
 
-    #[inline(always)]
+    #[inline]
     fn allocate_memory(&mut self, addr: u32) -> u32 {
         self.store_mut()
             .map_or(0, |store| self.vm_opers.allocate_memory(store, addr))
     }
 
-    #[inline(always)]
+    #[inline]
     fn write_mem_size(&mut self, size: u32) {
         self.store_mut().map(|s| {
             self.iomap.memory_size_io.write(s, 0u32, size as _);
@@ -387,7 +387,7 @@ impl CPU {
         });
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn read_mem_size(&mut self) -> u32 {
         self.store_mut()
             .map_or(0, |store| self.iomap.memory_size_io.read(store, 0u32))
@@ -500,17 +500,17 @@ impl CPU {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn has_interrupt(&mut self) -> bool {
         (self.get_eflags_no_arith() & (FLAG_INTERRUPT as i32)) != 0
     }
 
-    #[inline(always)]
+    #[inline]
     fn emulator_mut(&self) -> Option<&mut Emulator> {
         self.store_mut().map(|store| store.data_mut())
     }
 
-    #[inline(always)]
+    #[inline]
     fn microtick(&self) -> f64 {
         self.emulator_mut().map_or(0f64, |e| e.microtick())
     }

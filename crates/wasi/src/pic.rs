@@ -18,7 +18,7 @@ lazy_static::lazy_static! {
     };
 }
 
-#[inline(always)]
+#[inline]
 fn int_log2_byte(i: u8) -> i8 {
     INT_LOG2_TABLE[i as usize]
 }

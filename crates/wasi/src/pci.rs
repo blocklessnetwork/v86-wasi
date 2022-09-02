@@ -1,4 +1,4 @@
-use std::{rc::Weak, mem};
+use std::{mem, rc::Weak};
 
 use wasmtime::Store;
 
@@ -91,67 +91,67 @@ impl Space {
         self.0.copy_from_slice(val)
     }
 
-    #[inline(always)]
+    #[inline]
     fn copy_to_i32s(&self, idx: usize, to: &mut [i32]) {
         copy_to_i32s(&self.0[idx * 4..], to);
     }
 
-    #[inline(always)]
+    #[inline]
     fn read_i32(&self, idx: usize) -> i32 {
         read_i32(&self.0, idx)
     }
 
-    #[inline(always)]
+    #[inline]
     fn read_u32(&self, idx: usize) -> u32 {
         read_u32(&self.0, idx)
     }
 
-    #[inline(always)]
+    #[inline]
     fn read_i16(&self, idx: usize) -> i16 {
         read_i16(&self.0, idx)
     }
 
-    #[inline(always)]
+    #[inline]
     fn read_u16(&self, idx: usize) -> u16 {
         read_u16(&self.0, idx)
     }
 
-    #[inline(always)]
+    #[inline]
     fn read_i8(&self, idx: usize) -> i8 {
         self.0[idx] as i8
     }
 
-    #[inline(always)]
+    #[inline]
     fn read_u8(&self, idx: usize) -> u8 {
         self.0[idx]
     }
 
-    #[inline(always)]
+    #[inline]
     fn write_i32(&mut self, idx: usize, v: i32) {
         write_i32(&mut self.0, idx, v);
     }
 
-    #[inline(always)]
+    #[inline]
     fn write_u32(&mut self, idx: usize, v: u32) {
         write_u32(&mut self.0, idx, v);
     }
 
-    #[inline(always)]
+    #[inline]
     fn write_i16(&mut self, idx: usize, v: i16) {
         write_i16(&mut self.0, idx, v);
     }
 
-    #[inline(always)]
+    #[inline]
     fn write_u16(&mut self, idx: usize, v: u16) {
         write_u16(&mut self.0, idx, v);
     }
 
-    #[inline(always)]
+    #[inline]
     fn write_i8(&mut self, idx: usize, v: i8) {
         self.0[idx] = v as u8;
     }
 
-    #[inline(always)]
+    #[inline]
     fn write_u8(&mut self, idx: usize, v: u8) {
         self.0[idx] = v;
     }
@@ -201,7 +201,7 @@ impl PCI {
         let mut bar_space = [0i32; 6];
         space.copy_to_i32s(4, &mut bar_space);
         for i in 0..dev.pci_bars().len() {
-            let mut bar = &mut dev.pci_bars_mut()[i];
+            let bar = &mut dev.pci_bars_mut()[i];
             let mut bar = match bar {
                 &mut None => continue,
                 &mut Some(ref mut s) => s,

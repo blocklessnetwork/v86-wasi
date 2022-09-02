@@ -46,54 +46,54 @@ trait EmulatorTrait {
 }
 
 impl EmulatorTrait for Weak<Store<Emulator>> {
-    #[inline(always)]
+    #[inline]
     fn pic_mut(&self) -> Option<&mut PIC> {
         self.emulator_mut().pic_mut()
     }
 
-    #[inline(always)]
+    #[inline]
     fn pic(&self) -> Option<&PIC> {
         self.emulator_mut().pic()
     }
 
-    #[inline(always)]
+    #[inline]
     fn cpu_mut(&self) -> Option<&mut CPU> {
         let emu = self.emulator_mut();
         emu.cpu_mut()
     }
 
-    #[inline(always)]
+    #[inline]
     fn cpu(&self) -> Option<&CPU> {
         let emu = self.emulator();
         emu.cpu()
     }
 
-    #[inline(always)]
+    #[inline]
     fn io_mut(&self) -> Option<&mut IO> {
         self.emulator_mut().io_mut()
     }
 
-    #[inline(always)]
+    #[inline]
     fn io(&self) -> Option<&IO> {
         self.emulator().io()
     }
 
-    #[inline(always)]
+    #[inline]
     fn dma_mut(&self) -> Option<&mut DMA> {
         self.emulator_mut().dma_mut()
     }
 
-    #[inline(always)]
+    #[inline]
     fn emulator_mut(&self) -> &mut Emulator {
         unsafe { (*(self.as_ptr() as *mut Store<_>)).data_mut() }
     }
 
-    #[inline(always)]
+    #[inline]
     fn emulator(&self) -> &Emulator {
         unsafe { (*(self.as_ptr() as *mut Store<_>)).data() }
     }
 
-    #[inline(always)]
+    #[inline]
     fn rtc_mut(&self) -> Option<&mut RTC> {
         let emu = self.emulator();
         emu.cpu_mut().map(|cpu| &mut cpu.rtc)
