@@ -383,7 +383,7 @@ impl IO {
         })
     }
 
-    fn register_write_consecutive(
+    pub fn register_write_consecutive(
         &mut self,
         port_addr: u32,
         dev: Dev,

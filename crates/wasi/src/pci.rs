@@ -263,6 +263,30 @@ impl PCI {
                 |dev: &Dev, _: u32| dev.pci().map_or(0, |pci| pci.pci_status[2]),
                 |dev: &Dev, _: u32| dev.pci().map_or(0, |pci| pci.pci_status[3]),
             );
+            io.register_write_consecutive(
+                PCI_CONFIG_ADDRESS,
+                crate::Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _: u32, data: u8| {
+                    dev.pci_mut().map(|pci| pci.pci_addr[0] = data & 0xFC);
+                },
+                |dev: &Dev, _: u32, data: u8| {
+                    dev.cpu_mut().map(|cpu| {
+                        if cpu.pci.pci_addr[1] & 0x06 == 0x02 && data & 0x06 == 0x06 {
+                            dbg_log!("CPU reboot via PCI");
+                            //TODO cpu.reboot_internal();
+                            return;
+                        }
+                        cpu.pci.pci_addr[1] = data
+                    });
+                },
+                |dev: &Dev, _: u32, data: u8| {
+                    dev.pci_mut().map(|pci| pci.pci_addr[2] = data & 0xFC);
+                },
+                |dev: &Dev, _: u32, data: u8| {
+                    dev.pci_mut().map(|pci| pci.pci_addr[3] = data & 0xFC);
+                    //TODO
+                },
+            );
         });
     }
 
