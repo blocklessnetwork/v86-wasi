@@ -8,10 +8,10 @@ pub(crate) enum Module {
 
 macro_rules! dbg_log {
     ($fmt:expr, $($arg:tt)*) => {
-        println!($fmt, $($arg)*);
+        println!($fmt, $($arg)*)
     };
 
     ($fmt:expr) => {
-        println!($fmt);
+        println!($fmt)
     };
 }

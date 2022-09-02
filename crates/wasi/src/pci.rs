@@ -2,9 +2,10 @@ use std::{mem, rc::Weak};
 
 use wasmtime::Store;
 
-use crate::{io::IOps, Emulator, EmulatorTrait, IO};
+use crate::{io::IOps, Dev, Emulator, EmulatorTrait, IO};
 
 const PCI_CONFIG_ADDRESS: u32 = 0xCF8;
+
 const PCI_CONFIG_DATA: u32 = 0xCFC;
 
 pub(crate) struct PICBar {
@@ -174,7 +175,7 @@ pub(crate) struct PCI {
 }
 
 impl PCI {
-    fn new(store: Weak<Store<Emulator>>) -> Self {
+    pub fn new(store: Weak<Store<Emulator>>) -> Self {
         const INIT_DEV: Option<Box<dyn PCIDevice>> = None;
         const INIT_SPACE: Option<Space> = None;
         let devices = [INIT_DEV; 256];
@@ -188,6 +189,81 @@ impl PCI {
             device_spaces,
             store,
         }
+    }
+
+    #[inline]
+    fn pci_addr32(&self) -> u32 {
+        u32::from_le_bytes(self.pci_addr)
+    }
+
+    fn init(&mut self) {
+        self.store.io_mut().map(|io| {
+            io.register_write(
+                PCI_CONFIG_DATA,
+                crate::Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _port: u32, w8: u8| {
+                    dev.pci_mut().map(|pci| {
+                        pci.pci_write8(pci.pci_addr32(), w8);
+                    });
+                },
+                |dev: &Dev, _port: u32, w16: u16| {
+                    dev.pci_mut().map(|pci| {
+                        pci.pci_write16(pci.pci_addr32(), w16);
+                    });
+                },
+                |dev: &Dev, _port: u32, w32: u32| {
+                    dev.pci_mut().map(|pci| {
+                        pci.pci_write32(pci.pci_addr32(), w32);
+                    });
+                },
+            );
+
+            io.register_write8(
+                PCI_CONFIG_DATA + 1,
+                crate::Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _port: u32, w8: u8| {
+                    dev.pci_mut().map(|pci| {
+                        pci.pci_write8(pci.pci_addr32() + 1 | 0, w8);
+                    });
+                },
+            );
+
+            io.register_write8(
+                PCI_CONFIG_DATA + 2,
+                crate::Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _port: u32, w8: u8| {
+                    dev.pci_mut().map(|pci| {
+                        pci.pci_write8(pci.pci_addr32() + 2 | 0, w8);
+                    });
+                },
+            );
+
+            io.register_write8(
+                PCI_CONFIG_DATA + 3,
+                crate::Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _port: u32, w8: u8| {
+                    dev.pci_mut().map(|pci| {
+                        pci.pci_write8(pci.pci_addr32() + 3 | 0, w8);
+                    });
+                },
+            );
+            io.register_read_consecutive(
+                PCI_CONFIG_DATA,
+                crate::Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _: u32| dev.pci().map_or(0, |pci| pci.pci_response[0]),
+                |dev: &Dev, _: u32| dev.pci().map_or(0, |pci| pci.pci_response[1]),
+                |dev: &Dev, _: u32| dev.pci().map_or(0, |pci| pci.pci_response[2]),
+                |dev: &Dev, _: u32| dev.pci().map_or(0, |pci| pci.pci_response[3]),
+            );
+            io.register_read_consecutive(
+                PCI_CONFIG_ADDRESS,
+                crate::Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _: u32| dev.pci().map_or(0, |pci| pci.pci_status[0]),
+                |dev: &Dev, _: u32| dev.pci().map_or(0, |pci| pci.pci_status[1]),
+                |dev: &Dev, _: u32| dev.pci().map_or(0, |pci| pci.pci_status[2]),
+                |dev: &Dev, _: u32| dev.pci().map_or(0, |pci| pci.pci_status[3]),
+            );
+        });
     }
 
     fn register_device(&mut self, mut dev: impl PCIDevice + 'static) {

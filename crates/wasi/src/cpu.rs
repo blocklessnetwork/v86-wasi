@@ -10,6 +10,7 @@ use crate::{
     debug::Debug,
     dma::DMA,
     io::{MMapFn, MemAccess, MemAccessTrait, IO},
+    pci::PCI,
     pic::PIC,
     rtc::RTC,
     Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME,
@@ -264,6 +265,7 @@ pub struct CPU {
     pub(crate) io: IO,
     pub(crate) dma: DMA,
     pub(crate) pic: PIC,
+    pub(crate) pci: PCI,
 }
 
 impl CPU {
@@ -291,7 +293,8 @@ impl CPU {
             vm_opers: VMOpers::new(&inst, s),
             iomap: IOMap::new(memory),
             io: IO::new(store.clone()),
-            pic: PIC::new(store),
+            pic: PIC::new(store.clone()),
+            pci: PCI::new(store.clone()),
         }
     }
 

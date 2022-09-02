@@ -10,6 +10,7 @@ const LOG_ALL_IO: bool = false;
 use dma::DMA;
 use io::IO;
 use mem::add_mem_to_linker;
+use pci::PCI;
 use pic::PIC;
 use rtc::RTC;
 use wasmtime::*;
@@ -41,6 +42,8 @@ trait EmulatorTrait {
     fn pic_mut(&self) -> Option<&mut PIC>;
     fn pic(&self) -> Option<&PIC>;
     fn io(&self) -> Option<&IO>;
+    fn pci_mut(&self) -> Option<&mut PCI>;
+    fn pci(&self) -> Option<&PCI>;
     fn emulator(&self) -> &Emulator;
     fn emulator_mut(&self) -> &mut Emulator;
 }
@@ -54,6 +57,16 @@ impl EmulatorTrait for Weak<Store<Emulator>> {
     #[inline]
     fn pic(&self) -> Option<&PIC> {
         self.emulator_mut().pic()
+    }
+
+    #[inline]
+    fn pci_mut(&self) -> Option<&mut PCI> {
+        self.emulator_mut().pci_mut()
+    }
+
+    #[inline]
+    fn pci(&self) -> Option<&PCI> {
+        self.emulator().pci()
     }
 
     #[inline]

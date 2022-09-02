@@ -2,7 +2,9 @@ use std::rc::Weak;
 
 use wasmtime::Store;
 
-use crate::{debug::Debug, dma::DMA, io::IO, pic::PIC, rtc::RTC, Emulator, EmulatorTrait, CPU};
+use crate::{
+    debug::Debug, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Emulator, EmulatorTrait, CPU,
+};
 
 #[derive(Clone)]
 pub enum Dev {
@@ -11,7 +13,7 @@ pub enum Dev {
 }
 
 impl Dev {
-    #[inline(always)]
+    #[inline]
     pub(crate) fn rtc_mut(self: &Dev) -> Option<&mut RTC> {
         match *self {
             Dev::Emulator(ref e) => e.rtc_mut(),
@@ -19,12 +21,12 @@ impl Dev {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn debug_mut(self: &Dev) -> Option<&mut Debug> {
         self.cpu_mut().map(|cpu| &mut cpu.debug)
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn cpu_mut(self: &Dev) -> Option<&mut CPU> {
         match *self {
             Dev::Emulator(ref e) => e.cpu_mut(),
@@ -32,7 +34,7 @@ impl Dev {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn io_mut(self: &Dev) -> Option<&mut IO> {
         match *self {
             Dev::Emulator(ref e) => e.io_mut(),
@@ -40,7 +42,15 @@ impl Dev {
         }
     }
 
-    #[inline(always)]
+    #[inline]
+    pub(crate) fn io(self: &Dev) -> Option<&IO> {
+        match *self {
+            Dev::Emulator(ref e) => e.io(),
+            _ => None,
+        }
+    }
+
+    #[inline]
     pub(crate) fn dma_mut(self: &Dev) -> Option<&mut DMA> {
         match *self {
             Dev::Emulator(ref e) => e.dma_mut(),
@@ -48,7 +58,7 @@ impl Dev {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn pic_mut(self: &Dev) -> Option<&mut PIC> {
         match *self {
             Dev::Emulator(ref e) => e.pic_mut(),
@@ -56,10 +66,26 @@ impl Dev {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn pic(self: &Dev) -> Option<&PIC> {
         match *self {
             Dev::Emulator(ref e) => e.pic(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn pci_mut(self: &Dev) -> Option<&mut PCI> {
+        match *self {
+            Dev::Emulator(ref e) => e.pci_mut(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn pci(self: &Dev) -> Option<&PCI> {
+        match *self {
+            Dev::Emulator(ref e) => e.pci(),
             _ => None,
         }
     }

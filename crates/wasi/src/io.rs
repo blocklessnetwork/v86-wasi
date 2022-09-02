@@ -118,12 +118,24 @@ pub(crate) struct IOps {
     pub write8: Wr8Fn,
     pub write16: Wr16Fn,
     pub write32: Wr32Fn,
+    dev: Dev,
+}
 
+pub(crate) struct ConsIOps {
+    pub r1: Rd8Fn,
+    pub r2: Rd8Fn,
+    pub r3: Rd8Fn,
+    pub r4: Rd8Fn,
+    pub w1: Wr8Fn,
+    pub w2: Wr8Fn,
+    pub w3: Wr8Fn,
+    pub w4: Wr8Fn,
     dev: Dev,
 }
 
 pub(crate) struct IO {
     pub ports: Vec<IOps>,
+    pub cons_ports: Vec<ConsIOps>,
     store: Weak<Store<Emulator>>,
 }
 
@@ -167,12 +179,35 @@ impl IO {
         }
     }
 
-    pub fn new(store: Weak<Store<Emulator>>) -> IO {
-        let mut v = Vec::new();
-        for _ in 0..PORTS_SIZE {
-            v.push(IO::default_iops());
+    pub(crate) fn default_cons_iops() -> ConsIOps {
+        ConsIOps {
+            r1: Self::empty_read8,
+            r2: Self::empty_read8,
+            r3: Self::empty_read8,
+            r4: Self::empty_read8,
+            w1: Self::empty_write8,
+            w2: Self::empty_write8,
+            w3: Self::empty_write8,
+            w4: Self::empty_write8,
+            dev: Dev::Empty,
         }
-        IO { ports: v, store }
+    }
+
+    pub fn new(store: Weak<Store<Emulator>>) -> IO {
+        let mut p = Vec::new();
+        for _ in 0..PORTS_SIZE {
+            p.push(IO::default_iops());
+        }
+        let mut cp = Vec::new();
+        for _ in 0..PORTS_SIZE {
+            cp.push(IO::default_cons_iops());
+        }
+
+        IO {
+            ports: p,
+            cons_ports: cp,
+            store,
+        }
     }
 
     pub fn register_read(&mut self, port: u32, dev: Dev, r8: Rd8Fn, r16: Rd16Fn, r32: Rd32Fn) {
@@ -346,6 +381,137 @@ impl IO {
                 | ((mmp_fn)(dev, addr + 2) as u32) << 16
                 | ((mmp_fn)(dev, addr + 3) as u32) << 24
         })
+    }
+
+    fn register_write_consecutive(
+        &mut self,
+        port_addr: u32,
+        dev: Dev,
+        w8_1: Wr8Fn,
+        w8_2: Wr8Fn,
+        w8_3: Wr8Fn,
+        w8_4: Wr8Fn,
+    ) {
+        let paddr = port_addr as usize;
+        self.cons_ports[paddr].w1 = w8_1;
+        self.cons_ports[paddr].w2 = w8_2;
+        self.cons_ports[paddr].w3 = w8_3;
+        self.cons_ports[paddr].w4 = w8_4;
+        self.cons_ports[paddr].dev = dev.clone();
+        self.cons_ports[paddr + 1].w1 = w8_1;
+        self.cons_ports[paddr + 1].w2 = w8_2;
+        self.cons_ports[paddr + 1].w3 = w8_3;
+        self.cons_ports[paddr + 1].w4 = w8_4;
+        self.cons_ports[paddr + 1].dev = dev.clone();
+
+        let w16_1: Wr16Fn = |dev: &Dev, addr: u32, data: u16| {
+            dev.io().map(|io| {
+                let paddr = addr as usize;
+                (io.cons_ports[paddr].w1)(dev, addr, (data & 0xFF) as u8);
+                (io.cons_ports[paddr].w2)(dev, addr, (data >> 8 & 0xFF) as u8);
+            });
+        };
+        let w16_2: Wr16Fn = |dev: &Dev, addr: u32, data: u16| {
+            dev.io().map(|io| {
+                let paddr = addr as usize;
+                (io.cons_ports[paddr].w3)(dev, addr, (data & 0xFF) as u8);
+                (io.cons_ports[paddr].w4)(dev, addr, (data >> 8 & 0xFF) as u8);
+            });
+        };
+        let w32: Wr32Fn = |dev: &Dev, addr: u32, data: u32| {
+            dev.io().map(|io| {
+                let paddr = addr as usize;
+                (io.cons_ports[paddr].w1)(dev, addr, (data & 0xFF) as u8);
+                (io.cons_ports[paddr].w2)(dev, addr, (data >> 8 & 0xFF) as u8);
+                (io.cons_ports[paddr].w3)(dev, addr, (data >> 16 & 0xFF) as u8);
+                (io.cons_ports[paddr].w4)(dev, addr, (data >> 24 & 0xFF) as u8);
+            });
+        };
+        let empty_w = IO::empty_write8 as *const ();
+        if w8_3 as *const () != empty_w && w8_4 as *const () != empty_w {
+            self.cons_ports[paddr + 2].w1 = w8_1;
+            self.cons_ports[paddr + 2].w2 = w8_2;
+            self.cons_ports[paddr + 2].w3 = w8_3;
+            self.cons_ports[paddr + 2].w4 = w8_4;
+            self.cons_ports[paddr + 2].dev = dev.clone();
+            self.cons_ports[paddr + 3].w1 = w8_1;
+            self.cons_ports[paddr + 3].w2 = w8_2;
+            self.cons_ports[paddr + 3].w3 = w8_3;
+            self.cons_ports[paddr + 3].w4 = w8_4;
+            self.cons_ports[paddr + 3].dev = dev.clone();
+            self.register_write(port_addr, dev.clone(), w8_1, w16_1, w32);
+            self.register_write8(port_addr + 1, dev.clone(), w8_2);
+            self.register_write(port_addr + 2, dev.clone(), w8_3, w16_2, IO::empty_write32);
+            self.register_write8(port_addr + 3, dev.clone(), w8_4);
+        } else {
+            self.register_write(port_addr, dev.clone(), w8_1, w16_1, IO::empty_write32);
+            self.register_write8(port_addr + 1, dev.clone(), w8_2);
+        }
+    }
+
+    pub fn register_read_consecutive(
+        &mut self,
+        port_addr: u32,
+        dev: Dev,
+        r8_1: Rd8Fn,
+        r8_2: Rd8Fn,
+        r8_3: Rd8Fn,
+        r8_4: Rd8Fn,
+    ) {
+        let paddr = port_addr as usize;
+        self.cons_ports[paddr].r1 = r8_1;
+        self.cons_ports[paddr].r2 = r8_2;
+        self.cons_ports[paddr].r3 = r8_3;
+        self.cons_ports[paddr].r4 = r8_4;
+        self.cons_ports[paddr].dev = dev.clone();
+        self.cons_ports[paddr + 1].r1 = r8_1;
+        self.cons_ports[paddr + 1].r2 = r8_2;
+        self.cons_ports[paddr + 1].r3 = r8_3;
+        self.cons_ports[paddr + 1].r4 = r8_4;
+        self.cons_ports[paddr + 1].dev = dev.clone();
+        let r16_1: Rd16Fn = |dev: &Dev, port_addr: u32| {
+            dev.io().map_or(0, |io| {
+                let paddr = port_addr as usize;
+                (io.cons_ports[paddr].r1)(dev, port_addr) as u16
+                    | ((io.cons_ports[paddr].r2)(dev, port_addr) as u16) << 8
+            })
+        };
+        let r16_2: Rd16Fn = |dev: &Dev, port_addr: u32| {
+            dev.io().map_or(0, |io| {
+                let paddr = port_addr as usize;
+                (io.cons_ports[paddr].r3)(dev, port_addr) as u16
+                    | ((io.cons_ports[paddr].r4)(dev, port_addr) as u16) << 8
+            })
+        };
+        let r32: Rd32Fn = |dev: &Dev, port_addr: u32| {
+            dev.io().map_or(0, |io| {
+                let paddr = port_addr as usize;
+                (io.cons_ports[paddr].r1)(dev, port_addr) as u32
+                    | ((io.cons_ports[paddr].r2)(dev, port_addr) as u32) << 8
+                    | ((io.cons_ports[paddr].r3)(dev, port_addr) as u32) << 16
+                    | ((io.cons_ports[paddr].r4)(dev, port_addr) as u32) << 24
+            })
+        };
+        let empty_r = IO::empty_read8 as *const ();
+        if r8_3 as *const () != empty_r && r8_4 as *const () != empty_r {
+            self.cons_ports[paddr + 2].r1 = r8_1;
+            self.cons_ports[paddr + 2].r2 = r8_2;
+            self.cons_ports[paddr + 2].r3 = r8_3;
+            self.cons_ports[paddr + 2].r4 = r8_4;
+            self.cons_ports[paddr + 2].dev = dev.clone();
+            self.cons_ports[paddr + 3].r1 = r8_1;
+            self.cons_ports[paddr + 3].r2 = r8_2;
+            self.cons_ports[paddr + 3].r3 = r8_3;
+            self.cons_ports[paddr + 3].r4 = r8_4;
+            self.cons_ports[paddr + 3].dev = dev.clone();
+            self.register_read(port_addr, dev.clone(), r8_1, r16_1, r32);
+            self.register_read8(port_addr + 1, dev.clone(), r8_2);
+            self.register_read(port_addr + 2, dev.clone(), r8_3, r16_2, IO::empty_read32);
+            self.register_read8(port_addr + 3, dev.clone(), r8_4);
+        } else {
+            self.register_read(port_addr, dev.clone(), r8_1, r16_1, IO::empty_read32);
+            self.register_read8(port_addr + 1, dev.clone(), r8_2);
+        }
     }
 
     pub(crate) fn init(&mut self) {

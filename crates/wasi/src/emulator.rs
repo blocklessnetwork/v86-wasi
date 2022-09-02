@@ -6,7 +6,7 @@ use std::{
 
 use wasmtime::{Instance, Store};
 
-use crate::{dma::DMA, io::IO, pic::PIC, rtc::RTC, Setting, CPU};
+use crate::{dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Setting, CPU};
 
 pub(crate) struct InnerEmulator {
     start_time: time::Instant,
@@ -49,7 +49,7 @@ impl Emulator {
         let inner = Rc::new(Cell::new(InnerEmulator::new(setting)));
         Emulator { inner: inner }
     }
-    #[inline(always)]
+    #[inline]
     pub fn microtick(&self) -> f64 {
         self.inner().microtick()
     }
@@ -59,52 +59,62 @@ impl Emulator {
         self.inner_mut().start();
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn inner_strong_count(&self) -> usize {
         Rc::strong_count(&self.inner)
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn cpu_mut(&self) -> Option<&mut CPU> {
         self.inner_mut().cpu.as_mut()
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn pic_mut(&self) -> Option<&mut PIC> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.pic)
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn pic(&self) -> Option<&PIC> {
         self.inner_mut().cpu.as_ref().map(|cpu| &cpu.pic)
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn io_mut(&self) -> Option<&mut IO> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.io)
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn io(&self) -> Option<&IO> {
         self.inner_mut().cpu.as_ref().map(|cpu| &cpu.io)
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn dma_mut(&self) -> Option<&mut DMA> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.dma)
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn cpu(&self) -> Option<&CPU> {
         self.inner_mut().cpu.as_ref()
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn rtc_mut(&self) -> Option<&mut RTC> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.rtc)
     }
 
-    #[inline(always)]
+    #[inline]
+    pub(crate) fn pci_mut(&self) -> Option<&mut PCI> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.pci)
+    }
+
+    #[inline]
+    pub(crate) fn pci(&self) -> Option<&PCI> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &cpu.pci)
+    }
+
+    #[inline]
     fn inner(&self) -> &InnerEmulator {
         unsafe {
             let rc = &(*self.inner);
@@ -112,7 +122,7 @@ impl Emulator {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn inner_mut(&self) -> &mut InnerEmulator {
         unsafe {
             let rc = &(*self.inner);
@@ -120,7 +130,7 @@ impl Emulator {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn setting(&self) -> &Setting {
         &self.inner().setting
     }
