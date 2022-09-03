@@ -623,7 +623,7 @@ impl PCI {
 
         //dbg_log("PCI raise irq " + h(irq) + " dev=" + h(device, 2) +
         //        " (" + this.devices[pci_id].name + ")", LOG_PCI);
-        self.store.cpu().map(|cpu| {
+        self.store.cpu_mut().map(|cpu| {
             cpu.device_raise_irq(irq);
         });
     }

@@ -440,6 +440,7 @@ impl InnerPIC {
         }
     }
 
+    #[inline]
     fn set_irq(&mut self, irq_number: u8) {
         if self.is_master {
             self.set_master_irq(irq_number);
@@ -557,6 +558,10 @@ impl PIC {
             master,
             slave,
         }
+    }
+
+    pub fn set_irq(&mut self, irq_number: u8) {
+        self.master.set_irq(irq_number);
     }
 
     pub(crate) fn init(&mut self) {

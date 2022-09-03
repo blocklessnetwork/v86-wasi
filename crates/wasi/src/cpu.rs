@@ -628,7 +628,8 @@ impl CPU {
         }
     }
 
-    pub(crate) fn device_raise_irq(&self, i: u8) {
+    pub(crate) fn device_raise_irq(&mut self, i: u8) {
+        self.pic.set_irq(i);
         //TODO
     }
 
