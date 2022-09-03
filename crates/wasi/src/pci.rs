@@ -8,6 +8,8 @@ const PCI_CONFIG_ADDRESS: u32 = 0xCF8;
 
 const PCI_CONFIG_DATA: u32 = 0xCFC;
 
+const PAM0: u8 = 0x10;
+
 pub(crate) struct PICBar {
     size: u32,
     original_bar: i32,
@@ -25,7 +27,7 @@ trait PCIDevice {
 
     fn pci_space(&self) -> &[u8];
 
-    fn pci_space_mut(&self) -> &mut [u8];
+    fn pci_space_mut(&mut self) -> &mut [u8];
 
     fn pci_bars(&self) -> &[Option<PICBar>];
 
@@ -128,6 +130,7 @@ pub(crate) struct PCI {
     pci_status: [u8; 4],
     devices: [Option<Box<dyn PCIDevice>>; 256],
     device_spaces: [Option<Space>; 256],
+    isa_bridge_id: u8,
 }
 
 impl PCI {
@@ -144,6 +147,7 @@ impl PCI {
             devices,
             device_spaces,
             store,
+            isa_bridge_id: 0,
         }
     }
 
@@ -246,6 +250,35 @@ impl PCI {
                 },
             );
         });
+        let host_bridge = GenericPCIDevice::new(
+            0, 
+            vec![
+                // 00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC [Natoma] (rev 02)
+                0x86, 0x80, 0x37, 0x12, 0x00, 0x00, 0x00, 0x00,  0x02, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  0x00, PAM0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            ], 
+            vec![], 
+            "82441FX PMC"
+        );
+        self.register_device(host_bridge);
+        let isa_bridge = GenericPCIDevice::new(
+            1 << 3,
+            vec![
+                // 00:01.0 ISA bridge: Intel Corporation 82371SB PIIX3 ISA [Natoma/Triton II]
+                0x86, 0x80, 0x00, 0x70, 0x07, 0x00, 0x00, 0x02, 0x00, 0x00, 0x01, 0x06, 0x00, 0x00, 0x80, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            ], 
+            vec![], 
+            "82371SB PIIX3 ISA"
+        );
+        self.isa_bridge_id = isa_bridge.pci_id;
+        self.register_device(isa_bridge);
     }
 
     fn register_device(&mut self, mut dev: impl PCIDevice + 'static) {
@@ -572,5 +605,88 @@ impl PCI {
         });
     }
 
+    #[inline]
+    fn isa_bridge_space_read8(&self, idx: usize) -> u8 {
+        let space = self.device_spaces[self.isa_bridge_id as usize].as_ref();
+        space.map_or(0, |s| s.read_u8(idx))
+    }
+
+    fn raise_irq(&self, pci_id: u8) {
+        let space = self.device_spaces[pci_id as usize].as_ref();
+        assert!(space.is_some());
+        let space = space.unwrap();
+        let val = space.read_u32((0x3C >> 2) as usize);
+        let pin = (val >> 8 & 0xFF) - 1;
+        let device = (pci_id >> 3) - 1 & 0xFF;
+        let parent_pin = pin + device as u32 & 3;
+        let irq = self.isa_bridge_space_read8((0x60 + parent_pin) as usize);
+
+        //dbg_log("PCI raise irq " + h(irq) + " dev=" + h(device, 2) +
+        //        " (" + this.devices[pci_id].name + ")", LOG_PCI);
+        self.store.cpu().map(|cpu| {
+            cpu.device_raise_irq(irq);
+        });
+    }
+}
+
+pub(crate) struct GenericPCIDevice {
+    pci_id: u8,
+    pci_space: Vec<u8>,
+    pci_bars: Vec<Option<PICBar>>,
+    name: String,
+    pci_rom_size: u32,
+    pci_rom_address: u32,
+}
+
+impl GenericPCIDevice {
+    pub fn new(
+        pci_id: u8,
+        pci_space: Vec<u8>,
+        pci_bars: Vec<Option<PICBar>>,
+        name: &str,
+    ) -> Self {
+        Self {
+            pci_id,
+            pci_space,
+            pci_bars,
+            name: name.into(),
+            pci_rom_size: 0,
+            pci_rom_address: 0
+        }
+    }
+}
+
+impl PCIDevice for GenericPCIDevice {
     
+    fn pci_id(&self) -> u8 {
+        self.pci_id
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn pci_rom_size(&self) -> u32 {
+        self.pci_rom_size
+    }
+
+    fn pci_rom_address(&self) -> u32 {
+        self.pci_rom_address
+    }
+
+    fn pci_space(&self) -> &[u8] {
+        &self.pci_space
+    }
+
+    fn pci_space_mut(&mut self) -> &mut [u8] {
+        &mut self.pci_space
+    }
+
+    fn pci_bars(&self) -> &[Option<PICBar>] {
+        &self.pci_bars
+    }
+
+    fn pci_bars_mut(&mut self) -> &mut [Option<PICBar>] {
+        &mut self.pci_bars
+    }
 }

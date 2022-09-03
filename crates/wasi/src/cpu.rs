@@ -628,6 +628,10 @@ impl CPU {
         }
     }
 
+    pub(crate) fn device_raise_irq(&self, i: u8) {
+        //TODO
+    }
+
     pub(crate) fn reboot_internal(&mut self) {
         self.reset_cpu();
         //TODO:
