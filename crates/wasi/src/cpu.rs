@@ -627,4 +627,16 @@ impl CPU {
             self.rtc.cmos_write(0x3f, 0x01);
         }
     }
+
+    pub(crate) fn reboot_internal(&mut self) {
+        self.reset_cpu();
+        //TODO:
+        //self.fw_value = [];
+
+        // if(this.devices.virtio)
+        // {
+        //     this.devices.virtio.reset();
+        // }
+        self.load_bios();
+    }
 }

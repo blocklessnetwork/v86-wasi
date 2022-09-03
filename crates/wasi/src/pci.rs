@@ -2,7 +2,7 @@ use std::{mem, rc::Weak};
 
 use wasmtime::Store;
 
-use crate::{io::IOps, Dev, Emulator, EmulatorTrait, IO};
+use crate::{io::IOps, Dev, Emulator, EmulatorTrait, IO, utils::*};
 
 const PCI_CONFIG_ADDRESS: u32 = 0xCF8;
 
@@ -34,56 +34,12 @@ trait PCIDevice {
 
 struct Space([u8; 4 * 64]);
 
-macro_rules! copy_impl {
-    ($name: ident, $type: ty, $l: literal) => {
-        fn $name(src: &[u8], dst: &mut [$type]) {
-            let mut bs = [0u8; $l];
-            for i in 0..src.len() / $l {
-                let start = i * $l;
-                let mut end = start + $l;
-                if end > src.len() {
-                    end = src.len();
-                }
-                bs.copy_from_slice(&src[start..end]);
-                let t: $type = <$type>::from_le_bytes(bs);
-                dst[i] = t;
-            }
-        }
-    };
-}
-
-macro_rules! read_impl {
-    ($name: ident, $type: ty, $l: literal) => {
-        fn $name(src: &[u8], idx: usize) -> $type {
-            let mut bs = [0u8; $l];
-            bs.copy_from_slice(&src[idx * $l..(idx * $l + $l)]);
-            <$type>::from_le_bytes(bs)
-        }
-    };
-}
-
-macro_rules! write_impl {
-    ($name: ident, $type: ty, $l: literal) => {
-        fn $name(src: &mut [u8], idx: usize, v: $type) {
-            let bs = v.to_le_bytes();
-            let dst = &mut src[idx * $l..(idx * $l + $l)];
-            dst.copy_from_slice(&bs);
-        }
-    };
-}
-
-copy_impl!(copy_to_i32s, i32, 4);
-
-read_impl!(read_i32, i32, 4);
-read_impl!(read_u32, u32, 4);
-read_impl!(read_u16, u16, 2);
-read_impl!(read_i16, i16, 2);
-write_impl!(write_i32, i32, 4);
-write_impl!(write_u32, u32, 4);
-write_impl!(write_u16, u16, 2);
-write_impl!(write_i16, i16, 2);
-
 impl Space {
+    #[inline]
+    fn byteLength(&self) -> u8 {
+        64
+    }
+
     fn new() -> Self {
         Self([0; 4 * 64])
     }
@@ -273,18 +229,20 @@ impl PCI {
                     dev.cpu_mut().map(|cpu| {
                         if cpu.pci.pci_addr[1] & 0x06 == 0x02 && data & 0x06 == 0x06 {
                             dbg_log!("CPU reboot via PCI");
-                            //TODO cpu.reboot_internal();
+                            cpu.reboot_internal();
                             return;
                         }
                         cpu.pci.pci_addr[1] = data
                     });
                 },
                 |dev: &Dev, _: u32, data: u8| {
-                    dev.pci_mut().map(|pci| pci.pci_addr[2] = data & 0xFC);
+                    dev.pci_mut().map(|pci| pci.pci_addr[2] = data);
                 },
                 |dev: &Dev, _: u32, data: u8| {
-                    dev.pci_mut().map(|pci| pci.pci_addr[3] = data & 0xFC);
-                    //TODO
+                    dev.pci_mut().map(|pci| {
+                        pci.pci_addr[3] = data;
+                        pci.pci_query();
+                    });
                 },
             );
         });
@@ -520,6 +478,57 @@ impl PCI {
         }
     }
 
+    fn pci_query(&mut self) {
+        let dbg_line = "query";
+
+        // Bit | .31                     .0
+        // Fmt | EBBBBBBBBDDDDDFFFRRRRRR00
+
+        let bdf = self.pci_addr[2] << 8 | self.pci_addr[1];
+        let addr = self.pci_addr[0] & 0xFC;
+        //devfn = bdf & 0xFF,
+        //bus = bdf >> 8,
+        let dev = bdf >> 3 & 0x1F;
+        //fn = bdf & 7,
+        let enabled = self.pci_addr[3] >> 7;
+
+        let dbg_line = format!(
+            " enabled= {} bdf=0x{:04x} dev=0x{:02x} addr=0x{:0x}" ,
+            enabled,
+            bdf,
+            dev,
+            addr);
+
+        let device = self.device_spaces[bdf as usize].as_ref();
+
+        if device.is_some() {
+            let device = device.unwrap();
+            self.pci_status = (0x80000000u32 | 0).to_le_bytes();
+            let mut respone32 = 0u32;
+            if addr < device.byteLength() {
+                respone32 = device.read_u32((addr >> 2) as usize);
+                self.pci_response = respone32.to_le_bytes();
+            } else {
+                // required by freebsd-9.1
+                self.pci_response = [0; 4];
+            }
+            let mut dbg_line = format!(
+                "{} 0x{:x} -> 0x{:x}",
+                dbg_line,
+                self.pci_addr32() >> 0,
+                respone32 >> 0
+            );
+            if addr >= device.byteLength() {
+                dbg_line = format!("{} (undef)", dbg_line);
+            }
+            let dev = self.devices[bdf as usize].as_ref().unwrap();
+            dbg_log!("{} ({})", dbg_line, dev.name());
+        } else {
+            self.pci_response = (0xFFFF_FFFFu32).to_le_bytes(); //-1i32
+            self.pci_status = [0;4];
+        }
+    }
+
     fn set_io_bars(&self, bar: &PICBar, from: u32, to: u32) {
         let count = bar.size;
         dbg_log!("Move io bars: from={:x} to={:x} count={}", from, to, count);
@@ -562,4 +571,6 @@ impl PCI {
             }
         });
     }
+
+    
 }
