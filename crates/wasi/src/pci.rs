@@ -328,12 +328,12 @@ impl PCI {
         let device = self.devices[index].as_ref();
         assert!(
             !(addr >= 0x10 && addr < 0x2C || addr >= 0x30 && addr < 0x34),
-            "PCI: Expected 32-bit write, got 8-bit (addr: 0x{:02x})",
+            "PCI: Expected 32-bit write, got 8-bit (addr: {:#02X})",
             addr
         );
 
         dbg_log!(
-            "PCI write8 dev= 0x{:02x} ({}) addr=0x{:04x} value=0x{:02x}",
+            "PCI write8 dev={:#02x} ({}) addr={:#04x} value={:#02X}",
             bdf >> 3,
             device.unwrap().name(),
             addr,
@@ -357,7 +357,7 @@ impl PCI {
         if addr >= 0x10 && addr < 0x2C {
             // Bochs bios
             dbg_log!(
-                "Warning: PCI: Expected 32-bit write, got 16-bit (addr: 0x{:x})",
+                "Warning: PCI: Expected 32-bit write, got 16-bit (addr: {:#X})",
                 addr
             );
             return;
@@ -365,12 +365,12 @@ impl PCI {
 
         assert!(
             !(addr >= 0x30 && addr < 0x34),
-            "PCI: Expected 32-bit write, got 16-bit (addr: 0x{:x})",
+            "PCI: Expected 32-bit write, got 16-bit (addr: {:#X})",
             addr,
         );
 
         dbg_log!(
-            "PCI writ16 dev=0x{:02x} ({}) addr=0x{:0x} value=0x{:0x}",
+            "PCI writ16 dev=0x{:02x} ({}) addr={:#x} value={:#X}",
             bdf,
             device.unwrap().name(),
             addr,
@@ -404,7 +404,7 @@ impl PCI {
                 "n"
             };
             dbg_log!(
-                "BAR {} exists={} changed to 0x{:x} dev=0x{:02x} ({})", 
+                "BAR {} exists={} changed to 0x{:#x} dev=0x{:#02x} ({})", 
                 bar_nr, 
                 bar_yn,
                 written, 
@@ -482,7 +482,7 @@ impl PCI {
             dbg_log!("BAR effective value: {:x}", sp_val >> 0);
         } else if addr == 0x30 {
             dbg_log!(
-                "PCI write rom address dev=0x{:02x}, ({}) value=0x{:x}",
+                "PCI write rom address dev=0x{:02x}, ({}) value=0x{:X}",
                 bdf >> 3,
                 device.name(),
                 written >> 0
@@ -506,7 +506,7 @@ impl PCI {
             }
         } else if addr == 0x04 {
             dbg_log!(
-                "PCI write dev={:x} ({}) addr={:x} value={:x}",
+                "PCI write dev={:#X} ({}) addr={:#X} value={:#X}",
                 bdf >> 3,
                 device.name(),
                 addr,
@@ -514,7 +514,7 @@ impl PCI {
             );
         } else {
             dbg_log!(
-                "PCI write dev={:x} ({}) addr={:x} value={:x}",
+                "PCI write dev={:#X} ({}) addr={:#X} value={:#X}",
                 bdf >> 3,
                 device.name(),
                 addr,
@@ -541,7 +541,7 @@ impl PCI {
         let enabled = self.pci_addr[3] >> 7;
 
         let dbg_line = format!(
-            "query enabled={} bdf=0x{:04x} dev=0x{:02x} addr=0x{:08x}" ,
+            "query enabled={} bdf={:#04X} dev={:#02X} addr={:#X}" ,
             enabled,
             bdf,
             dev,
@@ -562,7 +562,7 @@ impl PCI {
                 self.pci_response = [0; 4];
             }
             let mut dbg_line = format!(
-                "{} 0x{:x} -> 0x{:x}",
+                "{} {:#08X} -> {:#08X}",
                 dbg_line,
                 self.pci_addr32() >> 0,
                 respone32 >> 0
@@ -580,7 +580,7 @@ impl PCI {
 
     fn set_io_bars(&self, bar: &PICBar, from: u32, to: u32) {
         let count = bar.size;
-        dbg_log!("Move io bars: from={:x} to={:x} count={}", from, to, count);
+        dbg_log!("Move io bars: from={:#X} to={:#X} count={}", from, to, count);
         self.store.io_mut().map(|io| {
             for i in 0..count {
                 let empty_iops = crate::io::IO::default_iops();
@@ -595,7 +595,7 @@ impl PCI {
                     && old_entry.write8 as *const () == IO::empty_write8 as *const ()
                 {
                     dbg_log!(
-                        "Warning: Bad IO bar: Source not mapped, port=0x{:x}",
+                        "Warning: Bad IO bar: Source not mapped, port=0x{:#X}",
                         from + i
                     );
                 }
@@ -613,7 +613,7 @@ impl PCI {
                     // These can fail if the os maps an io port in multiple bars (indicating a bug)
                     // XXX: Fails during restore_state
                     dbg_log!(
-                        "Warning: Bad IO bar: Target already mapped, port={:x}",
+                        "Warning: Bad IO bar: Target already mapped, port={:#X}",
                         to + i
                     );
                 }

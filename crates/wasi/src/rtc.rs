@@ -117,7 +117,7 @@ impl RTC {
 
     #[inline(always)]
     pub(crate) fn cmos_write(self: &mut RTC, index: u8, v: u8) {
-        dbg_log!("cmos 0x{:02x} <- 0x{:02x}", index, v);
+        dbg_log!("cmos {:#02X} <- {:#02X}", index, v);
         assert!(index < 128);
         self.cmos_data[index as usize] = v;
     }
@@ -167,7 +167,7 @@ impl RTC {
                 }
                 _ => {
                     let data = rtc.cmos_data[rtc.cmos_index as usize];
-                    dbg_log!("cmos read from index 0x{:02x}: data: {:02x}", index, data);
+                    dbg_log!("cmos read from index {:#02X}: data: {:#02X}", index, data);
                     data
                 }
             }
@@ -218,7 +218,7 @@ impl RTC {
                 rtc.cmos_write(rtc.cmos_index as _, v);
             }
             _ => {
-                dbg_log!("cmos write index 0x{:0x}: 0x{:0x}", rtc.cmos_index, v);
+                dbg_log!("cmos write index {:#X}: {:#X}", rtc.cmos_index, v);
             }
         });
     }

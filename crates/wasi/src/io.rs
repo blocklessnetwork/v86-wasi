@@ -242,7 +242,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.read8 as *const () == Self::empty_read8 as *const () || LOG_ALL_IO {
             dbg_log!(
-                "read8 port  #{:02x} {}",
+                "read8 port  #{:02X} {}",
                 port,
                 self.get_port_description(port)
             );
@@ -255,7 +255,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.read16 as *const () == Self::empty_read16 as *const () || LOG_ALL_IO {
             dbg_log!(
-                "read16 port  #{:02x} {}",
+                "read16 port  #{:02X} {}",
                 port,
                 self.get_port_description(port)
             );
@@ -268,7 +268,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.read32 as *const () == Self::empty_read32 as *const () || LOG_ALL_IO {
             dbg_log!(
-                "read32 port #{:02x} {}",
+                "read32 port #{:02X} {}",
                 port,
                 self.get_port_description(port)
             );
@@ -281,7 +281,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.write8 as *const () == Self::empty_write8 as *const () || LOG_ALL_IO {
             dbg_log!(
-                "write8 port  #{:02x} <- 0x{:02x} {}",
+                "write8 port  #{:02X} <- {:#02X} {}",
                 port,
                 data,
                 self.get_port_description(port)
@@ -294,7 +294,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.write16 as *const () == Self::empty_write16 as *const () || LOG_ALL_IO {
             dbg_log!(
-                "write16 port  #{:02x} <- 0x{:02x} {}",
+                "write16 port  #{:02X} <- {:#02X} {}",
                 port,
                 data,
                 self.get_port_description(port)
@@ -307,7 +307,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.write32 as *const () == Self::empty_write32 as *const () || LOG_ALL_IO {
             dbg_log!(
-                "write32 port  #{:02x} <- 0x{:02x} {}",
+                "write32 port  #{:02x} <- {:#02X} {}",
                 port,
                 data,
                 self.get_port_description(port)
@@ -331,7 +331,7 @@ impl IO {
         r32: Rd32Fn,
         w32: Wr32Fn,
     ) {
-        dbg_log!("mmap_register addr=0x{:x}  size={:x}", addr >> 0, size);
+        dbg_log!("mmap_register addr={:#X}  size={:#X}", addr >> 0, size);
         assert!((addr & MMAP_BLOCK_SIZE as u32).saturating_sub(1) == 0);
         assert!(size > 0 && (size & MMAP_BLOCK_SIZE - 1) == 0);
         let r32 = if r32 as *const () == Self::empty_read8 as *const () {
@@ -520,23 +520,23 @@ impl IO {
             m_size,
             0x100000000 - m_size as usize,
             |_: &Dev, addr: u32| {
-                dbg_log!("Read from unmapped memory space, addr=0x{:x}", addr >> 0);
+                dbg_log!("Read from unmapped memory space, addr={:#X}", addr >> 0);
                 0xFF
             },
             |_: &Dev, addr: u32, v: u8| {
                 dbg_log!(
-                    "Write to unmapped memory space, addr=0x{:x} value={:x}",
+                    "Write to unmapped memory space, addr={:#X} value={:#X}",
                     addr >> 0,
                     v
                 );
             },
             |_: &Dev, addr: u32| {
-                dbg_log!("Read from unmapped memory space, addr=0x{:x}", addr >> 0);
+                dbg_log!("Read from unmapped memory space, addr={:#X}", addr >> 0);
                 0xFFFFFFFF
             },
             |_: &Dev, addr: u32, v: u32| {
                 dbg_log!(
-                    "Write to unmapped memory space, addr=0x{:x} value={:x}",
+                    "Write to unmapped memory space, addr={:#X} value={:#X}",
                     addr >> 0,
                     v
                 );

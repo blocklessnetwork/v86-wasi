@@ -169,7 +169,7 @@ impl DMA {
     }
 
     fn port_multimask_write(&mut self, channel_offset: usize, data_byte: u8) {
-        dbg_log!("multichannel mask write: 0x{:x}", data_byte);
+        dbg_log!("multichannel mask write: {:#X}", data_byte);
         for i in 0..4 {
             self.update_mask(channel_offset + i, data_byte & (1 << i));
         }
@@ -181,13 +181,13 @@ impl DMA {
         value |= self.channel_mask[channel_offset + 1] << 1;
         value |= self.channel_mask[channel_offset + 2] << 2;
         value |= self.channel_mask[channel_offset + 3] << 3;
-        dbg_log!("multichannel mask read: 0x{:x}", value);
+        dbg_log!("multichannel mask read: {:#X}", value);
         value
     }
 
     fn port_mode_write(&mut self, channel_offset: usize, data_byte: u8) {
         let channel = (data_byte & 0x3) as usize + channel_offset;
-        dbg_log!("mode write [{}] = 0x{:0x}", channel, data_byte);
+        dbg_log!("mode write [{}] = {:#X}", channel, data_byte);
         self.channel_mode[channel] = data_byte;
     }
 
@@ -211,7 +211,7 @@ impl DMA {
     }
 
     fn port_pagehi_write(&mut self, channel: usize, data_byte: u8) {
-        dbg_log!("pagehi write [{}] = 0x{:x}", channel, data_byte);
+        dbg_log!("pagehi write [{}] = {:#X}", channel, data_byte);
         self.channel_pagehi[channel] = data_byte;
     }
 
@@ -221,7 +221,7 @@ impl DMA {
     }
 
     fn port_page_write(&mut self, channel: usize, data_byte: u8) {
-        dbg_log!("page write [{}] = 0x{:x}", channel, data_byte);
+        dbg_log!("page write [{}] = {:#X}", channel, data_byte);
         self.channel_page[channel] = data_byte;
     }
 
@@ -231,7 +231,7 @@ impl DMA {
     }
 
     fn port_addr_write(&mut self, channel: usize, data_byte: u16) {
-        dbg_log!("addr write [{}] = 0x{:x}", channel, data_byte);
+        dbg_log!("addr write [{}] = {:#X}", channel, data_byte);
         self.channel_addr[channel] =
             self.flipflop_get(self.channel_addr[channel], data_byte, false);
         self.channel_addr_init[channel] =
@@ -239,7 +239,7 @@ impl DMA {
     }
 
     fn port_count_write(&mut self, channel: usize, data_byte: u16) {
-        dbg_log!("count write [{}] = 0x{:x}", channel, data_byte);
+        dbg_log!("count write [{}] = {:#X}", channel, data_byte);
         self.channel_count[channel] =
             self.flipflop_get(self.channel_count[channel], data_byte, false);
         self.channel_count_init[channel] =
@@ -248,7 +248,7 @@ impl DMA {
 
     fn port_addr_read(&mut self, channel: usize) -> u8 {
         dbg_log!(
-            "addr read [{}] -> 0x{:x}",
+            "addr read [{}] -> {:#X}",
             channel,
             self.channel_addr[channel]
         );
@@ -257,7 +257,7 @@ impl DMA {
 
     fn port_count_read(&mut self, channel: usize) -> u8 {
         dbg_log!(
-            "count read [{}] -> 0x{:x}",
+            "count read [{}] -> {:#X}",
             channel,
             self.channel_count[channel]
         );
