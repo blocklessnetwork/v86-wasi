@@ -464,6 +464,7 @@ impl CPU {
         self.init_io();
         self.dma.init();
         self.pic.init();
+        self.pci.init();
         self.reset_cpu();
         self.load_bios();
 

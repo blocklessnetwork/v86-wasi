@@ -37,12 +37,9 @@ macro_rules! copy_impl {
     ($name: ident, $type: ty, $l: literal) => {
         pub fn $name(src: &[u8], dst: &mut [$type]) {
             let mut bs = [0u8; $l];
-            for i in 0..src.len() / $l {
+            for i in 0..dst.len() {
                 let start = i * $l;
-                let mut end = start + $l;
-                if end > src.len() {
-                    end = src.len();
-                }
+                let end = start + $l;
                 bs.copy_from_slice(&src[start..end]);
                 let t: $type = <$type>::from_le_bytes(bs);
                 dst[i] = t;

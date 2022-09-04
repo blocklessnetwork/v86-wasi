@@ -38,8 +38,8 @@ struct Space([u8; 4 * 64]);
 
 impl Space {
     #[inline]
-    fn byteLength(&self) -> u8 {
-        64
+    fn byteLength(&self) -> u32 {
+        64*4
     }
 
     fn new() -> Self {
@@ -47,7 +47,7 @@ impl Space {
     }
 
     fn set(&mut self, val: &[u8]) {
-        self.0.copy_from_slice(val)
+        self.0[0..val.len()].copy_from_slice(val)
     }
 
     #[inline]
@@ -156,7 +156,7 @@ impl PCI {
         u32::from_le_bytes(self.pci_addr)
     }
 
-    fn init(&mut self) {
+    pub fn init(&mut self) {
         self.store.io_mut().map(|io| {
             io.register_write(
                 PCI_CONFIG_DATA,
@@ -284,7 +284,7 @@ impl PCI {
     fn register_device(&mut self, mut dev: impl PCIDevice + 'static) {
         let device_id: usize = dev.pci_id() as _;
         dbg_log!("PCI register bdf=0x{:x} ({})", device_id, dev.name());
-        assert!(self.devices[device_id].is_some());
+        assert!(self.devices[device_id].is_none());
         assert!(dev.pci_space().len() >= 64);
         assert!(device_id < self.devices.len());
         let mut space = Space::new();
@@ -393,9 +393,24 @@ impl PCI {
         let device = self.devices[index].as_ref().unwrap();
         if addr >= 0x10 && addr < 0x28 {
             let bar_nr = addr - 0x10 >> 2;
-            let bar = device.pci_bars()[bar_nr as usize].as_ref();
-            // dbg_log!("BAR" + bar_nr + " exists=" + (bar ? "y" : "n") + " changed to " +
-            //        h(written >>> 0) + " dev=" + h(bdf >> 3, 2) + " (" + device.name + ") ", LOG_PCI);
+            let bar = if device.pci_bars().len() > bar_nr as usize {
+                device.pci_bars()[bar_nr as usize].as_ref()
+            } else {
+                None
+            };
+            let bar_yn = if bar.is_some() {
+                "y"
+            } else {
+                "n"
+            };
+            dbg_log!(
+                "BAR {} exists={} changed to 0x{:x} dev=0x{:02x} ({})", 
+                bar_nr, 
+                bar_yn,
+                written, 
+                bdf >> 3, 
+                device.name(),
+            );
             if bar.is_some() {
                 let mut bar = bar.unwrap();
                 assert!(
@@ -467,7 +482,7 @@ impl PCI {
             dbg_log!("BAR effective value: {:x}", sp_val >> 0);
         } else if addr == 0x30 {
             dbg_log!(
-                "PCI write rom address dev={:02x}, ({}) value={:x}",
+                "PCI write rom address dev=0x{:02x}, ({}) value=0x{:x}",
                 bdf >> 3,
                 device.name(),
                 written >> 0
@@ -517,7 +532,7 @@ impl PCI {
         // Bit | .31                     .0
         // Fmt | EBBBBBBBBDDDDDFFFRRRRRR00
 
-        let bdf = self.pci_addr[2] << 8 | self.pci_addr[1];
+        let bdf = (self.pci_addr[2] as u16) << 8 | self.pci_addr[1] as u16;
         let addr = self.pci_addr[0] & 0xFC;
         //devfn = bdf & 0xFF,
         //bus = bdf >> 8,
@@ -526,11 +541,12 @@ impl PCI {
         let enabled = self.pci_addr[3] >> 7;
 
         let dbg_line = format!(
-            " enabled= {} bdf=0x{:04x} dev=0x{:02x} addr=0x{:0x}" ,
+            "query enabled={} bdf=0x{:04x} dev=0x{:02x} addr=0x{:08x}" ,
             enabled,
             bdf,
             dev,
-            addr);
+            addr
+        );
 
         let device = self.device_spaces[bdf as usize].as_ref();
 
@@ -538,7 +554,7 @@ impl PCI {
             let device = device.unwrap();
             self.pci_status = (0x80000000u32 | 0).to_le_bytes();
             let mut respone32 = 0u32;
-            if addr < device.byteLength() {
+            if (addr as u32) < device.byteLength() {
                 respone32 = device.read_u32((addr >> 2) as usize);
                 self.pci_response = respone32.to_le_bytes();
             } else {
@@ -551,7 +567,7 @@ impl PCI {
                 self.pci_addr32() >> 0,
                 respone32 >> 0
             );
-            if addr >= device.byteLength() {
+            if (addr as u32) >= device.byteLength() {
                 dbg_line = format!("{} (undef)", dbg_line);
             }
             let dev = self.devices[bdf as usize].as_ref().unwrap();
