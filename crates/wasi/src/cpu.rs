@@ -13,7 +13,7 @@ use crate::{
     pci::PCI,
     pic::PIC,
     rtc::RTC,
-    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME,
+    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, bus::BUS,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -266,6 +266,7 @@ pub struct CPU {
     pub(crate) dma: DMA,
     pub(crate) pic: PIC,
     pub(crate) pci: PCI,
+    pub(crate) bus: BUS,
 }
 
 impl CPU {
@@ -282,19 +283,21 @@ impl CPU {
         let s = unsafe { &mut *(store.as_ptr() as *mut Store<Emulator>) };
         let memory = inst.get_memory(s.as_context_mut(), "memory").unwrap();
         let rtc = RTC::new(store.clone());
+        let bus = BUS::new(&store);
         Self {
-            debug: Debug::new(store.clone()),
-            store: store.clone(),
-            dma: DMA::new(store.clone()),
+            rtc,
+            bus,
             memory,
             a20_byte: 0,
+            store: store.clone(),
             mmap_fn: MMapFn::new(),
-            rtc,
-            vm_opers: VMOpers::new(&inst, s),
             iomap: IOMap::new(memory),
             io: IO::new(store.clone()),
             pic: PIC::new(store.clone()),
             pci: PCI::new(store.clone()),
+            dma: DMA::new(store.clone()),
+            debug: Debug::new(store.clone()),
+            vm_opers: VMOpers::new(&inst, s),
         }
     }
 
