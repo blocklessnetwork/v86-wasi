@@ -1,4 +1,4 @@
-use std::{rc::Weak, collections::HashMap};
+use std::{collections::HashMap, rc::Weak};
 
 use wasmtime::Store;
 
@@ -24,7 +24,7 @@ impl BusController {
     }
 
     fn register(&mut self, name: &'static str, call: BusCall) {
-        let call = call as *const();
+        let call = call as *const ();
         match self.listeners.get_mut(name) {
             Some(q) => {
                 q.push(call);
@@ -38,14 +38,12 @@ impl BusController {
     fn unregister(&mut self, name: &'static str, call: BusCall) {
         let call = call as *const ();
         match self.listeners.get_mut(name) {
-            Some(q) => {
-                match q.binary_search(&call) {
-                    Ok(i) => {
-                        q.remove(i);
-                    }
-                    Err(_) => {}
+            Some(q) => match q.binary_search(&call) {
+                Ok(i) => {
+                    q.remove(i);
                 }
-            }
+                Err(_) => {}
+            },
             None => (),
         };
     }
@@ -54,11 +52,11 @@ impl BusController {
         match self.listeners.get(name) {
             Some(v) => {
                 v.iter().for_each(|call| {
-                    let call = unsafe {std::mem::transmute::<_, BusCall>(call)};
+                    let call = unsafe { std::mem::transmute::<_, BusCall>(call) };
                     call(&self.store, data);
                 });
-            },
-            None => {},
+            }
+            None => {}
         }
     }
 }
@@ -67,6 +65,6 @@ pub(crate) struct BUS(BusController);
 
 impl BUS {
     pub fn new(store: &Weak<Store<Emulator>>) -> Self {
-        Self (BusController::new(store.clone()))
+        Self(BusController::new(store.clone()))
     }
 }

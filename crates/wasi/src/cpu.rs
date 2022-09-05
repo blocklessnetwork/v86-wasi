@@ -6,6 +6,7 @@
 use std::rc::Weak;
 
 use crate::{
+    bus::BUS,
     consts::*,
     debug::Debug,
     dma::DMA,
@@ -13,7 +14,7 @@ use crate::{
     pci::PCI,
     pic::PIC,
     rtc::RTC,
-    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, bus::BUS,
+    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -266,7 +267,6 @@ pub struct CPU {
     pub(crate) dma: DMA,
     pub(crate) pic: PIC,
     pub(crate) pci: PCI,
-    pub(crate) bus: BUS,
 }
 
 impl CPU {
@@ -286,7 +286,6 @@ impl CPU {
         let bus = BUS::new(&store);
         Self {
             rtc,
-            bus,
             memory,
             a20_byte: 0,
             store: store.clone(),

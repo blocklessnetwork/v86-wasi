@@ -3,7 +3,8 @@ use std::rc::Weak;
 use wasmtime::Store;
 
 use crate::{
-    debug::Debug, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Emulator, EmulatorTrait, CPU, bus::BUS,
+    bus::BUS, debug::Debug, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Emulator,
+    EmulatorTrait, CPU,
 };
 
 #[derive(Clone)]
@@ -28,12 +29,18 @@ impl Dev {
 
     #[inline]
     pub(crate) fn bus_mut(self: &Dev) -> Option<&mut BUS> {
-        self.cpu_mut().map(|cpu| &mut cpu.bus)
+        match *self {
+            Dev::Emulator(ref e) => e.bus_mut(),
+            _ => None,
+        }
     }
 
     #[inline]
     pub(crate) fn bus(self: &Dev) -> Option<&BUS> {
-        self.cpu_mut().map(|cpu| &cpu.bus)
+        match *self {
+            Dev::Emulator(ref e) => e.bus(),
+            _ => None,
+        }
     }
 
     #[inline]

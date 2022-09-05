@@ -1,34 +1,34 @@
 #[macro_use]
 mod log;
 
-use std::slice;
 use std::rc::Weak;
+use std::slice;
 
 const ALL_DEBUG: bool = true;
 const LOG_ALL_IO: bool = false;
 
 use bus::BUS;
-use wasmtime::*;
 use dma::DMA;
 use io::IO;
 use mem::add_mem_to_linker;
 use pci::PCI;
 use pic::PIC;
 use rtc::RTC;
+use wasmtime::*;
+mod bus;
 pub(crate) mod consts;
 mod cpu;
 mod debug;
 mod dev;
-mod bus;
 mod dma;
-mod vga;
+mod emulator;
 mod io;
 mod mem;
 mod pci;
 mod pic;
 mod rtc;
-mod emulator;
 mod setting;
+mod vga;
 pub use consts::*;
 pub use cpu::CPU;
 pub use emulator::Emulator;
@@ -50,7 +50,6 @@ macro_rules! copy_impl {
         }
     };
 }
-
 
 macro_rules! read_impl {
     ($name: ident, $type: ty, $l: literal) => {
@@ -122,7 +121,7 @@ impl EmulatorTrait for Weak<Store<Emulator>> {
     fn bus_mut(&self) -> Option<&mut BUS> {
         self.emulator_mut().bus_mut()
     }
-    
+
     #[inline]
     fn bus(&self) -> Option<&BUS> {
         self.emulator_mut().bus()
