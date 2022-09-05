@@ -57,8 +57,8 @@ pub(crate) struct VGAScreen {
     store: Weak<Store<Emulator>>,
     vga_memory_size: u32,
     cursor_address: u32,
-    cursor_scanline_start: u32,
-    cursor_scanline_end: u32,
+    cursor_scanline_start: u8,
+    cursor_scanline_end: u8,
     max_cols: u32,
     max_rows: u32,
     screen_width: u32,
@@ -100,7 +100,7 @@ pub(crate) struct VGAScreen {
     dac_color_index_read: u8,
     dac_state: u8,
     dac_map: Vec<u8>,
-    attribute_controller_index: i32,
+    attribute_controller_index: u32,
     palette_source: u8,
     attribute_mode: u8,
     color_plane_enable: u8,
@@ -120,7 +120,7 @@ pub(crate) struct VGAScreen {
     miscellaneous_graphics_register: u8,
     color_compare: u8,
     color_dont_care: u8,
-    max_scan_line: u32,
+    max_scan_line: u8,
     miscellaneous_output_register: u8,
     port_3DA_value: u8,
     diff_addr_min: u32,
@@ -324,7 +324,7 @@ impl VGAScreen {
         } else if self.crtc_mode & 0x40 > 0 {
             bytes_per_line >>= 1;
         }
-        bytes_per_line
+        bytes_per_line as u8
     }
 
     fn scan_line_to_screen_row(&self, mut scan_line: u32) -> u32 {
@@ -543,7 +543,7 @@ impl VGAScreen {
         // But shift one less if PEL width mode - 2 dot clocks per pixel
         shift_count -= self.attribute_mode & 0x40;
 
-        return shift_count >> 6;
+        return (shift_count >> 6) as u8;
     }
 
     fn partial_replot(&mut self, min: u32, max: u32) {
@@ -688,7 +688,7 @@ impl VGAScreen {
                 vertical_scans >>= 1;
             }
 
-            let height = vertical_scans / (1 + (self.max_scan_line & 0x1F)) | 0;
+            let height = vertical_scans / (1 + ((self.max_scan_line as u32) & 0x1F)) | 0;
 
             if horizontal_characters > 0 && height > 0 {
                 self.set_size_text(horizontal_characters, height);
@@ -743,9 +743,9 @@ impl VGAScreen {
     }
 
     fn port3C0_write(&mut self, value: u8) {
-        if self.attribute_controller_index == -1 {
+        if self.attribute_controller_index == 0xFFFF_FFFF {
             dbg_log!("attribute controller index register: {:#X}", value);
-            self.attribute_controller_index = (value & 0x1F) as i32;
+            self.attribute_controller_index = (value & 0x1F) as u32;
             dbg_log!(
                 "attribute actual index: {:#X}",
                 self.attribute_controller_index
@@ -826,7 +826,269 @@ impl VGAScreen {
                     }
                 }
             }
-            self.attribute_controller_index = -1;
+            self.attribute_controller_index = 0xFFFF_FFFF;
         }
     }
+
+    fn update_cursor_scanline (&mut self) {
+        //TODOthis.bus.send("screen-update-cursor-scanline", [this.cursor_scanline_start, this.cursor_scanline_end]);
+    }
+
+    fn port3CF_write(&mut self, value: u8) {
+        match self.graphics_index {
+            0 => {
+                self.planar_setreset = value;
+                dbg_log!("plane set/reset: {:#X}", value);
+            }
+            1 => {
+                self.planar_setreset_enable = value;
+                dbg_log!("plane set/reset enable: {:#X}", value);
+            }
+            2 => {
+                self.color_compare = value;
+                dbg_log!("color compare: {:#X}", value);
+            }
+            3 => {
+                self.planar_rotate_reg = value;
+                dbg_log!("plane rotate: {:#X}", value);
+            }
+            4 => {
+                self.plane_read = value;
+                dbg_log!("plane read: {:#X}", value);
+            }
+            5 => {
+                let previous_planar_mode = self.planar_mode;
+                self.planar_mode = value;
+                dbg_log!("planar mode: {:#X}", value);
+                if (previous_planar_mode ^ value) & 0x60 > 0 {
+                    // Shift mode modified. Pixel buffer invalidated
+                    self.complete_replot();
+                }
+            }
+            6 => {
+                dbg_log!("miscellaneous graphics register: {:#X}", value);
+                if self.miscellaneous_graphics_register != value {
+                    self.miscellaneous_graphics_register = value;
+                    self.update_vga_size();
+                }
+            }
+            7 => {
+                self.color_dont_care = value;
+                dbg_log!("color don't care: {:#X}", value);
+            }
+            8 => {
+                self.planar_bitmap = value;
+                dbg_log!("planar bitmap: {:#X}", value);
+            }
+            _ => {
+                dbg_log!(
+                    "3CF / graphics write {:#X}: {:#X}", 
+                    self.graphics_index, 
+                    value
+                );
+            }
+        }
+    }
+
+    fn port3CF_read(&self) -> u8 {
+        dbg_log!("3CF / graphics read {:X}", self.graphics_index);
+        match self.graphics_index {
+            0 => self.planar_setreset,
+            1 => self.planar_setreset_enable,
+            2 => self.color_compare,
+            3 => self.planar_rotate_reg,
+            4 => self.plane_read,
+            5 => self.planar_mode,
+            6 => self.miscellaneous_graphics_register,
+            7 => self.color_dont_care,
+            8 => self.planar_bitmap,
+            _ => 0,
+        }
+    }
+
+    fn port3D4_write(&mut self, register: u8) {
+        dbg_log!("3D4 / crtc index: {:#X}", register);
+        self.index_crtc = register;
+    }
+
+    fn port3D4_read(&self) -> u8 {
+        dbg_log!("3D4 read / crtc index: {:#X}", self.index_crtc);
+        self.index_crtc
+    }
+
+    fn update_cursor(&mut self) {
+        let mut row = (self.cursor_address - self.start_address) / self.max_cols | 0;
+        let col = (self.cursor_address - self.start_address) % self.max_cols;
+    
+        row = (self.max_rows - 1).min(row);
+        //TODO this.bus.send("screen-update-cursor", [row, col]);
+    }
+
+    fn port3D5_write(&mut self, value: u8) {
+        match self.index_crtc {
+            0x1 => {
+                dbg_log!("3D5 / hdisp enable end write: {:#X}", value);
+                if self.horizontal_display_enable_end != value as u32 {
+                    self.horizontal_display_enable_end = value as u32;
+                    self.update_vga_size();
+                }
+            }
+            0x2 => {
+                if self.horizontal_blank_start != value as u32 {
+                    self.horizontal_blank_start = value as u32;
+                    self.update_vga_size();
+                }
+            }
+            0x7 => {
+                dbg_log!("3D5 / overflow register write: {:#X}", value);
+                let previous_vertical_display_enable_end = self.vertical_display_enable_end;
+                self.vertical_display_enable_end &= 0xFF;
+                let value: u32 = value as u32;
+                self.vertical_display_enable_end |= (value << 3 & 0x200) | (value << 7 & 0x100);
+                if previous_vertical_display_enable_end != self.vertical_display_enable_end {
+                    self.update_vga_size();
+                }
+                self.line_compare = (self.line_compare & 0x2FF) | (value << 4 & 0x100);
+
+                let previous_vertical_blank_start = self.vertical_blank_start;
+                self.vertical_blank_start = (self.vertical_blank_start & 0x2FF) | (value << 5 & 0x100);
+                if previous_vertical_blank_start != self.vertical_blank_start {
+                    self.update_vga_size();
+                }
+                self.update_layers();
+            }
+            0x8 => {
+                dbg_log!("3D5 / preset row scan write: {:#X}", value);
+                self.preset_row_scan = value;
+                self.update_layers();
+            }
+            0x9 => {
+                dbg_log!("3D5 / max scan line write: {:#X}", value);
+                self.max_scan_line = value;
+                let value: u32 = value as u32;
+                self.line_compare = (self.line_compare & 0x1FF) | (value << 3 & 0x200);
+
+                let previous_vertical_blank_start = self.vertical_blank_start;
+                self.vertical_blank_start = (self.vertical_blank_start & 0x1FF) | (value << 4 & 0x200);
+                if previous_vertical_blank_start != self.vertical_blank_start {
+                    self.update_vga_size();
+                }
+
+                self.update_layers();
+            }
+            0xA => {
+                dbg_log!("3D5 / cursor scanline start write: {:#X}", value);
+                self.cursor_scanline_start = value;
+                self.update_cursor_scanline();
+            }
+            0xB => {
+                dbg_log!("3D5 / cursor scanline end write: #{:#X}", value);
+                self.cursor_scanline_end = value;
+                self.update_cursor_scanline();
+            }
+            0xC => {
+                if (self.start_address >> 8 & 0xFF) as u8 != value  {
+                    let value: u32 = value as u32;
+                    self.start_address = self.start_address & 0xff | value << 8;
+                    self.update_layers();
+                    if !self.crtc_mode &  0x3 > 0 {
+                        // Address substitution implementation depends on the
+                        // starting row and column, so the pixel buffer is invalidated.
+                        self.complete_replot();
+                    }
+                }
+                dbg_log!("3D5 / start addr hi write: {:#X} -> {:#04X}", value, self.start_address);
+            }
+            0xD => {
+                if (self.start_address & 0xFF) as u8 != value {
+                    self.start_address = self.start_address & 0xff00 | value as u32;
+                    self.update_layers();
+                    if !self.crtc_mode &  0x3 >0 {
+                        // Address substitution implementation depends on the
+                        // starting row and column, so the pixel buffer is invalidated.
+                        self.complete_replot();
+                    }
+                }
+                dbg_log!("3D5 / start addr lo write: {:#X} -> {:#04X}", value, self.start_address);
+            }
+            0xE => {
+                dbg_log!("3D5 / cursor address hi write: {:#X}", value);
+                self.cursor_address = self.cursor_address & 0xFF | (value as u32) << 8;
+                self.update_cursor();
+            }
+            0xF => {
+                dbg_log!("3D5 / cursor address lo write: {:#X}", value);
+                self.cursor_address = self.cursor_address & 0xFF00 | (value as u32);
+                self.update_cursor();
+            }
+            0x12 => {
+                dbg_log!("3D5 / vdisp enable end write: {:#X}", value);
+                if (self.vertical_display_enable_end & 0xFF) as u8 != value {
+                    self.vertical_display_enable_end = (self.vertical_display_enable_end & 0x300) | (value as u32);
+                    self.update_vga_size();
+                }
+            }
+            0x13 => {
+                dbg_log!("3D5 / offset register write: {:#X}", value);
+                if self.offset_register != value {
+                    self.offset_register = value;
+                    self.update_vga_size();
+
+                    if !self.crtc_mode & 0x3 > 0 {
+                        // Address substitution implementation depends on the
+                        // virtual width, so the pixel buffer is invalidated.
+                        self.complete_replot();
+                    }
+                }
+            }
+            0x14 => {
+                dbg_log!("3D5 / underline location write: {:#X}", value);
+                if self.underline_location_register != value {
+                    let previous_underline = self.underline_location_register;
+
+                    self.underline_location_register = value;
+                    self.update_vga_size();
+
+                    if (previous_underline ^ value) & 0x40 > 0 {
+                        // Doubleword addressing changed. Pixel buffer invalidated.
+                        self.complete_replot();
+                    }
+                }
+            }
+            0x15 => {
+                dbg_log!("3D5 / vertical blank start write: {:#X}", value);
+                if(self.vertical_blank_start & 0xFF) as u8 != value {
+                    self.vertical_blank_start = (self.vertical_blank_start & 0x300) | value as u32;
+                    self.update_vga_size();
+                }
+            }
+            0x17 => {
+                dbg_log!("3D5 / crtc mode write: {:#X}", value);
+                if self.crtc_mode != value {
+                    let previous_mode = self.crtc_mode;
+
+                    self.crtc_mode = value;
+                    self.update_vga_size();
+
+                    if(previous_mode ^ value) & 0x43 > 0 {
+                        // Word/byte addressing changed or address substitution changed.
+                        // Pixel buffer invalidated.
+                        self.complete_replot();
+                    }
+                }
+            }
+            0x18 => {
+                dbg_log!("3D5 / line compare write: {:#X}", value);
+                self.line_compare = (self.line_compare & 0x300) | value as u32;
+                self.update_layers();
+            }
+            _ =>  {
+                if self.index_crtc < self.crtc.len() as u8 {
+                    self.crtc[self.index_crtc as usize] = value as u8;
+                }
+                dbg_log!("3D5 / CRTC write {:#X}:  {:#X}", self.index_crtc, value);
+            }
+        }
+    }
+
 }
