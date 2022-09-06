@@ -64,7 +64,7 @@ impl BusController {
 pub(crate) struct BUS(BusController);
 
 impl BUS {
-    pub fn new(store: &Weak<Store<Emulator>>) -> Self {
-        Self(BusController::new(store.clone()))
+    pub fn new(store: Weak<Store<Emulator>>) -> Self {
+        Self(BusController::new(store))
     }
 }

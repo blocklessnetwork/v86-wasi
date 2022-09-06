@@ -1,6 +1,7 @@
 pub struct Setting {
     pub(crate) bios_file: Option<String>,
     pub(crate) memory_size: u32,
+    pub(crate) vga_memory_size: u32,
     pub(crate) fast_boot: bool,
 }
 
@@ -8,6 +9,7 @@ impl Setting {
     pub fn new() -> Self {
         Self {
             bios_file: None,
+            vga_memory_size: 8 * 1024 * 1024,
             memory_size: 128 * 1024 * 1024,
             fast_boot: false,
         }

@@ -1,14 +1,14 @@
-use std::rc::Weak;
+use std::{rc::Weak, slice};
 
 use wasmtime::Store;
 
-use crate::{pci::PICBar, Emulator};
+use crate::{pci::{PCIBar, PCIDevice}, Emulator, EmulatorTrait, Dev, io::IO, log::Module};
 
 const VGA_BANK_SIZE: u32 = 64 * 1024;
 
-const MAX_XRES: u32 = 2560;
+const MAX_XRES: u16 = 2560;
 
-const MAX_YRES: u32 = 1600;
+const MAX_YRES: u16 = 1600;
 
 const MAX_BPP: u8 = 32;
 
@@ -50,7 +50,7 @@ struct VGAStats {
     is_graphical: bool,
     res_x: u32,
     res_y: u32,
-    bpp: u8,
+    bpp: u16,
 }
 
 pub(crate) struct VGAScreen {
@@ -59,8 +59,8 @@ pub(crate) struct VGAScreen {
     cursor_address: u32,
     cursor_scanline_start: u8,
     cursor_scanline_end: u8,
-    max_cols: u32,
-    max_rows: u32,
+    max_cols: u8,
+    max_rows: u8,
     screen_width: u32,
     screen_height: u32,
     virtual_width: u32,
@@ -70,8 +70,9 @@ pub(crate) struct VGAScreen {
     start_address_latched: u32,
     crtc: Vec<u8>,
     crtc_mode: u8,
-    horizontal_display_enable_end: u32,
-    horizontal_blank_start: u32,
+    horizontal_display_enable_end: u8,
+    dispi_index: u16,
+    horizontal_blank_start: u8,
     vertical_display_enable_end: u32,
     vertical_blank_start: u32,
     underline_location_register: u8,
@@ -82,15 +83,16 @@ pub(crate) struct VGAScreen {
     graphical_mode: bool,
     vga256_palette: Vec<i32>,
     latch_dword: u32,
-    svga_width: u8,
-    svga_height: u8,
+    svga_width: u16,
+    svga_height: u16,
     svga_enabled: bool,
-    svga_bpp: u8,
-    svga_bank_offset: u8,
-    svga_offset: u8,
-    pci_space: Vec<u8>,
+    svga_bpp: u16,
+    svga_bank_offset: u16,
+    svga_offset: u32,
+    dispi_enable_value: u16,
+    pci_space: &'static [u8],
     pci_id: u8,
-    pci_bars: Vec<PICBar>,
+    pci_bars: Vec<Option<PCIBar>>,
     pci_rom_size: u32,
     pci_rom_address: u32,
     name: &'static str,
@@ -106,11 +108,11 @@ pub(crate) struct VGAScreen {
     color_plane_enable: u8,
     horizontal_panning: u8,
     color_select: u8,
-    sequencer_index: i32,
+    sequencer_index: u8,
     plane_write_bm: u8,
     sequencer_memory_mode: u8,
     clocking_mode: u8,
-    graphics_index: i32,
+    graphics_index: u8,
     plane_read: u8,
     planar_mode: u8,
     planar_rotate_reg: u8,
@@ -128,15 +130,780 @@ pub(crate) struct VGAScreen {
     diff_plot_min: u32,
     diff_plot_max: u32,
     svga_memory: Vec<u8>,
-    vga_memory: Vec<u8>,
-    plane0: Vec<u8>,
-    plane1: Vec<u8>,
-    plane2: Vec<u8>,
-    plane3: Vec<u8>,
-    pixel_buffer: Vec<u8>,
+    vga_memory: &'static mut [u8],
+    svga_memory16: &'static mut [u16],
+    svga_memory32: &'static mut [u32],
+    plane0: &'static mut [u8],
+    plane1: &'static mut [u8],
+    plane2: &'static mut [u8],
+    plane3: &'static mut [u8],
+    pixel_buffer: &'static mut [u8],
 }
 
 impl VGAScreen {
+    pub fn new(store: Weak<Store<Emulator>>, vga_memory_size: u32) -> Self {
+        let cursor_address = 0;
+        let cursor_scanline_start = 0xE;
+        let cursor_scanline_end = 0xF;
+        //Number of columns in text mode
+        let max_cols = 80;
+        //Number of rows in text mode
+        let max_rows = 25;
+        //Width in pixels in graphical mode
+        let screen_width = 0;
+        //Height in pixels in graphical mode
+        let screen_height = 0;
+        //Logical width in pixels of virtual buffer available for panning
+        let virtual_width = 0;
+        //Logical height in pixels of virtual buffer available for panning
+        let virtual_height = 0;
+        //The rectangular fragments of the image buffer, and their destination
+        //locations, to be drawn every screen_fill_buffer during VGA modes.
+        let layers = Vec::new();
+        //video memory start address
+        let start_address = 0;
+        //Start address - a copy of start_address that only gets updated
+        //during VSync, used for panning and page flipping
+        let start_address_latched = 0;
+        let crtc_mode = 0;
+        let horizontal_display_enable_end = 0;
+        let horizontal_blank_start = 0;
+        let vertical_display_enable_end = 0;
+        let vertical_blank_start = 0;
+        let underline_location_register = 0;
+        let preset_row_scan = 0;
+        let offset_register = 0;
+        let line_compare = 0;
+        let graphical_mode_is_linear = true;
+        let graphical_mode = false;
+        let latch_dword = 0;
+        let svga_width = 0;
+        let svga_height = 0;
+        let svga_enabled = false;
+        let svga_bpp = 32;
+        let svga_bank_offset = 0;
+        let svga_offset = 0;
+        let pci_rom_size = 0x10000;
+        let pci_rom_address = 0xFEB00000;
+        let name = "vga";
+        let stats = VGAStats {
+            is_graphical: false,
+            res_x: 0,
+            res_y: 0,
+            bpp: 0,
+        };
+        let index_crtc = 0;
+        let dac_color_index_write = 0;
+        let dac_color_index_read = 0;
+        let dac_state = 0;
+        let attribute_controller_index = 0xFFFF_FFFF;
+        let palette_source = 0x20;
+        let attribute_mode = 0;
+        let color_plane_enable = 0;
+        let horizontal_panning = 0;
+        let color_select = 0;
+        let sequencer_index = 0xFF;
+        let plane_write_bm = 0xF;
+        let sequencer_memory_mode = 0;
+        let clocking_mode = 0;
+        let graphics_index = 0xFF;
+        // value 0-3, which plane to read
+        let plane_read = 0; 
+        let planar_mode = 0;
+        let planar_rotate_reg = 0;
+        let planar_bitmap = 0xFF;
+        let planar_setreset = 0;
+        let planar_setreset_enable = 0;
+        let miscellaneous_graphics_register = 0;
+        let color_compare = 0;
+        let color_dont_care = 0;
+        let max_scan_line = 0;
+        let miscellaneous_output_register = 0xff;
+        let port_3DA_value = 0xFF;
+        let crtc = vec![0u8; 0x19];
+        let dispi_index = 0xFFFF;
+        let dispi_enable_value = 0;
+        let diff_addr_min = vga_memory_size;
+        let diff_addr_max = 0;
+        let diff_plot_min = vga_memory_size;
+        let diff_plot_max = 0;
+        let vga256_palette = vec![0i32;256];
+        let pci_id = 0x12 << 3;
+        let pci_bars = vec![Some(PCIBar {
+            size:vga_memory_size,
+            original_bar: 0,
+            entries: Vec::new(),
+        })];
+        let pci_space: &[u8] = &[
+            0x34, 0x12, 0x11, 0x11, 0x03, 0x01, 0x00, 0x00, 0x02, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00,
+            0x08, (VGA_LFB_ADDRESS >> 8) as u8, (VGA_LFB_ADDRESS >> 16) as u8, (VGA_LFB_ADDRESS >> 24) as u8,
+                                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xbf, 0xfe, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf4, 0x1a, 0x00, 0x11,
+            0x00, 0x00, 0xbe, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+        let dac_map = vec![0u8; 0x10];
+        let mut svga_memory = vec![0u8; vga_memory_size as usize];
+        let vga_memory = unsafe {
+            let ptr = svga_memory.as_mut_ptr();
+            slice::from_raw_parts_mut(ptr, 4 * VGA_BANK_SIZE as usize)
+        };
+        let svga_memory16 = unsafe {
+            let ptr = svga_memory.as_mut_ptr() as *mut u16;
+            slice::from_raw_parts_mut(ptr, svga_memory.len()/2 as usize)
+        };
+        let svga_memory32 = unsafe {
+            let ptr = svga_memory.as_mut_ptr() as *mut u32;
+            slice::from_raw_parts_mut(ptr, svga_memory.len()/3 as usize)
+        };
+        let plane0 = unsafe {
+            let ptr = svga_memory.as_mut_ptr();
+            slice::from_raw_parts_mut(ptr.add(0 * VGA_BANK_SIZE as usize), VGA_BANK_SIZE as usize)
+        };
+        let plane1 = unsafe {
+            let ptr = svga_memory.as_mut_ptr();
+            slice::from_raw_parts_mut(ptr.add(1 * VGA_BANK_SIZE as usize), VGA_BANK_SIZE as usize)
+        };
+        let plane2 = unsafe {
+            let ptr = svga_memory.as_mut_ptr();
+            slice::from_raw_parts_mut(ptr.add(2 * VGA_BANK_SIZE as usize), VGA_BANK_SIZE as usize)
+        };
+        let plane3 = unsafe {
+            let ptr = svga_memory.as_mut_ptr();
+            slice::from_raw_parts_mut(ptr.add(3 * VGA_BANK_SIZE as usize), VGA_BANK_SIZE as usize)
+        };
+        let pixel_buffer = unsafe {
+            let ptr = svga_memory.as_mut_ptr();
+            slice::from_raw_parts_mut(ptr.add(VGA_PIXEL_BUFFER_START as usize), VGA_PIXEL_BUFFER_SIZE as usize)
+        };
+        VGAScreen {
+            store,
+            name,
+            crtc,
+            stats,
+            layers,
+            pci_bars,
+            dac_map,
+            plane0,
+            plane1,
+            plane2,
+            plane3,
+            pixel_buffer,
+            max_cols,
+            vga_memory,
+            svga_memory,
+            svga_memory16,
+            svga_memory32,
+            pci_id,
+            max_rows,
+            pci_space,
+            crtc_mode,
+            vga256_palette,
+            line_compare,
+            graphical_mode,
+            preset_row_scan,
+            latch_dword,
+            svga_width,
+            svga_height,
+            svga_enabled,
+            svga_bpp,
+            svga_bank_offset,
+            svga_offset,
+            offset_register,
+            screen_width,
+            screen_height,
+            start_address,
+            virtual_width,
+            virtual_height,
+            cursor_address,
+            vga_memory_size,
+            cursor_scanline_end,
+            pci_rom_size,
+            pci_rom_address,
+            cursor_scanline_start,
+            start_address_latched,
+            horizontal_display_enable_end,
+            horizontal_blank_start,
+            vertical_display_enable_end,
+            vertical_blank_start,
+            underline_location_register,
+            graphical_mode_is_linear,
+            index_crtc,
+            dac_color_index_write,
+            dac_color_index_read,
+            dac_state,
+            attribute_controller_index,
+            palette_source,
+            attribute_mode,
+            color_plane_enable,
+            horizontal_panning,
+            color_select,
+            sequencer_index,
+            plane_write_bm,
+            sequencer_memory_mode,
+            clocking_mode,
+            graphics_index,
+            plane_read,
+            planar_mode,
+            planar_rotate_reg,
+            planar_bitmap,
+            planar_setreset,
+            planar_setreset_enable,
+            miscellaneous_graphics_register,
+            color_compare,
+            color_dont_care,
+            max_scan_line,
+            miscellaneous_output_register,
+            port_3DA_value,
+            dispi_index,
+            dispi_enable_value,
+            diff_addr_min,
+            diff_addr_max,
+            diff_plot_min,
+            diff_plot_max,
+        }
+    }
+
+    pub fn init(&mut self) {
+        self.store.io_mut().map(|io| {
+            io.register_write8(0x3C0, 
+                Dev::Emulator(self.store.clone()), 
+                |dev: &Dev, _addr: u32, v: u8| {
+                    dev.vga_mut().map(|vga| {
+                        vga.port3C0_write(v);
+                    });
+                }
+            );
+            io.register_read(0x3C0, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3C0_read8()
+                    })
+                },
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3C0_read16()
+                    })
+                },
+                IO::empty_read32,
+            );
+            io.register_read8(0x3C1, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3C1_read()
+                    })
+                }
+            );
+            io.register_write8(0x3C2, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32, v: u8| {
+                    dev.vga_mut().map(|vga| {
+                        vga.port3C2_write(v);
+                    });
+                }
+            );
+            io.register_write_consecutive(0x3C4, 
+                Dev::Emulator(self.store.clone()), 
+                |dev: &Dev, _addr: u32, v: u8| {
+                    dev.vga_mut().map(|vga| {
+                        vga.port3C4_write(v);
+                    });
+                }, 
+                |dev: &Dev, _addr: u32, v: u8| {
+                    dev.vga_mut().map(|vga| {
+                        vga.port3C5_write(v);
+                    });
+                },
+                IO::empty_write8, 
+                IO::empty_write8,
+            );
+
+            io.register_read8(0x3C4, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3C4_read()
+                    })
+                }
+            );
+
+            io.register_read8(0x3C5, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3C5_read()
+                    })
+                }
+            );
+
+            io.register_write_consecutive(0x3CE, 
+                Dev::Emulator(self.store.clone()), 
+                |dev: &Dev, _addr: u32, v: u8| {
+                    dev.vga_mut().map(|vga| {
+                        vga.port3CE_write(v);
+                    });
+                }, 
+                |dev: &Dev, _addr: u32, v: u8| {
+                    dev.vga_mut().map(|vga| {
+                        vga.port3CF_write(v);
+                    });
+                },
+                IO::empty_write8, 
+                IO::empty_write8,
+            );
+
+            io.register_read8(0x3CE, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3CE_read()
+                    })
+                }
+            );
+
+            io.register_read8(0x3CF, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3CF_read()
+                    })
+                }
+            );
+
+            io.register_write8(0x3C7, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32, v: u8| {
+                    dev.vga_mut().map(|vga| {
+                        vga.port3C7_write(v);
+                    });
+                }
+            );
+
+            io.register_read8(0x3C7, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3C7_read()
+                    })
+                }
+            );
+
+            io.register_write8(0x3C8, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32, v: u8| {
+                    dev.vga_mut().map(|vga| {
+                        vga.port3C8_write(v);
+                    });
+                }
+            );
+
+            io.register_read8(0x3C8, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3C8_read()
+                    })
+                }
+            );
+
+            io.register_write8(0x3C9, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32, v: u8| {
+                    dev.vga_mut().map(|vga| {
+                        vga.port3C9_write(v);
+                    });
+                }
+            );
+
+            io.register_read8(0x3C9, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3C9_read()
+                    })
+                }
+            );
+
+            io.register_read8(0x3CC, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3CC_read()
+                    })
+                }
+            );
+
+            io.register_write_consecutive(0x3D4, 
+                Dev::Emulator(self.store.clone()), 
+                |dev: &Dev, _addr: u32, v: u8| {
+                    dev.vga_mut().map(|vga| {
+                        vga.port3D4_write(v);
+                    });
+                }, 
+                |dev: &Dev, _addr: u32, v: u8| {
+                    dev.vga_mut().map(|vga| {
+                        vga.port3D5_write(v);
+                    });
+                },
+                IO::empty_write8, 
+                IO::empty_write8,
+            );
+
+            io.register_read8(0x3D4, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3D4_read()
+                    })
+                }
+            );
+
+            io.register_read(0x3D5, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3D5_read()
+                    })
+                },
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        dbg_log!(Module::VGA, "Warning: 16-bit read from 3D5");
+                        vga.port3D5_read() as u16
+                    })
+                },
+                IO::empty_read32  
+            );
+
+            io.register_read8(0x3CA, 
+                Dev::Emulator(self.store.clone()),
+                |_dev: &Dev, _addr: u32| {
+                    dbg_log!(Module::VGA, "3CA read"); 
+                    return 0; 
+                }
+            );
+
+            io.register_read8(0x3DA, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3DA_read()
+                    })
+                }
+            );
+
+            io.register_read8(0x3BA, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port3DA_read()
+                    })
+                }
+            );
+
+            io.mmap_register(
+                0xA0000, 
+                0x20000,
+                |dev: &Dev, addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.vga_memory_read(addr)
+                    })
+                }, 
+                |dev: &Dev, addr: u32, v: u8| {
+                    dev.vga_mut().map(|vga| {
+                        vga.vga_memory_write(addr, v);
+                    });
+                }, 
+                IO::empty_read32, 
+                IO::empty_write32
+            );
+            io.mmap_register(
+                VGA_LFB_ADDRESS, 
+                self.vga_memory_size as usize,
+                |dev: &Dev, addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.svga_memory_read8(addr)
+                    })
+                },
+                |dev: &Dev, addr: u32, v: u8| {
+                    dev.vga_mut().map(|vga| {
+                        vga.svga_memory_write8(addr, v);
+                    });
+                }, 
+                |dev: &Dev, addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.svga_memory_read32(addr)
+                    })
+                },
+                |dev: &Dev, addr: u32, v: u32| {
+                    dev.vga_mut().map(|vga| {
+                        vga.svga_memory_write32(addr, v);
+                    });
+                }, 
+            );
+        });
+        self.store.pci_mut().map(|pci| {
+            pci.register_device(VGADev(self.store.clone()));
+        });
+    }
+
+    #[inline]
+    fn port3CC_read(&self) -> u8 {
+        dbg_log!(Module::VGA, "3CC read");
+        self.miscellaneous_output_register
+    }
+
+    #[inline]
+    fn port3C9_read(&mut self) -> u8 {
+        dbg_log!(Module::VGA, "3C9 read");
+        let index = self.dac_color_index_read / 3 | 0;
+        let offset = self.dac_color_index_read % 3;
+        let color = self.vga256_palette[index as usize];
+
+        self.dac_color_index_read += 1;
+        return ((color >> (2 - offset) * 8 & 0xFF) / 255 * 63 | 0) as u8;
+    }
+
+    fn port3C9_write(&mut self, color_byte: u8) {
+        let index = (self.dac_color_index_write / 3 | 0) as usize;
+        let offset = self.dac_color_index_write % 3;
+        let mut color = self.vga256_palette[index];
+        let color_byte = (color_byte & 0x3F) * 255 / 63 | 0;
+        if offset == 0 {
+            color = color & !0xFF0000 | (color_byte as i32) << 16;
+        } else if offset == 1 {
+            color = color & !0xFF00 | (color_byte as i32) << 8;
+        } else {
+            color = color & !0xFF | color_byte as i32;
+            dbg_log!(Module::VGA, "dac set color, index={:#X} value={:#X}", index, color);
+        }
+
+        if self.vga256_palette[index] != color {
+            self.vga256_palette[index] = color;
+            self.complete_redraw();
+        }
+        self.dac_color_index_write += 1;
+    }
+
+
+    #[inline]
+    fn port3C8_read(&self) -> u8 {
+        self.dac_color_index_write / 3 & 0xFF
+    }
+
+    #[inline]
+    fn port3C8_write(&mut self, index: u8) {
+        self.dac_color_index_write = index * 3;
+        self.dac_state |= 0x3;
+    }
+
+    #[inline]
+    fn port3C7_read(&self) -> u8 {
+        // prepared to accept reads or writes
+        self.dac_state
+    }
+
+    #[inline]
+    fn port3C7_write(&mut self, index: u8) {
+        // index for reading the DAC
+        dbg_log!(Module::VGA, "3C7 write: {:#X}", index);
+        self.dac_color_index_read = index * 3;
+        self.dac_state &= 0x0;
+    }
+
+    #[inline]
+    fn port3CE_read(&self) -> u8 {
+        self.graphics_index
+    }
+
+    #[inline]
+    fn port3CE_write(&mut self, value: u8) {
+        self.graphics_index = value;
+    }
+
+    fn port3CF_write(&mut self, value: u8) {
+        match self.graphics_index {
+            0 => {
+                self.planar_setreset = value;
+                dbg_log!(Module::VGA, "plane set/reset: {:#X}", value);
+            }
+            1 => {
+                self.planar_setreset_enable = value;
+                dbg_log!(Module::VGA, "plane set/reset enable: {:#X}", value);
+            }
+            2 => {
+                self.color_compare = value;
+                dbg_log!(Module::VGA, "color compare: {:#X}", value);
+            }
+            3 => {
+                self.planar_rotate_reg = value;
+                dbg_log!(Module::VGA, "plane rotate: {:#X}", value);
+            }
+            4 => {
+                self.plane_read = value;
+                dbg_log!(Module::VGA, "plane read: {:#X}", value);
+            }
+            5 => {
+                let previous_planar_mode = self.planar_mode;
+                self.planar_mode = value;
+                dbg_log!(Module::VGA, "planar mode: {:#X}", value);
+                if (previous_planar_mode ^ value) & 0x60 > 0 {
+                    // Shift mode modified. Pixel buffer invalidated
+                    self.complete_replot();
+                }
+            }
+            6 => {
+                dbg_log!(Module::VGA, "miscellaneous graphics register: {:#X}", value);
+                if self.miscellaneous_graphics_register != value {
+                    self.miscellaneous_graphics_register = value;
+                    self.update_vga_size();
+                }
+            }
+            7 => {
+                self.color_dont_care = value;
+                dbg_log!(Module::VGA, "color don't care: {:#X}", value);
+            }
+            8 => {
+                self.planar_bitmap = value;
+                dbg_log!(Module::VGA, "planar bitmap: {:#X}", value);
+            }
+            _ => {
+                dbg_log!(Module::VGA, "3CF / graphics write {:#X}: {:#X}", self.graphics_index, value);
+            }
+        }
+    }
+
+    #[inline]
+    fn port3C5_read(&self) -> u8 {
+        dbg_log!(Module::VGA, "3C5 / sequencer read {:#X}", self.sequencer_index);
+
+        match self.sequencer_index {
+            0x01 => self.clocking_mode,
+            0x02 => self.plane_write_bm,
+            0x04 => self.sequencer_memory_mode,
+            0x06 => 0x12,
+            _ => 0,
+        }
+    }
+
+    #[inline]
+    fn port3C4_read(&self) -> u8 {
+        self.sequencer_index
+    }
+
+    #[inline]
+    fn port3C4_write(&mut self, value: u8) {
+        self.sequencer_index = value;
+    }
+
+    #[inline]
+    fn port3C2_write(&mut self, value: u8) {
+        dbg_log!(Module::VGA, "3C2 / miscellaneous output register = {:#X}", value);
+        self.miscellaneous_output_register = value;
+    }
+
+    fn port3C1_read(&self) -> u8 {
+        if self.attribute_controller_index < 0x10 {
+            dbg_log!(
+                Module::VGA, 
+                "3C1 / internal palette read: {:#X} -> {:#X}", 
+                self.attribute_controller_index,
+                self.dac_map[self.attribute_controller_index as usize],
+            );
+            return self.dac_map[self.attribute_controller_index as usize] & 0xFF;
+        }
+
+        match self.attribute_controller_index {
+            0x10 =>  {
+                dbg_log!(Module::VGA, "3C1 / attribute mode read: {:#X}", self.attribute_mode);
+                self.attribute_mode
+            }
+            0x12 => {
+                dbg_log!(Module::VGA, "3C1 / color plane enable read: {:#X}", self.color_plane_enable);
+                self.color_plane_enable
+            }
+            0x13 => {
+                dbg_log!(Module::VGA, "3C1 / horizontal panning read: {:#X}", self.horizontal_panning);
+                self.horizontal_panning
+            }
+            0x14 => {
+                dbg_log!(Module::VGA, "3C1 / color select read: {:#X}", self.color_select);
+                self.color_select
+            }
+            _ => {
+                dbg_log!(Module::VGA, "3C1 / attribute controller read {:#X}", self.attribute_controller_index);
+                0xFF
+            }
+        }
+    }
+
+    #[inline]
+    fn port3C0_read8(&self) -> u8 {
+        dbg_log!(Module::VGA, "3C0 read");
+        let result = self.attribute_controller_index as u8 | self.palette_source;
+        return result;
+    }
+
+    #[inline]
+    fn port3C0_read16(&self) -> u16 {
+        dbg_log!(Module::VGA, "3C0 read16");
+        return (self.port3C0_read8() as u16) & 0xFF |
+                ((self.port3C1_read() as u16) << 8 & 0xFF00);
+    }
+
+    #[inline]
+    fn svga_memory_read8(&self, addr: u32) -> u8 {
+        return self.svga_memory[(addr & 0xFFFFFFF) as usize];
+    }
+    #[inline]
+    fn svga_memory_read32(&self, mut addr: u32) -> u32 {
+        let addr: usize = (addr & 0xFFFFFFF) as usize;
+        if addr & 3 > 0 {
+            return self.svga_memory[addr] as u32 | 
+                    (self.svga_memory[addr + 1] as u32) << 8 |
+                    (self.svga_memory[addr + 2] as u32) << 16 | 
+                    (self.svga_memory[addr + 3] as u32) << 24;
+        } else {
+            return self.svga_memory32[addr >> 2];
+        }
+    }
+
+    #[inline]
+    fn svga_memory_write8(&mut self, mut addr: u32, value: u8) {
+        addr &= 0xFFFFFFF;
+        self.svga_memory[addr as usize] = value;
+
+        self.diff_addr_min = if addr < self.diff_addr_min {
+            addr
+        } else {
+            self.diff_addr_min
+        };
+        self.diff_addr_max = if addr > self.diff_addr_max {
+            addr
+        }  else {
+            self.diff_addr_max
+        };
+    }
+
+    fn svga_memory_write32(&mut self, mut addr: u32, value: u32) {
+        addr &= 0xFFFFFFF;
+        self.diff_addr_min = if addr < self.diff_addr_min {
+             addr 
+         } else {
+            self.diff_addr_min
+         };
+        self.diff_addr_max = if addr + 3 > self.diff_addr_max {
+            addr + 3 
+        } else { 
+            self.diff_addr_max
+        };
+        let addr: usize = addr as usize;
+        self.svga_memory[addr] = value as u8;
+        self.svga_memory[addr + 1] = (value >> 8) as u8;
+        self.svga_memory[addr + 2] = (value >> 16) as u8;
+        self.svga_memory[addr + 3] = (value >> 24) as u8;
+    }
+
     fn vga_memory_read(&mut self, mut addr: u32) -> u8 {
         if self.svga_enabled && self.graphical_mode_is_linear {
             addr -= 0xA0000;
@@ -150,14 +917,14 @@ impl VGAScreen {
 
         // VGA chip only decodes addresses within the selected memory space.
         if addr >= VGA_HOST_MEMORY_SPACE_SIZE[memory_space_select as usize] as u32 {
-            dbg_log!("vga read outside memory space: addr:{:#X}", addr);
+            dbg_log!(Module::VGA, "vga read outside memory space: addr:{:#X}", addr);
             return 0;
         }
         let i_addr: usize = addr as usize;
         self.latch_dword = self.plane0[i_addr] as u32;
-        self.latch_dword |= (self.plane1[i_addr] << 8) as u32;
-        self.latch_dword |= (self.plane2[i_addr] << 16) as u32;
-        self.latch_dword |= (self.plane3[i_addr] << 24) as u32;
+        self.latch_dword |= (self.plane1[i_addr] as u32) << 8;
+        self.latch_dword |= (self.plane2[i_addr] as u32) << 16;
+        self.latch_dword |= (self.plane3[i_addr] as u32) << 24;
 
         if self.planar_mode & 0x08 > 0 {
             // read mode 1
@@ -195,7 +962,7 @@ impl VGAScreen {
                 plane = (addr & 0x1) as u8;
                 addr &= !0x1;
             }
-            return self.vga_memory[(plane << 16) as usize | addr as usize];
+            return self.vga_memory[(plane as usize) << 16 | addr as usize];
         }
     }
 
@@ -212,6 +979,7 @@ impl VGAScreen {
 
         if addr >= VGA_HOST_MEMORY_SPACE_SIZE[memory_space_select as usize] as u32 {
             dbg_log!(
+                Module::VGA, 
                 "vga write outside memory space: addr:{:#X}, value:{:#X}",
                 addr,
                 value
@@ -398,8 +1166,8 @@ impl VGAScreen {
         let start_buffer_row = pixel_addr_start / self.virtual_width | 0;
         let start_buffer_col = pixel_addr_start % self.virtual_width + pixel_panning as u32;
 
-        let mut split_screen_row = self.scan_line_to_screen_row(1 + self.line_compare);
-        split_screen_row = split_screen_row.min(self.screen_height);
+        let split_screen_row = self.scan_line_to_screen_row(1 + self.line_compare);
+        let split_screen_row = split_screen_row.min(self.screen_height as u32);
 
         let split_buffer_height = self.screen_height - split_screen_row;
 
@@ -413,7 +1181,7 @@ impl VGAScreen {
                 buffer_x: 0,
                 buffer_y: start_buffer_row + y,
                 buffer_width: self.virtual_width,
-                buffer_height: split_screen_row,
+                buffer_height: split_screen_row as u32,
             });
             x += self.virtual_width as i32;
             y += 1;
@@ -434,7 +1202,7 @@ impl VGAScreen {
                 buffer_x: 0,
                 buffer_y: y,
                 buffer_width: self.virtual_width,
-                buffer_height: split_buffer_height,
+                buffer_height: split_buffer_height as u32,
             });
             x += self.virtual_width as i32;
             y += 1;
@@ -442,7 +1210,7 @@ impl VGAScreen {
     }
 
     fn complete_redraw(&mut self) {
-        dbg_log!("complete redraw");
+        dbg_log!(Module::VGA, "complete redraw");
         if self.graphical_mode {
             self.diff_addr_min = 0;
 
@@ -486,7 +1254,7 @@ impl VGAScreen {
                 plane_dword = setreset_dword;
                 plane_dword = self.apply_bitmask(plane_dword, bitmask);
             }
-            _ =>{}
+            _ => {}
         }
 
         let mut plane_select = 0xF;
@@ -578,7 +1346,7 @@ impl VGAScreen {
             let mut pixel_addr = addr - self.start_address;
 
             // Remove substituted bits
-            pixel_addr &= (self.crtc_mode << 13) as u32 | !0x6000;
+            pixel_addr &= (self.crtc_mode as u32) << 13 | !0x6000;
 
             // Convert to 1 pixel per address
             pixel_addr <<= shift_count;
@@ -615,7 +1383,7 @@ impl VGAScreen {
     }
 
     fn complete_replot(&mut self) {
-        dbg_log!("complete replot");
+        dbg_log!(Module::VGA, "complete replot");
 
         if !self.graphical_mode || self.svga_enabled {
             return;
@@ -634,7 +1402,8 @@ impl VGAScreen {
 
         let horizontal_characters =
             (1 + self.horizontal_display_enable_end).min(self.horizontal_blank_start);
-        let mut vertical_scans = (1 + self.vertical_display_enable_end).min(self.vertical_blank_start);
+        let mut vertical_scans =
+            (1 + self.vertical_display_enable_end).min(self.vertical_blank_start);
 
         if horizontal_characters == 0 || vertical_scans == 0 {
             // Don't update if width or height is zero.
@@ -688,7 +1457,7 @@ impl VGAScreen {
                 vertical_scans >>= 1;
             }
 
-            let height = vertical_scans / (1 + ((self.max_scan_line as u32) & 0x1F)) | 0;
+            let height = (vertical_scans / (1 + ((self.max_scan_line as u32) & 0x1F)) | 0) as u8;
 
             if horizontal_characters > 0 && height > 0 {
                 self.set_size_text(horizontal_characters, height);
@@ -696,7 +1465,7 @@ impl VGAScreen {
         }
     }
 
-    fn set_size_text(&mut self, cols_count: u32, rows_count: u32) {
+    fn set_size_text(&mut self, cols_count: u8, rows_count: u8) {
         self.max_cols = cols_count;
         self.max_rows = rows_count;
         //RODOthis.bus.send("screen-set-size-text", [cols_count, rows_count]);
@@ -706,7 +1475,7 @@ impl VGAScreen {
         &mut self,
         width: u32,
         height: u32,
-        bpp: u8,
+        bpp: u16,
         virtual_width: u32,
         virtual_height: u32,
     ) {
@@ -744,9 +1513,10 @@ impl VGAScreen {
 
     fn port3C0_write(&mut self, value: u8) {
         if self.attribute_controller_index == 0xFFFF_FFFF {
-            dbg_log!("attribute controller index register: {:#X}", value);
+            dbg_log!(Module::VGA, "attribute controller index register: {:#X}", value);
             self.attribute_controller_index = (value & 0x1F) as u32;
             dbg_log!(
+                Module::VGA, 
                 "attribute actual index: {:#X}",
                 self.attribute_controller_index
             );
@@ -760,6 +1530,7 @@ impl VGAScreen {
         } else {
             if self.attribute_controller_index < 0x10 {
                 dbg_log!(
+                    Module::VGA, 
                     "internal palette: {:#X} -> {:#X}",
                     self.attribute_controller_index,
                     value
@@ -771,7 +1542,7 @@ impl VGAScreen {
             } else {
                 match self.attribute_controller_index as u32 {
                     0x10 => {
-                        dbg_log!("3C0 / attribute mode control: {:#X}", value);
+                        dbg_log!(Module::VGA, "3C0 / attribute mode control: {:#X}", value);
                         if self.attribute_mode != value {
                             let previous_mode = self.attribute_mode;
                             self.attribute_mode = value;
@@ -793,7 +1564,7 @@ impl VGAScreen {
                         }
                     }
                     0x12 => {
-                        dbg_log!("3C0 / color plane enable: {:#X}", value);
+                        dbg_log!(Module::VGA, "3C0 / color plane enable: {:#X}", value);
                         if self.color_plane_enable != value {
                             self.color_plane_enable = value;
 
@@ -802,14 +1573,14 @@ impl VGAScreen {
                         }
                     }
                     0x13 => {
-                        dbg_log!("3C0 / horizontal panning: {:#X}", value);
+                        dbg_log!(Module::VGA, "3C0 / horizontal panning: {:#X}", value);
                         if self.horizontal_panning != value {
                             self.horizontal_panning = value & 0xF;
                             self.update_layers();
                         }
                     }
                     0x14 => {
-                        dbg_log!("3C0 / color select: {:#X}", value);
+                        dbg_log!(Module::VGA, "3C0 / color select: {:#X}", value);
                         if self.color_select != value {
                             self.color_select = value;
 
@@ -819,6 +1590,7 @@ impl VGAScreen {
                     }
                     _ => {
                         dbg_log!(
+                            Module::VGA, 
                             "3C0 / attribute controller write {:#X}: {:#X}",
                             self.attribute_controller_index,
                             value
@@ -830,68 +1602,43 @@ impl VGAScreen {
         }
     }
 
-    fn update_cursor_scanline (&mut self) {
+    fn update_cursor_scanline(&mut self) {
         //TODOthis.bus.send("screen-update-cursor-scanline", [this.cursor_scanline_start, this.cursor_scanline_end]);
     }
 
-    fn port3CF_write(&mut self, value: u8) {
-        match self.graphics_index {
-            0 => {
-                self.planar_setreset = value;
-                dbg_log!("plane set/reset: {:#X}", value);
-            }
-            1 => {
-                self.planar_setreset_enable = value;
-                dbg_log!("plane set/reset enable: {:#X}", value);
-            }
-            2 => {
-                self.color_compare = value;
-                dbg_log!("color compare: {:#X}", value);
-            }
-            3 => {
-                self.planar_rotate_reg = value;
-                dbg_log!("plane rotate: {:#X}", value);
-            }
-            4 => {
-                self.plane_read = value;
-                dbg_log!("plane read: {:#X}", value);
-            }
-            5 => {
-                let previous_planar_mode = self.planar_mode;
-                self.planar_mode = value;
-                dbg_log!("planar mode: {:#X}", value);
-                if (previous_planar_mode ^ value) & 0x60 > 0 {
-                    // Shift mode modified. Pixel buffer invalidated
-                    self.complete_replot();
+    fn port3C5_write(&mut self, value: u8) {
+        match self.sequencer_index {
+            0x01 => {
+                dbg_log!(Module::VGA, "clocking mode: {:#X}", value);
+                let previous_clocking_mode = self.clocking_mode;
+                self.clocking_mode = value;
+                if (previous_clocking_mode ^ value) & 0x20 > 0 {
+                    // Screen disable bit modified
+                    self.update_layers();
                 }
             }
-            6 => {
-                dbg_log!("miscellaneous graphics register: {:#X}", value);
-                if self.miscellaneous_graphics_register != value {
-                    self.miscellaneous_graphics_register = value;
-                    self.update_vga_size();
-                }
+            0x02 => {
+                dbg_log!(Module::VGA, "plane write mask: {:#X}", value);
+                self.plane_write_bm = value;
             }
-            7 => {
-                self.color_dont_care = value;
-                dbg_log!("color don't care: {:#X}", value);
-            }
-            8 => {
-                self.planar_bitmap = value;
-                dbg_log!("planar bitmap: {:#X}", value);
+            0x04 => {
+                dbg_log!(Module::VGA, "sequencer memory mode: {:#X}", value);
+                self.sequencer_memory_mode = value;
             }
             _ => {
                 dbg_log!(
-                    "3CF / graphics write {:#X}: {:#X}", 
-                    self.graphics_index, 
+                    Module::VGA, 
+                    "3C5 / sequencer write {:#X}: {:#X}",
+                    self.sequencer_index,
                     value
                 );
             }
         }
     }
 
+    #[inline]
     fn port3CF_read(&self) -> u8 {
-        dbg_log!("3CF / graphics read {:X}", self.graphics_index);
+        dbg_log!(Module::VGA, "3CF / graphics read {:X}", self.graphics_index);
         match self.graphics_index {
             0 => self.planar_setreset,
             1 => self.planar_setreset_enable,
@@ -907,19 +1654,19 @@ impl VGAScreen {
     }
 
     fn port3D4_write(&mut self, register: u8) {
-        dbg_log!("3D4 / crtc index: {:#X}", register);
+        dbg_log!(Module::VGA, "3D4 / crtc index: {:#X}", register);
         self.index_crtc = register;
     }
 
     fn port3D4_read(&self) -> u8 {
-        dbg_log!("3D4 read / crtc index: {:#X}", self.index_crtc);
+        dbg_log!(Module::VGA, "3D4 read / crtc index: {:#X}", self.index_crtc);
         self.index_crtc
     }
 
     fn update_cursor(&mut self) {
-        let mut row = (self.cursor_address - self.start_address) / self.max_cols | 0;
-        let col = (self.cursor_address - self.start_address) % self.max_cols;
-    
+        let mut row = ((self.cursor_address - self.start_address) / self.max_cols as u32 | 0) as u8;
+        let col = ((self.cursor_address - self.start_address) % self.max_cols as u32) as u8;
+
         row = (self.max_rows - 1).min(row);
         //TODO this.bus.send("screen-update-cursor", [row, col]);
     }
@@ -927,20 +1674,20 @@ impl VGAScreen {
     fn port3D5_write(&mut self, value: u8) {
         match self.index_crtc {
             0x1 => {
-                dbg_log!("3D5 / hdisp enable end write: {:#X}", value);
-                if self.horizontal_display_enable_end != value as u32 {
-                    self.horizontal_display_enable_end = value as u32;
+                dbg_log!(Module::VGA, "3D5 / hdisp enable end write: {:#X}", value);
+                if self.horizontal_display_enable_end != value {
+                    self.horizontal_display_enable_end = value;
                     self.update_vga_size();
                 }
             }
             0x2 => {
-                if self.horizontal_blank_start != value as u32 {
-                    self.horizontal_blank_start = value as u32;
+                if self.horizontal_blank_start != value {
+                    self.horizontal_blank_start = value;
                     self.update_vga_size();
                 }
             }
             0x7 => {
-                dbg_log!("3D5 / overflow register write: {:#X}", value);
+                dbg_log!(Module::VGA, "3D5 / overflow register write: {:#X}", value);
                 let previous_vertical_display_enable_end = self.vertical_display_enable_end;
                 self.vertical_display_enable_end &= 0xFF;
                 let value: u32 = value as u32;
@@ -951,25 +1698,27 @@ impl VGAScreen {
                 self.line_compare = (self.line_compare & 0x2FF) | (value << 4 & 0x100);
 
                 let previous_vertical_blank_start = self.vertical_blank_start;
-                self.vertical_blank_start = (self.vertical_blank_start & 0x2FF) | (value << 5 & 0x100);
+                self.vertical_blank_start =
+                    (self.vertical_blank_start & 0x2FF) | (value << 5 & 0x100);
                 if previous_vertical_blank_start != self.vertical_blank_start {
                     self.update_vga_size();
                 }
                 self.update_layers();
             }
             0x8 => {
-                dbg_log!("3D5 / preset row scan write: {:#X}", value);
+                dbg_log!(Module::VGA, "3D5 / preset row scan write: {:#X}", value);
                 self.preset_row_scan = value;
                 self.update_layers();
             }
             0x9 => {
-                dbg_log!("3D5 / max scan line write: {:#X}", value);
+                dbg_log!(Module::VGA, "3D5 / max scan line write: {:#X}", value);
                 self.max_scan_line = value;
                 let value: u32 = value as u32;
                 self.line_compare = (self.line_compare & 0x1FF) | (value << 3 & 0x200);
 
                 let previous_vertical_blank_start = self.vertical_blank_start;
-                self.vertical_blank_start = (self.vertical_blank_start & 0x1FF) | (value << 4 & 0x200);
+                self.vertical_blank_start =
+                    (self.vertical_blank_start & 0x1FF) | (value << 4 & 0x200);
                 if previous_vertical_blank_start != self.vertical_blank_start {
                     self.update_vga_size();
                 }
@@ -977,59 +1726,70 @@ impl VGAScreen {
                 self.update_layers();
             }
             0xA => {
-                dbg_log!("3D5 / cursor scanline start write: {:#X}", value);
+                dbg_log!(Module::VGA, "3D5 / cursor scanline start write: {:#X}", value);
                 self.cursor_scanline_start = value;
                 self.update_cursor_scanline();
             }
             0xB => {
-                dbg_log!("3D5 / cursor scanline end write: #{:#X}", value);
+                dbg_log!(Module::VGA, "3D5 / cursor scanline end write: #{:#X}", value);
                 self.cursor_scanline_end = value;
                 self.update_cursor_scanline();
             }
             0xC => {
-                if (self.start_address >> 8 & 0xFF) as u8 != value  {
+                if (self.start_address >> 8 & 0xFF) as u8 != value {
                     let value: u32 = value as u32;
                     self.start_address = self.start_address & 0xff | value << 8;
                     self.update_layers();
-                    if !self.crtc_mode &  0x3 > 0 {
+                    if !self.crtc_mode & 0x3 > 0 {
                         // Address substitution implementation depends on the
                         // starting row and column, so the pixel buffer is invalidated.
                         self.complete_replot();
                     }
                 }
-                dbg_log!("3D5 / start addr hi write: {:#X} -> {:#04X}", value, self.start_address);
+                dbg_log!(
+                    Module::VGA, 
+                    "3D5 / start addr hi write: {:#X} -> {:#04X}",
+                    value,
+                    self.start_address
+                );
             }
             0xD => {
                 if (self.start_address & 0xFF) as u8 != value {
                     self.start_address = self.start_address & 0xff00 | value as u32;
                     self.update_layers();
-                    if !self.crtc_mode &  0x3 >0 {
+                    if !self.crtc_mode & 0x3 > 0 {
                         // Address substitution implementation depends on the
                         // starting row and column, so the pixel buffer is invalidated.
                         self.complete_replot();
                     }
                 }
-                dbg_log!("3D5 / start addr lo write: {:#X} -> {:#04X}", value, self.start_address);
+                dbg_log!(
+                    Module::VGA, 
+                    "3D5 / start addr lo write: {:#X} -> {:#04X}",
+                    value,
+                    self.start_address
+                );
             }
             0xE => {
-                dbg_log!("3D5 / cursor address hi write: {:#X}", value);
+                dbg_log!(Module::VGA, "3D5 / cursor address hi write: {:#X}", value);
                 self.cursor_address = self.cursor_address & 0xFF | (value as u32) << 8;
                 self.update_cursor();
             }
             0xF => {
-                dbg_log!("3D5 / cursor address lo write: {:#X}", value);
+                dbg_log!(Module::VGA, "3D5 / cursor address lo write: {:#X}", value);
                 self.cursor_address = self.cursor_address & 0xFF00 | (value as u32);
                 self.update_cursor();
             }
             0x12 => {
-                dbg_log!("3D5 / vdisp enable end write: {:#X}", value);
+                dbg_log!(Module::VGA, "3D5 / vdisp enable end write: {:#X}", value);
                 if (self.vertical_display_enable_end & 0xFF) as u8 != value {
-                    self.vertical_display_enable_end = (self.vertical_display_enable_end & 0x300) | (value as u32);
+                    self.vertical_display_enable_end =
+                        (self.vertical_display_enable_end & 0x300) | (value as u32);
                     self.update_vga_size();
                 }
             }
             0x13 => {
-                dbg_log!("3D5 / offset register write: {:#X}", value);
+                dbg_log!(Module::VGA, "3D5 / offset register write: {:#X}", value);
                 if self.offset_register != value {
                     self.offset_register = value;
                     self.update_vga_size();
@@ -1042,7 +1802,7 @@ impl VGAScreen {
                 }
             }
             0x14 => {
-                dbg_log!("3D5 / underline location write: {:#X}", value);
+                dbg_log!(Module::VGA, "3D5 / underline location write: {:#X}", value);
                 if self.underline_location_register != value {
                     let previous_underline = self.underline_location_register;
 
@@ -1056,21 +1816,21 @@ impl VGAScreen {
                 }
             }
             0x15 => {
-                dbg_log!("3D5 / vertical blank start write: {:#X}", value);
-                if(self.vertical_blank_start & 0xFF) as u8 != value {
+                dbg_log!(Module::VGA, "3D5 / vertical blank start write: {:#X}", value);
+                if (self.vertical_blank_start & 0xFF) as u8 != value {
                     self.vertical_blank_start = (self.vertical_blank_start & 0x300) | value as u32;
                     self.update_vga_size();
                 }
             }
             0x17 => {
-                dbg_log!("3D5 / crtc mode write: {:#X}", value);
+                dbg_log!(Module::VGA, "3D5 / crtc mode write: {:#X}", value);
                 if self.crtc_mode != value {
                     let previous_mode = self.crtc_mode;
 
                     self.crtc_mode = value;
                     self.update_vga_size();
 
-                    if(previous_mode ^ value) & 0x43 > 0 {
+                    if (previous_mode ^ value) & 0x43 > 0 {
                         // Word/byte addressing changed or address substitution changed.
                         // Pixel buffer invalidated.
                         self.complete_replot();
@@ -1078,17 +1838,277 @@ impl VGAScreen {
                 }
             }
             0x18 => {
-                dbg_log!("3D5 / line compare write: {:#X}", value);
+                dbg_log!(Module::VGA, "3D5 / line compare write: {:#X}", value);
                 self.line_compare = (self.line_compare & 0x300) | value as u32;
                 self.update_layers();
             }
-            _ =>  {
+            _ => {
                 if self.index_crtc < self.crtc.len() as u8 {
                     self.crtc[self.index_crtc as usize] = value as u8;
                 }
-                dbg_log!("3D5 / CRTC write {:#X}:  {:#X}", self.index_crtc, value);
+                dbg_log!(Module::VGA, "3D5 / CRTC write {:#X}:  {:#X}", self.index_crtc, value);
             }
         }
     }
 
+    fn port3D5_read(&self) -> u8 {
+        dbg_log!(Module::VGA, "3D5 read {:#X}", self.index_crtc);
+
+        match self.index_crtc {
+            0x1 => self.horizontal_display_enable_end,
+            0x2 => self.horizontal_blank_start,
+            0x7 => {
+                ((self.vertical_display_enable_end >> 7 & 0x2)
+                    | (self.vertical_blank_start >> 5 & 0x8)
+                    | (self.line_compare >> 4 & 0x10)
+                    | (self.vertical_display_enable_end >> 3 & 0x40)) as u8
+            }
+            0x8 => self.preset_row_scan as u8,
+            0x9 => self.max_scan_line,
+            0xA => self.cursor_scanline_start,
+            0xB => self.cursor_scanline_end,
+            0xC => (self.start_address & 0xFF) as u8,
+            0xD => (self.start_address >> 8) as u8,
+            0xE => (self.cursor_address >> 8) as u8,
+            0xF => (self.cursor_address & 0xFF) as u8,
+            0x12 => (self.vertical_display_enable_end & 0xFF) as u8,
+            0x13 => self.offset_register,
+            0x14 => self.underline_location_register,
+            0x15 => (self.vertical_blank_start & 0xFF) as u8,
+            0x17 => self.crtc_mode,
+            0x18 => (self.line_compare & 0xFF) as u8,
+            _ => {
+                if self.index_crtc < self.crtc.len() as u8 {
+                    self.crtc[self.index_crtc as usize]
+                } else {
+                    0
+                }
+            }
+        }
+    }
+
+    fn svga_bytes_per_line(&self) -> u32 {
+        let bits = if self.svga_bpp == 15 {
+            16
+        } else {
+            self.svga_bpp
+        };
+        return (self.svga_width  * bits) as u32  / 8;
+    }
+
+    fn port3DA_read(&mut self) -> u8 {
+        dbg_log!(Module::VGA, "3DA read - status 1 and clear attr index");
+
+        let value = self.port_3DA_value;
+
+        // Status register, bit 3 set by update_vertical_retrace
+        // during screen-fill-buffer
+        if !self.graphical_mode {
+            // But screen-fill-buffer may not get triggered in text mode
+            // so toggle it manually here
+            if self.port_3DA_value & 1 > 0 {
+                self.port_3DA_value ^= 8;
+            }
+            self.port_3DA_value ^= 1;
+        } else {
+            self.port_3DA_value ^= 1;
+            self.port_3DA_value &= 1;
+        }
+        self.attribute_controller_index = 0xFFFF_FFFF;
+        return value;
+    }
+
+    fn port1CE_write(&mut self, value: u16) {
+        self.dispi_index = value;
+    }
+
+    fn port1CF_write(&mut self, value: u16) {
+        dbg_log!(Module::VGA, "1CF / dispi write {:#X}: {:#X}", self.dispi_index, value);
+        match self.dispi_index {
+            1 => {
+                self.svga_width = value;
+                if self.svga_width > MAX_XRES {
+                    dbg_log!(
+                        Module::VGA, 
+                        "svga_width reduced from {} to {}",
+                        self.svga_width,
+                        MAX_XRES
+                    );
+                    self.svga_width = MAX_XRES;
+                }
+            }
+            2 => {
+                self.svga_height = value;
+                if self.svga_height > MAX_YRES {
+                    dbg_log!(
+                        Module::VGA, 
+                        "svga_height reduced from {} to {}",
+                        self.svga_height,
+                        MAX_YRES
+                    );
+                    self.svga_height = MAX_YRES;
+                }
+            }
+            3 => {
+                self.svga_bpp = value;
+            }
+            4 => {
+                // enable, options
+                self.svga_enabled = (value & 1) == 1;
+                self.dispi_enable_value = value;
+            }
+            5 => {
+                self.svga_bank_offset = (value) << 16;
+            }
+            9 => {
+                // y offset
+                self.svga_offset = value as u32 * self.svga_bytes_per_line();
+                dbg_log!(Module::VGA, "SVGA offset: {:#X} y={:#X}", self.svga_offset, value);
+                self.complete_redraw();
+            }
+            _ => {}
+        }
+
+        if self.svga_enabled && (self.svga_width == 0 || self.svga_height == 0) {
+            dbg_log!(
+                Module::VGA, 
+                "SVGA: disabled because of invalid width/height: {} x{}",
+                self.svga_width,
+                self.svga_height
+            );
+            self.svga_enabled = false;
+        }
+
+        assert!(self.svga_bpp != 4, "unimplemented svga bpp: 4");
+        assert!(self.svga_bpp != 15, "unimplemented svga bpp: 15");
+        assert!(
+            self.svga_bpp == 4
+                || self.svga_bpp == 8
+                || self.svga_bpp == 15
+                || self.svga_bpp == 16
+                || self.svga_bpp == 24
+                || self.svga_bpp == 32,
+            "unexpected svga bpp: {}",
+            self.svga_bpp
+        );
+
+        dbg_log!(
+            Module::VGA, 
+            "SVGA: enabled={}, {}x{}x{}",
+            self.svga_enabled,
+            self.svga_width,
+            self.svga_height,
+            self.svga_bpp
+        );
+
+        if self.svga_enabled && self.dispi_index == 4 {
+            self.set_size_graphical(
+                self.svga_width as u32,
+                self.svga_height as u32,
+                self.svga_bpp,
+                self.svga_width as u32,
+                self.svga_height as u32,
+            );
+            //TODO this.bus.send("screen-set-mode", true);
+            self.graphical_mode = true;
+            self.graphical_mode_is_linear = true;
+        }
+
+        if !self.svga_enabled {
+            self.svga_bank_offset = 0;
+        }
+
+        self.update_layers();
+    }
+
+    fn port1CF_read(&self) -> u16 {
+        dbg_log!(Module::VGA, "1CF / dispi read {:#X}", self.dispi_index);
+        return self.svga_register_read(self.dispi_index);
+    }
+
+    fn svga_register_read(&self, n: u16) -> u16 {
+        match n {
+            0 => {
+                // id
+                0xB0C0u16
+            }
+            1 => {
+                if self.dispi_enable_value & 2 > 0 {
+                    MAX_XRES
+                } else {
+                    self.svga_width
+                }
+            }
+            2 => {
+                if self.dispi_enable_value & 2 > 0 {
+                    MAX_YRES
+                } else {
+                    self.svga_height
+                }
+            }
+            3 => {
+                if self.dispi_enable_value & 2 > 0 {
+                    MAX_BPP as u16
+                } else {
+                    self.svga_bpp
+                }
+            }
+            4 => self.dispi_enable_value as u16,
+
+            5 => self.svga_bank_offset >> 16,
+            6 => {
+                // virtual width
+                if self.screen_width > 0 {
+                    self.screen_width as u16
+                } else {
+                    1u16 // seabios/windows98 divide exception
+                }
+            }
+            8 => {
+                // x offset
+                0
+            }
+            0x0A => (self.vga_memory_size / VGA_BANK_SIZE | 0) as u16,
+            _ => 0xFF,
+        }
+    }
+}
+
+struct VGADev(Weak<Store<Emulator>>);
+
+impl PCIDevice for VGADev {
+    #[inline]
+    fn pci_id(&self) -> u8 {
+        self.0.vga().map_or(0, |vga| vga.pci_id)
+    }
+
+    #[inline]
+    fn name(&self) -> &str {
+        self.0.vga().map_or("vga", |vga| vga.name)
+    }
+
+    #[inline]
+    fn pci_rom_size(&self) -> u32 {
+        self.0.vga().map_or(0, |vga| vga.pci_rom_size)
+    }
+
+    #[inline]
+    fn pci_rom_address(&self) -> u32 {
+        self.0.vga().map_or(0, |vga| vga.pci_rom_address)
+    }
+
+    #[inline]
+    fn pci_space(&self) -> &[u8] {
+        self.0.vga().map(|vga| vga.pci_space).unwrap()
+    }
+
+    #[inline]
+    fn pci_bars(&self) -> &[Option<PCIBar>] {
+        self.0.vga().map(|vga| &vga.pci_bars).unwrap()
+    }
+
+    #[inline]
+    fn pci_bars_mut(&mut self) -> &mut [Option<PCIBar>] {
+        self.0.vga_mut().map(|vga| &mut vga.pci_bars).unwrap()
+    }
 }

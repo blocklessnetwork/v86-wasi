@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use std::{collections::HashMap, marker::PhantomData, ops::Add, rc::Weak};
 use wasmtime::{AsContext, AsContextMut, Memory, Store};
 
-use crate::{Dev, Emulator, EmulatorTrait, LOG_ALL_IO, MMAP_BLOCK_BITS, MMAP_BLOCK_SIZE};
+use crate::{Dev, Emulator, EmulatorTrait, LOG_ALL_IO, MMAP_BLOCK_BITS, MMAP_BLOCK_SIZE, log::Module};
 
 pub(crate) trait MemAccessTrait<T> {
     fn read(&self, store: impl AsContext, idx: u32) -> T;
@@ -141,30 +141,30 @@ pub(crate) struct IO {
 
 impl IO {
     pub fn empty_read8(_: &Dev, p: u32) -> u8 {
-        dbg_log!("empty_read8: {}", p);
+        dbg_log!(Module::IO,"empty_read8: {}", p);
         0xFF
     }
 
     pub fn empty_read16(_: &Dev, p: u32) -> u16 {
-        dbg_log!("empty_read16: {}", p);
+        dbg_log!(Module::IO, "empty_read16: {}", p);
         0xFFFF
     }
 
     pub fn empty_read32(_: &Dev, p: u32) -> u32 {
-        dbg_log!("empty_read32: {}", p);
+        dbg_log!(Module::IO, "empty_read32: {}", p);
         0xFFFF_FFFF
     }
 
     pub fn empty_write8(_: &Dev, p: u32, _: u8) {
-        dbg_log!("empty_write8: {}", p);
+        dbg_log!(Module::IO, "empty_write8: {}", p);
     }
 
     pub fn empty_write16(_: &Dev, p: u32, _: u16) {
-        dbg_log!("empty_write16: {}", p);
+        dbg_log!(Module::IO, "empty_write16: {}", p);
     }
 
     pub fn empty_write32(_: &Dev, p: u32, _: u32) {
-        dbg_log!("empty_write32: {}", p);
+        dbg_log!(Module::IO, "empty_write32: {}", p);
     }
 
     pub(crate) fn default_iops() -> IOps {
@@ -242,6 +242,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.read8 as *const () == Self::empty_read8 as *const () || LOG_ALL_IO {
             dbg_log!(
+                Module::IO, 
                 "read8 port  #{:02X} {}",
                 port,
                 self.get_port_description(port)
@@ -255,6 +256,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.read16 as *const () == Self::empty_read16 as *const () || LOG_ALL_IO {
             dbg_log!(
+                Module::IO, 
                 "read16 port  #{:02X} {}",
                 port,
                 self.get_port_description(port)
@@ -268,6 +270,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.read32 as *const () == Self::empty_read32 as *const () || LOG_ALL_IO {
             dbg_log!(
+                Module::IO, 
                 "read32 port #{:02X} {}",
                 port,
                 self.get_port_description(port)
@@ -281,6 +284,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.write8 as *const () == Self::empty_write8 as *const () || LOG_ALL_IO {
             dbg_log!(
+                Module::IO, 
                 "write8 port  #{:02X} <- {:#02X} {}",
                 port,
                 data,
@@ -294,6 +298,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.write16 as *const () == Self::empty_write16 as *const () || LOG_ALL_IO {
             dbg_log!(
+                Module::IO, 
                 "write16 port  #{:02X} <- {:#02X} {}",
                 port,
                 data,
@@ -307,6 +312,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.write32 as *const () == Self::empty_write32 as *const () || LOG_ALL_IO {
             dbg_log!(
+                Module::IO, 
                 "write32 port  #{:02x} <- {:#02X} {}",
                 port,
                 data,
@@ -331,8 +337,8 @@ impl IO {
         r32: Rd32Fn,
         w32: Wr32Fn,
     ) {
-        dbg_log!("mmap_register addr={:#X}  size={:#X}", addr >> 0, size);
-        assert!((addr & MMAP_BLOCK_SIZE as u32).saturating_sub(1) == 0);
+        dbg_log!(Module::IO, "mmap_register addr={:#X}  size={:#X}", addr >> 0, size);
+        assert!((addr & (MMAP_BLOCK_SIZE as u32 - 1)) == 0);
         assert!(size > 0 && (size & MMAP_BLOCK_SIZE - 1) == 0);
         let r32 = if r32 as *const () == Self::empty_read8 as *const () {
             Self::mmap_read32_shim
@@ -520,22 +526,24 @@ impl IO {
             m_size,
             0x100000000 - m_size as usize,
             |_: &Dev, addr: u32| {
-                dbg_log!("Read from unmapped memory space, addr={:#X}", addr >> 0);
+                dbg_log!(Module::IO, "Read from unmapped memory space, addr={:#X}", addr >> 0);
                 0xFF
             },
             |_: &Dev, addr: u32, v: u8| {
                 dbg_log!(
+                    Module::IO, 
                     "Write to unmapped memory space, addr={:#X} value={:#X}",
                     addr >> 0,
                     v
                 );
             },
             |_: &Dev, addr: u32| {
-                dbg_log!("Read from unmapped memory space, addr={:#X}", addr >> 0);
+                dbg_log!(Module::IO, "Read from unmapped memory space, addr={:#X}", addr >> 0);
                 0xFFFFFFFF
             },
             |_: &Dev, addr: u32, v: u32| {
                 dbg_log!(
+                    Module::IO, 
                     "Write to unmapped memory space, addr={:#X} value={:#X}",
                     addr >> 0,
                     v

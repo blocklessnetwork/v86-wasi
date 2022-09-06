@@ -10,10 +10,10 @@ const LOG_ALL_IO: bool = false;
 use bus::BUS;
 use dma::DMA;
 use io::IO;
-use mem::add_mem_to_linker;
 use pci::PCI;
 use pic::PIC;
 use rtc::RTC;
+use vga::VGAScreen;
 use wasmtime::*;
 mod bus;
 pub(crate) mod consts;
@@ -33,6 +33,7 @@ pub use consts::*;
 pub use cpu::CPU;
 pub use emulator::Emulator;
 pub use setting::*;
+pub(crate) use log::Module;
 
 pub use dev::Dev;
 
@@ -99,9 +100,23 @@ trait EmulatorTrait {
     fn pci(&self) -> Option<&PCI>;
     fn emulator(&self) -> &Emulator;
     fn emulator_mut(&self) -> &mut Emulator;
+    fn setting(&self) -> &Setting;
+    fn vga(&self) -> Option<&VGAScreen>;
+    fn vga_mut(&self) -> Option<&mut VGAScreen>;
 }
 
 impl EmulatorTrait for Weak<Store<Emulator>> {
+
+    #[inline]
+    fn vga(&self) -> Option<&VGAScreen> {
+        self.cpu().map(|cpu| &cpu.vga)
+    }
+
+    #[inline]
+    fn vga_mut(&self) -> Option<&mut VGAScreen> {
+        self.cpu_mut().map(|cpu| &mut cpu.vga)
+    }
+    
     #[inline]
     fn pic_mut(&self) -> Option<&mut PIC> {
         self.emulator_mut().pic_mut()
@@ -142,6 +157,12 @@ impl EmulatorTrait for Weak<Store<Emulator>> {
     fn cpu(&self) -> Option<&CPU> {
         let emu = self.emulator();
         emu.cpu()
+    }
+
+    #[inline]
+    fn setting(&self) -> &Setting {
+        let emu = self.emulator();
+        emu.setting()
     }
 
     #[inline]
@@ -486,5 +507,5 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         )
         .unwrap();
 
-    add_mem_to_linker(linker);
+    mem::add_mem_to_linker(linker);
 }

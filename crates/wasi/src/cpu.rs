@@ -6,6 +6,7 @@
 use std::rc::Weak;
 
 use crate::{
+    EmulatorTrait,
     bus::BUS,
     consts::*,
     debug::Debug,
@@ -14,7 +15,7 @@ use crate::{
     pci::PCI,
     pic::PIC,
     rtc::RTC,
-    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME,
+    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, vga::VGAScreen, log::Module,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -267,6 +268,7 @@ pub struct CPU {
     pub(crate) dma: DMA,
     pub(crate) pic: PIC,
     pub(crate) pci: PCI,
+    pub(crate) vga: VGAScreen,
 }
 
 impl CPU {
@@ -283,9 +285,12 @@ impl CPU {
         let s = unsafe { &mut *(store.as_ptr() as *mut Store<Emulator>) };
         let memory = inst.get_memory(s.as_context_mut(), "memory").unwrap();
         let rtc = RTC::new(store.clone());
-        let bus = BUS::new(&store);
+        let bus = BUS::new(store.clone());
+        let vga_mem_size = store.setting().vga_memory_size;
+        let vga = VGAScreen::new(store.clone(), vga_mem_size);
         Self {
             rtc,
+            vga,
             memory,
             a20_byte: 0,
             store: store.clone(),
@@ -379,6 +384,7 @@ impl CPU {
         });
     }
 
+    #[inline]
     pub fn pic_call_irq(&mut self, interrupt_nr: i32) {
         self.store_mut().map(|store| {
             self.vm_opers
@@ -386,6 +392,7 @@ impl CPU {
         });
     }
 
+    #[inline]
     fn do_many_cycles_native(&mut self) {
         self.store_mut().map(|store| {
             self.vm_opers.do_many_cycles_native(store);
@@ -398,12 +405,14 @@ impl CPU {
             .map_or(0, |store| self.iomap.memory_size_io.read(store, 0u32))
     }
 
+    #[inline]
     fn reset_cpu(&mut self) {
         self.store_mut().map(|store| {
             self.vm_opers.reset_cpu(store);
         });
     }
 
+    #[inline]
     fn set_tsc(&mut self, low: u32, hig: u32) {
         self.store_mut().map(|store| {
             self.vm_opers.set_tsc(store, low, hig);
@@ -436,7 +445,7 @@ impl CPU {
             .flatten();
         let bios = bios.expect("Warning: No BIOS");
         let offset = 0x100000 - bios.len();
-        dbg_log!("load bois to: {}", offset);
+        dbg_log!(Module::CPU, "load bois to: {}", offset);
         self.store_mut().map(|store| {
             self.iomap.mem8_write_slice(store, offset, &bios);
         });
@@ -467,12 +476,13 @@ impl CPU {
         self.dma.init();
         self.pic.init();
         self.pci.init();
+        self.vga.init();
         self.reset_cpu();
         self.load_bios();
 
         self.io
             .register_read8(0xB3, Dev::Empty, |_: &Dev, _: u32| -> u8 {
-                dbg_log!("port 0xB3 read");
+                dbg_log!(Module::CPU, "port 0xB3 read");
                 0
             });
         self.io.register_read8(

@@ -6,7 +6,7 @@ use std::{
 
 use wasmtime::{Instance, Store};
 
-use crate::{bus::BUS, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Setting, CPU};
+use crate::{bus::BUS, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Setting, CPU, vga::VGAScreen};
 
 pub(crate) struct InnerEmulator {
     start_time: time::Instant,
@@ -26,7 +26,7 @@ impl InnerEmulator {
     }
 
     fn init(&mut self, inst: Instance, store: Weak<Store<Emulator>>) {
-        self.bus = Some(BUS::new(&store));
+        self.bus = Some(BUS::new(store.clone()));
         self.cpu = Some(CPU::new(inst, store));
     }
 
@@ -60,6 +60,11 @@ impl Emulator {
     pub fn start(&mut self, inst: Instance, store: Weak<Store<Emulator>>) {
         self.inner_mut().init(inst, store);
         self.inner_mut().start();
+    }
+
+    #[inline]
+    pub(crate) fn vga_mut(&self) -> Option<&mut VGAScreen> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.vga)
     }
 
     #[inline]

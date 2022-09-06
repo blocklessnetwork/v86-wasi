@@ -4,7 +4,7 @@ use wasmtime::Store;
 
 use crate::{
     bus::BUS, debug::Debug, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Emulator,
-    EmulatorTrait, CPU,
+    EmulatorTrait, CPU, vga::VGAScreen,
 };
 
 #[derive(Clone)]
@@ -103,6 +103,22 @@ impl Dev {
     pub(crate) fn pci(self: &Dev) -> Option<&PCI> {
         match *self {
             Dev::Emulator(ref e) => e.pci(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn vga_mut(self: &Dev) -> Option<&mut VGAScreen> {
+        match *self {
+            Dev::Emulator(ref e) => e.vga_mut(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn vga(self: &Dev) -> Option<&VGAScreen> {
+        match *self {
+            Dev::Emulator(ref e) => e.vga(),
             _ => None,
         }
     }

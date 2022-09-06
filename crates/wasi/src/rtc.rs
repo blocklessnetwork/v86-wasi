@@ -3,7 +3,7 @@ use std::rc::Weak;
 use chrono::{Datelike, TimeZone, Timelike, Utc};
 use wasmtime::Store;
 
-use crate::{consts::*, Dev, Emulator, EmulatorTrait, CPU};
+use crate::{consts::*, Dev, Emulator, EmulatorTrait, CPU, log::Module};
 
 pub(crate) struct RTC {
     cmos_index: u8,
@@ -117,7 +117,7 @@ impl RTC {
 
     #[inline(always)]
     pub(crate) fn cmos_write(self: &mut RTC, index: u8, v: u8) {
-        dbg_log!("cmos {:#02X} <- {:#02X}", index, v);
+        dbg_log!(Module::RTC, "cmos {:#02X} <- {:#02X}", index, v);
         assert!(index < 128);
         self.cmos_data[index as usize] = v;
     }
@@ -154,7 +154,7 @@ impl RTC {
                 CMOS_STATUS_B => rtc.cmos_b,
                 CMOS_STATUS_C => {
                     //TODO: this.cpu.device_lower_irq(8);
-                    dbg_log!("cmos reg C read");
+                    dbg_log!(Module::RTC, "cmos reg C read");
                     let c = rtc.cmos_c;
                     let mask: u8 = !0xF0;
                     rtc.cmos_c &= mask;
@@ -167,7 +167,7 @@ impl RTC {
                 }
                 _ => {
                     let data = rtc.cmos_data[rtc.cmos_index as usize];
-                    dbg_log!("cmos read from index {:#02X}: data: {:#02X}", index, data);
+                    dbg_log!(Module::RTC, "cmos read from index {:#02X}: data: {:#02X}", index, data);
                     data
                 }
             }
@@ -180,6 +180,7 @@ impl RTC {
                 rtc.cmos_a = v & 0x7F;
                 rtc.periodic_interrupt_time = 1000.0 / (32768 >> (rtc.cmos_a & 0xF) - 1) as f64;
                 dbg_log!(
+                    Module::RTC, 
                     "Periodic interrupt, a= 0x{:02}  t={}",
                     rtc.cmos_a,
                     rtc.periodic_interrupt_time
@@ -204,6 +205,7 @@ impl RTC {
                         .and_hms(hours, minus, secs);
                     let ms_from_now = alarm_date.timestamp_millis() - now.timestamp_millis();
                     dbg_log!(
+                        Module::RTC, 
                         "RTC alarm scheduled for {} hh:mm:ss={}:{}:{} ms_from_now={}",
                         alarm_date.to_string(),
                         hours,
@@ -218,7 +220,7 @@ impl RTC {
                 rtc.cmos_write(rtc.cmos_index as _, v);
             }
             _ => {
-                dbg_log!("cmos write index {:#X}: {:#X}", rtc.cmos_index, v);
+                dbg_log!(Module::RTC, "cmos write index {:#X}: {:#X}", rtc.cmos_index, v);
             }
         });
     }

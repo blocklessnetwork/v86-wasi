@@ -2,7 +2,7 @@ use std::rc::Weak;
 
 use wasmtime::Store;
 
-use crate::{Dev, Emulator, EmulatorTrait};
+use crate::{Dev, Emulator, EmulatorTrait, log::Module};
 
 pub(crate) struct DMA {
     store: Weak<Store<Emulator>>,
@@ -164,12 +164,12 @@ impl DMA {
     }
 
     fn portc_write(&mut self, _data_byte: u8) {
-        dbg_log!("flipflop reset");
+        dbg_log!(Module::DMA, "flipflop reset");
         self.lsb_msb_flipflop = 0;
     }
 
     fn port_multimask_write(&mut self, channel_offset: usize, data_byte: u8) {
-        dbg_log!("multichannel mask write: {:#X}", data_byte);
+        dbg_log!(Module::DMA, "multichannel mask write: {:#X}", data_byte);
         for i in 0..4 {
             self.update_mask(channel_offset + i, data_byte & (1 << i));
         }
@@ -181,20 +181,20 @@ impl DMA {
         value |= self.channel_mask[channel_offset + 1] << 1;
         value |= self.channel_mask[channel_offset + 2] << 2;
         value |= self.channel_mask[channel_offset + 3] << 3;
-        dbg_log!("multichannel mask read: {:#X}", value);
+        dbg_log!(Module::DMA, "multichannel mask read: {:#X}", value);
         value
     }
 
     fn port_mode_write(&mut self, channel_offset: usize, data_byte: u8) {
         let channel = (data_byte & 0x3) as usize + channel_offset;
-        dbg_log!("mode write [{}] = {:#X}", channel, data_byte);
+        dbg_log!(Module::DMA, "mode write [{}] = {:#X}", channel, data_byte);
         self.channel_mode[channel] = data_byte;
     }
 
     fn port_singlemask_write(&mut self, channel_offset: usize, data_byte: u8) {
         let channel = (data_byte & 0x3) as usize + channel_offset;
         let value = if data_byte & 0x4 > 0 { 1 } else { 0 };
-        dbg_log!("singlechannel mask write [{}] = {}", channel, value);
+        dbg_log!(Module::DMA, "singlechannel mask write [{}] = {}", channel, value);
         self.update_mask(channel, value);
     }
 
@@ -202,7 +202,7 @@ impl DMA {
         if self.channel_mask[channel] != value {
             self.channel_mask[channel] = value;
             if value == 0 {
-                dbg_log!("firing on_unmask({})", channel);
+                dbg_log!(Module::DMA, "firing on_unmask({})", channel);
                 self.unmask_listeners.iter().map(|v| {
                     //TODO
                 });
@@ -211,27 +211,27 @@ impl DMA {
     }
 
     fn port_pagehi_write(&mut self, channel: usize, data_byte: u8) {
-        dbg_log!("pagehi write [{}] = {:#X}", channel, data_byte);
+        dbg_log!(Module::DMA, "pagehi write [{}] = {:#X}", channel, data_byte);
         self.channel_pagehi[channel] = data_byte;
     }
 
     fn port_pagehi_read(&self, channel: usize) -> u8 {
-        dbg_log!("pagehi read [{}]", channel);
+        dbg_log!(Module::DMA, "pagehi read [{}]", channel);
         self.channel_pagehi[channel]
     }
 
     fn port_page_write(&mut self, channel: usize, data_byte: u8) {
-        dbg_log!("page write [{}] = {:#X}", channel, data_byte);
+        dbg_log!(Module::DMA, "page write [{}] = {:#X}", channel, data_byte);
         self.channel_page[channel] = data_byte;
     }
 
     fn port_page_read(&self, channel: usize) -> u8 {
-        dbg_log!("page read [{}]", channel);
+        dbg_log!(Module::DMA, "page read [{}]", channel);
         self.channel_page[channel]
     }
 
     fn port_addr_write(&mut self, channel: usize, data_byte: u16) {
-        dbg_log!("addr write [{}] = {:#X}", channel, data_byte);
+        dbg_log!(Module::DMA, "addr write [{}] = {:#X}", channel, data_byte);
         self.channel_addr[channel] =
             self.flipflop_get(self.channel_addr[channel], data_byte, false);
         self.channel_addr_init[channel] =
@@ -239,7 +239,7 @@ impl DMA {
     }
 
     fn port_count_write(&mut self, channel: usize, data_byte: u16) {
-        dbg_log!("count write [{}] = {:#X}", channel, data_byte);
+        dbg_log!(Module::DMA, "count write [{}] = {:#X}", channel, data_byte);
         self.channel_count[channel] =
             self.flipflop_get(self.channel_count[channel], data_byte, false);
         self.channel_count_init[channel] =
@@ -248,6 +248,7 @@ impl DMA {
 
     fn port_addr_read(&mut self, channel: usize) -> u8 {
         dbg_log!(
+            Module::DMA, 
             "addr read [{}] -> {:#X}",
             channel,
             self.channel_addr[channel]
@@ -257,6 +258,7 @@ impl DMA {
 
     fn port_count_read(&mut self, channel: usize) -> u8 {
         dbg_log!(
+            Module::DMA, 
             "count read [{}] -> {:#X}",
             channel,
             self.channel_count[channel]
