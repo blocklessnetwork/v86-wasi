@@ -1,7 +1,6 @@
+#![allow(unused)]
 use std::{mem, rc::Weak};
-
 use wasmtime::Store;
-
 use crate::{io::IOps, utils::*, Dev, Emulator, EmulatorTrait, IO, log::Module};
 
 const PCI_CONFIG_ADDRESS: u32 = 0xCF8;
@@ -36,7 +35,7 @@ struct Space([u8; 4 * 64]);
 
 impl Space {
     #[inline]
-    fn byteLength(&self) -> u32 {
+    fn byte_length(&self) -> u32 {
         64 * 4
     }
 
@@ -555,7 +554,7 @@ impl PCI {
             let device = device.unwrap();
             self.pci_status = (0x80000000u32 | 0).to_le_bytes();
             let mut respone32 = 0u32;
-            if (addr as u32) < device.byteLength() {
+            if (addr as u32) < device.byte_length() {
                 respone32 = device.read_u32((addr >> 2) as usize);
                 self.pci_response = respone32.to_le_bytes();
             } else {
@@ -568,7 +567,7 @@ impl PCI {
                 self.pci_addr32() >> 0,
                 respone32 >> 0
             );
-            if (addr as u32) >= device.byteLength() {
+            if (addr as u32) >= device.byte_length() {
                 dbg_line = format!("{} (undef)", dbg_line);
             }
             let dev = self.devices[bdf as usize].as_ref().unwrap();

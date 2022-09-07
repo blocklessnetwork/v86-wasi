@@ -6,6 +6,8 @@ use crate::{Emulator, EmulatorTrait};
 
 pub(crate) enum BusData {
     None,
+    Bool(bool),
+    U8Tuple(u8, u8),
 }
 
 pub(crate) type BusCall = fn(store: &Weak<Store<Emulator>>, data: &BusData);
@@ -48,12 +50,12 @@ impl BusController {
         };
     }
 
-    fn send(&mut self, name: &'static str, data: &BusData) {
+    pub fn send(&mut self, name: &'static str, data: BusData) {
         match self.listeners.get(name) {
             Some(v) => {
                 v.iter().for_each(|call| {
                     let call = unsafe { std::mem::transmute::<_, BusCall>(call) };
-                    call(&self.store, data);
+                    call(&self.store, &data);
                 });
             }
             None => {}
@@ -66,5 +68,10 @@ pub(crate) struct BUS(BusController);
 impl BUS {
     pub fn new(store: Weak<Store<Emulator>>) -> Self {
         Self(BusController::new(store))
+    }
+
+    #[inline]
+    pub fn send(&mut self, name: &'static str, data: BusData) {
+        self.0.send(name, data);
     }
 }

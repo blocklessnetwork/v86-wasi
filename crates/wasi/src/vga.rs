@@ -1,8 +1,10 @@
+#![allow(unused)]
+#![allow(non_snake_case)]
 use std::{rc::Weak, slice};
 
 use wasmtime::Store;
 
-use crate::{pci::{PCIBar, PCIDevice}, Emulator, EmulatorTrait, Dev, io::IO, log::Module};
+use crate::{pci::{PCIBar, PCIDevice}, Emulator, EmulatorTrait, Dev, io::IO, log::Module, bus::BusData};
 
 const VGA_BANK_SIZE: u32 = 64 * 1024;
 
@@ -19,13 +21,11 @@ const VGA_LFB_ADDRESS: u32 = 0xE0000000;
 const VGA_PIXEL_BUFFER_START: u32 = 4 * VGA_BANK_SIZE;
 
 /**
- * @const
  * Equals the maximum number of pixels for non svga.
  * 8 pixels per byte.
  */
 const VGA_PIXEL_BUFFER_SIZE: u32 = 8 * VGA_BANK_SIZE;
 
-/** @const */
 const VGA_MIN_MEMORY_SIZE: u32 = VGA_PIXEL_BUFFER_START + VGA_PIXEL_BUFFER_SIZE;
 
 const VGA_HOST_MEMORY_SPACE_START: &[u32] = &[0xA0000, 0xA0000, 0xB0000, 0xB8000];
@@ -1077,7 +1077,7 @@ impl VGAScreen {
             for col in 0..self.max_cols {
                 chr = self.vga_memory[addr];
                 color = self.vga_memory[addr | 1];
-                //TODO this.bus.send("screen-put-char", [row, col, chr,
+                //this.bus.send("screen-put-char", [row, col, chr,
                 //self.vga256_palette[color >> 4 & 0xF], this.vga256_palette[color & 0xF]]);
                 addr += 2;
             }
@@ -1149,7 +1149,10 @@ impl VGAScreen {
             // See http://www.phatcode.net/res/224/files/html/ch29/29-05.html#Heading6
             // and http://www.osdever.net/FreeVGA/vga/seqreg.htm#01
             self.layers.clear();
-            //TODO this.bus.send("screen-clear");
+            self.store.bus_mut().map(|bus| {
+                bus.send("screen-clear", BusData::None);
+            });
+            
             return;
         }
 
@@ -1468,7 +1471,9 @@ impl VGAScreen {
     fn set_size_text(&mut self, cols_count: u8, rows_count: u8) {
         self.max_cols = cols_count;
         self.max_rows = rows_count;
-        //RODOthis.bus.send("screen-set-size-text", [cols_count, rows_count]);
+        self.store.bus_mut().map(|bus| {
+            bus.send("screen-set-size-text", BusData::U8Tuple(cols_count, rows_count));
+        });
     }
 
     fn set_size_graphical(
@@ -1549,7 +1554,9 @@ impl VGAScreen {
                             let is_graphical = (value & 0x1) > 0;
                             if !self.svga_enabled && self.graphical_mode != is_graphical {
                                 self.graphical_mode = is_graphical;
-                                //TODO this.bus.send("screen-set-mode", this.graphical_mode);
+                                self.store.bus_mut().map(|bus|{
+                                    bus.send("screen-set-mode", BusData::Bool(self.graphical_mode));
+                                });
                             }
 
                             if (previous_mode ^ value) & 0x40 > 0 {
@@ -1602,8 +1609,12 @@ impl VGAScreen {
         }
     }
 
+    #[inline]
     fn update_cursor_scanline(&mut self) {
-        //TODOthis.bus.send("screen-update-cursor-scanline", [this.cursor_scanline_start, this.cursor_scanline_end]);
+        self.store.bus_mut().map(|bus| {
+            bus.send("screen-update-cursor-scanline", 
+            BusData::U8Tuple(self.cursor_scanline_start, self.cursor_scanline_end))
+        });
     }
 
     fn port3C5_write(&mut self, value: u8) {
@@ -1668,7 +1679,12 @@ impl VGAScreen {
         let col = ((self.cursor_address - self.start_address) % self.max_cols as u32) as u8;
 
         row = (self.max_rows - 1).min(row);
-        //TODO this.bus.send("screen-update-cursor", [row, col]);
+        self.store.bus_mut().map(|bus| {
+            bus.send(
+                "screen-update-cursor", 
+                BusData::U8Tuple(row, col),
+            );
+        });
     }
 
     fn port3D5_write(&mut self, value: u8) {
@@ -2009,7 +2025,9 @@ impl VGAScreen {
                 self.svga_width as u32,
                 self.svga_height as u32,
             );
-            //TODO this.bus.send("screen-set-mode", true);
+            self.store.bus_mut().map(|bus| {
+                bus.send("screen-set-mode", BusData::Bool(true));
+            });
             self.graphical_mode = true;
             self.graphical_mode_is_linear = true;
         }

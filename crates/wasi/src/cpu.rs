@@ -1,3 +1,5 @@
+#![allow(unused)]
+#![allow(non_snake_case)]
 // Resources:
 // https://pdos.csail.mit.edu/6.828/2006/readings/i386/toc.htm
 // https://www-ssl.intel.com/content/www/us/en/processors/architectures-software-developer-manuals.html
