@@ -8,6 +8,8 @@ pub(crate) enum BusData {
     None,
     Bool(bool),
     U8Tuple(u8, u8),
+    ScreenSetSizeGraphical(u32, u32, u32, u32, u16),
+    ScreenPutChar(u8, u8, u8, i32, i32)
 }
 
 pub(crate) type BusCall = fn(store: &Weak<Store<Emulator>>, data: &BusData);

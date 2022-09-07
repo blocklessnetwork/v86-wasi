@@ -1077,8 +1077,18 @@ impl VGAScreen {
             for col in 0..self.max_cols {
                 chr = self.vga_memory[addr];
                 color = self.vga_memory[addr | 1];
-                //this.bus.send("screen-put-char", [row, col, chr,
-                //self.vga256_palette[color >> 4 & 0xF], this.vga256_palette[color & 0xF]]);
+                self.store.bus_mut().map(|bus| {
+                    bus.send(
+                        "screen-put-char",
+                        BusData::ScreenPutChar(
+                            row,
+                            col, 
+                            chr, 
+                            self.vga256_palette[(color >> 4 & 0xF) as usize], 
+                            self.vga256_palette[(color & 0xF)as usize]
+                        )
+                    );
+                });
                 addr += 2;
             }
         }
@@ -1501,8 +1511,12 @@ impl VGAScreen {
             self.stats.is_graphical = true;
             self.stats.res_x = width;
             self.stats.res_y = height;
-
-            //TODO self.bus.send("screen-set-size-graphical", [width, height, virtual_width, virtual_height, bpp]);
+            self.store.bus_mut().map(|bus| {
+                bus.send(
+                    "screen-set-size-graphical",
+                    BusData::ScreenSetSizeGraphical(width, height, virtual_width, virtual_height, bpp)
+                );
+            });
         }
     }
 
