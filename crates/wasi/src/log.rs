@@ -31,11 +31,11 @@ impl Display for Module {
 macro_rules! dbg_log {
     ($m: expr, $fmt:expr, $($arg:tt)*) => {
         let values = format!($fmt, $($arg)*);
-        println!("[{:<2}] {}", $m, &values);
+        println!("[{:5}] {}", $m, &values);
     };
 
     ($m: expr, $fmt:expr) => {
         let values = format!($fmt);
-        println!("[{:<2}] {}", $m, &values);
+        println!("[{:5}] {}", $m, &values);
     };
 }

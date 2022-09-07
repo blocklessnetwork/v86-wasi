@@ -566,10 +566,17 @@ impl PIC {
         }
     }
 
+    #[inline]
+    pub fn acknowledge_irq(&mut self) {
+        self.master.acknowledge_irq();
+    }
+
+    #[inline]
     pub fn set_irq(&mut self, irq_number: u8) {
         self.master.set_irq(irq_number);
     }
 
+    #[inline]
     pub(crate) fn init(&mut self) {
         self.master.init();
         self.slave.init();

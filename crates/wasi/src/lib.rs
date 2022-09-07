@@ -301,8 +301,10 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .func_wrap(
             "env",
             "pic_acknowledge",
-            move |mut _caller: Caller<'_, Emulator>| {
-                panic!("env pic_acknowledge call.");
+            move |mut caller: Caller<'_, Emulator>| {
+                caller.data_mut().cpu_mut().map(|cpu| {
+                    cpu.pic_acknowledge();
+                });
             },
         )
         .unwrap();

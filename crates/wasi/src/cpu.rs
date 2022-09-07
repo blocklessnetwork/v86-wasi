@@ -517,6 +517,11 @@ impl CPU {
     }
 
     #[inline]
+    pub fn pic_acknowledge(&mut self) {
+        self.pic.acknowledge_irq();
+    }
+
+    #[inline]
     fn has_interrupt(&mut self) -> bool {
         (self.get_eflags_no_arith() & (FLAG_INTERRUPT as i32)) != 0
     }
@@ -556,6 +561,8 @@ impl CPU {
         //TODO:
     }
 
+
+
     pub fn main_run(&mut self) -> i32 {
         if self.in_hlt() {
             let t = self.hlt_loop();
@@ -563,6 +570,7 @@ impl CPU {
                 return t;
             }
         }
+        while true {
         let start = self.microtick();
         let mut now = start;
         while now - start < TIME_PER_FRAME as _ {
@@ -573,6 +581,7 @@ impl CPU {
             if self.in_hlt() {
                 return t;
             }
+        }
         }
         return 0;
     }
