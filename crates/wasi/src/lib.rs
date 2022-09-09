@@ -5,7 +5,7 @@ use std::rc::Weak;
 use std::slice;
 
 const ALL_DEBUG: bool = true;
-const LOG_ALL_IO: bool = false;
+
 
 use bus::BUS;
 use dma::DMA;
@@ -23,6 +23,7 @@ mod dev;
 mod dma;
 mod emulator;
 mod io;
+mod timewheel;
 mod mem;
 mod pci;
 mod pic;
@@ -251,8 +252,11 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
         .unwrap();
 
     linker
-        .func_wrap("env", "hlt_op", move |mut _caller: Caller<'_, Emulator>| {
-            panic!("env hlt_op call.");
+        .func_wrap("env", "hlt_op", move |mut caller: Caller<'_, Emulator>| {
+            let emu = caller.data_mut();
+            emu.cpu_mut().map(|cpu| {
+                cpu.hlt_op();
+            });
         })
         .unwrap();
 

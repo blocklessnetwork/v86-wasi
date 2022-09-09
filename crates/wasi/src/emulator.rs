@@ -38,6 +38,10 @@ impl InnerEmulator {
         self.cpu.as_mut().map(|c| {
             c.init();
             c.main_run();
+            loop {
+                c.next_tick(0);
+                c.tasks_trigger();
+            }
         });
     }
 }

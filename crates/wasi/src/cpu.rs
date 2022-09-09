@@ -5,11 +5,12 @@
 // https://www-ssl.intel.com/content/www/us/en/processors/architectures-software-developer-manuals.html
 // http://ref.x86asm.net/geek32.html
 
-use std::rc::Weak;
+use std::{rc::Weak, task::Poll};
 
 use crate::{
     EmulatorTrait,
     bus::BUS,
+    timewheel::TimeWheel,
     consts::*,
     debug::Debug,
     dma::DMA,
@@ -17,7 +18,7 @@ use crate::{
     pci::PCI,
     pic::PIC,
     rtc::RTC,
-    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, vga::VGAScreen, log::Module,
+    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, vga::VGAScreen, log::Module, timewheel,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -257,6 +258,8 @@ impl VMOpers {
     }
 }
 
+type TaskFn = (fn(store: &Weak<Store<Emulator>>, u64), u64);
+
 pub struct CPU {
     memory: Memory,
     store: Weak<Store<Emulator>>,
@@ -265,12 +268,15 @@ pub struct CPU {
     vm_opers: VMOpers,
     pub(crate) mmap_fn: MMapFn,
     a20_byte: u8,
+    tick_counter: u64,
+    idle: bool,
     pub(crate) debug: Debug,
     pub(crate) io: IO,
     pub(crate) dma: DMA,
     pub(crate) pic: PIC,
     pub(crate) pci: PCI,
     pub(crate) vga: VGAScreen,
+    tasks: TimeWheel<TaskFn>,
 }
 
 impl CPU {
@@ -294,7 +300,9 @@ impl CPU {
             rtc,
             vga,
             memory,
+            idle: true,
             a20_byte: 0,
+            tick_counter: 0,
             store: store.clone(),
             mmap_fn: MMapFn::new(),
             iomap: IOMap::new(memory),
@@ -304,6 +312,7 @@ impl CPU {
             dma: DMA::new(store.clone()),
             debug: Debug::new(store.clone()),
             vm_opers: VMOpers::new(&inst, s),
+            tasks: TimeWheel::new(60*60*1000),
         }
     }
 
@@ -507,14 +516,52 @@ impl CPU {
         self.fill_cmos();
     }
 
+    #[inline]
     fn in_hlt(&mut self) -> bool {
         self.store_mut()
             .map_or(false, |store| self.iomap.in_hlt_io.read(store, 1) > 0)
     }
 
+    #[inline]
+    pub fn next_tick(&mut self, t: u64) {
+        self.tick_counter += 1;
+        let tick = self.tick_counter;
+        self.idle = true;
+        self.cpu_yield(t, tick);
+    }
+
+    #[inline]
+    fn cpu_yield(&mut self, t: u64, tick: u64) {
+        let t = if t < 1 {
+            0
+        } else {
+            t
+        };
+        self.add_task(t as usize, (|store: &Weak<Store<Emulator>>, tick: u64| {
+            store.cpu_mut().map(|cpu| {
+                cpu.yield_callback(tick);
+            });
+        }, tick));
+    }
+
+    #[inline]
+    fn yield_callback(&mut self, tick: u64) {
+        if tick == self.tick_counter {
+            self.do_tick();
+        }
+    }
+
+    #[inline]
+    fn do_tick(&mut self) {
+        self.idle = false;
+        let t = self.main_run();
+        self.next_tick(t as u64);
+    }
+
     pub fn handle_irqs(&mut self) {
         if self.has_interrupt() {
-            //TODO:
+            self.pic_acknowledge();
+
         }
     }
 
@@ -524,7 +571,7 @@ impl CPU {
     }
 
     #[inline]
-    fn has_interrupt(&mut self) -> bool {
+    fn has_interrupt(&self) -> bool {
         (self.get_eflags_no_arith() & (FLAG_INTERRUPT as i32)) != 0
     }
 
@@ -538,6 +585,19 @@ impl CPU {
         self.emulator_mut().map_or(0f64, |e| e.microtick())
     }
 
+    #[inline]
+    pub fn hlt_op(&mut self) {
+        if !self.has_interrupt() {
+            self.store.bus_mut().map(|bus| {
+                bus.send("pu-event-halt", crate::bus::BusData::None);
+            });
+        }
+        self.store_mut()
+            .map(|store| self.iomap.in_hlt_io.write(store, 0, 1));
+        self.hlt_loop();
+    }
+
+    #[inline]
     fn hlt_loop(&mut self) -> i32 {
         if self.has_interrupt() {
             let s = self.run_hardware_timers(self.microtick());
@@ -548,16 +608,19 @@ impl CPU {
         }
     }
 
+    #[inline]
     fn run_hardware_timers(&self, now: f64) -> i32 {
         //TODO:
         100
     }
 
+    #[inline]
     fn get_eflags_no_arith(&self) -> i32 {
         self.store_mut()
             .map_or(0, |store| self.vm_opers.get_eflags_no_arith(store))
     }
 
+    #[inline]
     fn do_many_cycles(&mut self) {
         self.do_many_cycles_native();
         //TODO:
@@ -572,7 +635,6 @@ impl CPU {
                 return t;
             }
         }
-        while true {
         let start = self.microtick();
         let mut now = start;
         while now - start < TIME_PER_FRAME as _ {
@@ -584,8 +646,23 @@ impl CPU {
                 return t;
             }
         }
-        }
         return 0;
+    }
+
+    #[inline]
+    fn add_task(&mut self, t: usize, task: TaskFn) {
+        self.tasks.add(t, task);
+    }
+
+    #[inline]
+    pub fn tasks_trigger(&mut self) {
+        let tasks = match self.tasks.tick() {
+            Poll::Ready(v) => v,
+            Poll::Pending => return,
+        };
+        tasks.iter().for_each(|task| {
+            (task.0)(&self.store, task.1);
+        });
     }
 
     pub(crate) fn fill_cmos(&mut self) {

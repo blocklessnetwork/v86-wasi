@@ -2,7 +2,9 @@ use lazy_static::lazy_static;
 use std::{collections::HashMap, marker::PhantomData, ops::Add, rc::Weak};
 use wasmtime::{AsContext, AsContextMut, Memory, Store};
 
-use crate::{Dev, Emulator, EmulatorTrait, LOG_ALL_IO, MMAP_BLOCK_BITS, MMAP_BLOCK_SIZE, log::Module};
+use crate::{Dev, Emulator, EmulatorTrait, MMAP_BLOCK_BITS, MMAP_BLOCK_SIZE, log::Module};
+
+const LOG_ALL_IO: bool = false;
 
 pub(crate) trait MemAccessTrait<T> {
     fn read(&self, store: impl AsContext, idx: u32) -> T;
@@ -141,30 +143,42 @@ pub(crate) struct IO {
 
 impl IO {
     pub fn empty_read8(_: &Dev, p: u32) -> u8 {
-        dbg_log!(Module::IO,"empty_read8: {}", p);
+        if LOG_ALL_IO {
+            dbg_log!(Module::IO,"empty_read8: {}", p);
+        }
         0xFF
     }
 
     pub fn empty_read16(_: &Dev, p: u32) -> u16 {
-        dbg_log!(Module::IO, "empty_read16: {}", p);
+        if LOG_ALL_IO {
+            dbg_log!(Module::IO, "empty_read16: {}", p);
+        }
         0xFFFF
     }
 
     pub fn empty_read32(_: &Dev, p: u32) -> u32 {
-        dbg_log!(Module::IO, "empty_read32: {}", p);
+        if LOG_ALL_IO {
+            dbg_log!(Module::IO, "empty_read32: {}", p);
+        }
         0xFFFF_FFFF
     }
 
     pub fn empty_write8(_: &Dev, p: u32, _: u8) {
-        dbg_log!(Module::IO, "empty_write8: {}", p);
+        if LOG_ALL_IO {
+            dbg_log!(Module::IO, "empty_write8: {}", p);
+        }
     }
 
     pub fn empty_write16(_: &Dev, p: u32, _: u16) {
-        dbg_log!(Module::IO, "empty_write16: {}", p);
+        if LOG_ALL_IO {
+            dbg_log!(Module::IO, "empty_write16: {}", p);
+        }
     }
 
     pub fn empty_write32(_: &Dev, p: u32, _: u32) {
-        dbg_log!(Module::IO, "empty_write32: {}", p);
+        if LOG_ALL_IO {
+            dbg_log!(Module::IO, "empty_write32: {}", p);
+        }
     }
 
     pub(crate) fn default_iops() -> IOps {
