@@ -18,7 +18,7 @@ use crate::{
     pci::PCI,
     pic::PIC,
     rtc::RTC,
-    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, vga::VGAScreen, log::Module, timewheel,
+    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, vga::VGAScreen, log::Module, timewheel, uart::UART,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -275,6 +275,7 @@ pub struct CPU {
     pub(crate) dma: DMA,
     pub(crate) pic: PIC,
     pub(crate) pci: PCI,
+    pub(crate) uart0: UART,
     pub(crate) vga: VGAScreen,
     tasks: TimeWheel<TaskFn>,
 }
@@ -296,9 +297,11 @@ impl CPU {
         let bus = BUS::new(store.clone());
         let vga_mem_size = store.setting().vga_memory_size;
         let vga = VGAScreen::new(store.clone(), vga_mem_size);
+        let uart0 = UART::new(store.clone(), 0x3F8);
         Self {
             rtc,
             vga,
+            uart0,
             memory,
             idle: true,
             a20_byte: 0,
@@ -460,6 +463,27 @@ impl CPU {
         self.store_mut().map(|store| {
             self.iomap.mem8_write_slice(store, offset, &bios);
         });
+        self.store.emulator_mut().set_bios(bios);
+        self.io.mmap_register(
+            0xFEB00000, 
+            0x100000,
+            |dev: &Dev, mut addr: u32| {
+                let mut addr: usize = addr as usize;
+                dev.bios().map_or(0, |b| {
+                    addr = (addr - 0xFEB00000) | 0;
+                    if addr  < b.len()  {
+                        b[addr]
+                    } else {
+                        0
+                    }
+                })
+            }, 
+            |dev: &Dev, addr: u32, v: u8| {
+                assert!(false, "Unexpected write to VGA rom");
+            }, 
+            IO::empty_read32,
+            IO::empty_write32, 
+        );
         #[cfg(feature = "check_bios")]
         self.check_bios(&bios, offset);
     }
@@ -484,6 +508,7 @@ impl CPU {
         self.create_memory(memory_size);
         self.debug.init();
         self.init_io();
+        self.uart0.init();
         self.dma.init();
         self.pic.init();
         self.pci.init();

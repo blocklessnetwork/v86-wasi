@@ -13,6 +13,7 @@ use io::IO;
 use pci::PCI;
 use pic::PIC;
 use rtc::RTC;
+use uart::UART;
 use vga::VGAScreen;
 use wasmtime::*;
 mod bus;
@@ -28,6 +29,7 @@ mod mem;
 mod pci;
 mod pic;
 mod rtc;
+mod uart;
 mod setting;
 mod vga;
 pub use consts::*;
@@ -104,20 +106,40 @@ trait EmulatorTrait {
     fn setting(&self) -> &Setting;
     fn vga(&self) -> Option<&VGAScreen>;
     fn vga_mut(&self) -> Option<&mut VGAScreen>;
+    fn uart0_mut(&self) -> Option<&mut UART>;
+    fn uart0(&self) -> Option<&UART>;
 }
 
 impl EmulatorTrait for Weak<Store<Emulator>> {
 
     #[inline]
-    fn vga(&self) -> Option<&VGAScreen> {
-        self.cpu().map(|cpu| &cpu.vga)
+    fn cpu_mut(&self) -> Option<&mut CPU> {
+        let emu = self.emulator_mut();
+        emu.cpu_mut()
     }
 
     #[inline]
-    fn vga_mut(&self) -> Option<&mut VGAScreen> {
-        self.cpu_mut().map(|cpu| &mut cpu.vga)
+    fn cpu(&self) -> Option<&CPU> {
+        let emu = self.emulator();
+        emu.cpu()
     }
     
+    #[inline]
+    fn rtc_mut(&self) -> Option<&mut RTC> {
+        let emu = self.emulator();
+        emu.cpu_mut().map(|cpu| &mut cpu.rtc)
+    }
+
+    #[inline]
+    fn io_mut(&self) -> Option<&mut IO> {
+        self.emulator_mut().io_mut()
+    }
+
+    #[inline]
+    fn dma_mut(&self) -> Option<&mut DMA> {
+        self.emulator_mut().dma_mut()
+    }
+
     #[inline]
     fn pic_mut(&self) -> Option<&mut PIC> {
         self.emulator_mut().pic_mut()
@@ -129,8 +151,8 @@ impl EmulatorTrait for Weak<Store<Emulator>> {
     }
 
     #[inline]
-    fn pci_mut(&self) -> Option<&mut PCI> {
-        self.emulator_mut().pci_mut()
+    fn io(&self) -> Option<&IO> {
+        self.emulator().io()
     }
 
     #[inline]
@@ -144,20 +166,23 @@ impl EmulatorTrait for Weak<Store<Emulator>> {
     }
 
     #[inline]
+    fn pci_mut(&self) -> Option<&mut PCI> {
+        self.emulator_mut().pci_mut()
+    }
+
+    #[inline]
     fn pci(&self) -> Option<&PCI> {
         self.emulator().pci()
     }
 
     #[inline]
-    fn cpu_mut(&self) -> Option<&mut CPU> {
-        let emu = self.emulator_mut();
-        emu.cpu_mut()
+    fn emulator(&self) -> &Emulator {
+        unsafe { (*(self.as_ptr() as *mut Store<_>)).data() }
     }
 
     #[inline]
-    fn cpu(&self) -> Option<&CPU> {
-        let emu = self.emulator();
-        emu.cpu()
+    fn emulator_mut(&self) -> &mut Emulator {
+        unsafe { (*(self.as_ptr() as *mut Store<_>)).data_mut() }
     }
 
     #[inline]
@@ -167,34 +192,23 @@ impl EmulatorTrait for Weak<Store<Emulator>> {
     }
 
     #[inline]
-    fn io_mut(&self) -> Option<&mut IO> {
-        self.emulator_mut().io_mut()
+    fn vga(&self) -> Option<&VGAScreen> {
+        self.cpu().map(|cpu| &cpu.vga)
     }
 
     #[inline]
-    fn io(&self) -> Option<&IO> {
-        self.emulator().io()
+    fn vga_mut(&self) -> Option<&mut VGAScreen> {
+        self.cpu_mut().map(|cpu| &mut cpu.vga)
     }
 
     #[inline]
-    fn dma_mut(&self) -> Option<&mut DMA> {
-        self.emulator_mut().dma_mut()
+    fn uart0_mut(&self) -> Option<&mut UART> {
+        self.emulator_mut().uart0_mut()
     }
 
     #[inline]
-    fn emulator_mut(&self) -> &mut Emulator {
-        unsafe { (*(self.as_ptr() as *mut Store<_>)).data_mut() }
-    }
-
-    #[inline]
-    fn emulator(&self) -> &Emulator {
-        unsafe { (*(self.as_ptr() as *mut Store<_>)).data() }
-    }
-
-    #[inline]
-    fn rtc_mut(&self) -> Option<&mut RTC> {
-        let emu = self.emulator();
-        emu.cpu_mut().map(|cpu| &mut cpu.rtc)
+    fn uart0(&self) -> Option<&UART> {
+        self.emulator().uart0()
     }
 }
 

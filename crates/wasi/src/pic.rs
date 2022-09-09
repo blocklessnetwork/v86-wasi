@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 use crate::{Dev, Emulator, EmulatorTrait, log::Module};
 use std::rc::Weak;
 use wasmtime::Store;

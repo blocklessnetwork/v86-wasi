@@ -4,7 +4,7 @@ use wasmtime::Store;
 
 use crate::{
     bus::BUS, debug::Debug, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Emulator,
-    EmulatorTrait, CPU, vga::VGAScreen,
+    EmulatorTrait, CPU, vga::VGAScreen, uart::UART,
 };
 
 #[derive(Clone)]
@@ -100,9 +100,33 @@ impl Dev {
     }
 
     #[inline]
+    pub(crate) fn uart0(self: &Dev) -> Option<&UART> {
+        match *self {
+            Dev::Emulator(ref e) => e.uart0(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn uart0_mut(self: &Dev) -> Option<&mut UART> {
+        match *self {
+            Dev::Emulator(ref e) => e.uart0_mut(),
+            _ => None,
+        }
+    }
+
+    #[inline]
     pub(crate) fn pci(self: &Dev) -> Option<&PCI> {
         match *self {
             Dev::Emulator(ref e) => e.pci(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn bios(self: &Dev) -> Option<&[u8]> {
+        match *self {
+            Dev::Emulator(ref e) => e.emulator().bios().map(|b| &b[..]),
             _ => None,
         }
     }

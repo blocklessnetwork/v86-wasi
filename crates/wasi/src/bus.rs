@@ -6,7 +6,9 @@ use crate::{Emulator, EmulatorTrait};
 
 pub(crate) enum BusData {
     None,
+    String(String),
     Bool(bool),
+    U8(u8),
     U8Tuple(u8, u8),
     ScreenSetSizeGraphical(u32, u32, u32, u32, u16),
     ScreenPutChar(u8, u8, u8, i32, i32)
@@ -15,7 +17,7 @@ pub(crate) enum BusData {
 pub(crate) type BusCall = fn(store: &Weak<Store<Emulator>>, data: &BusData);
 
 struct BusController {
-    listeners: HashMap<&'static str, Vec<*const ()>>,
+    listeners: HashMap<String, Vec<*const ()>>,
     store: Weak<Store<Emulator>>,
 }
 
@@ -27,19 +29,19 @@ impl BusController {
         }
     }
 
-    fn register(&mut self, name: &'static str, call: BusCall) {
+    fn register(&mut self, name: &str, call: BusCall) {
         let call = call as *const ();
         match self.listeners.get_mut(name) {
             Some(q) => {
                 q.push(call);
             }
             None => {
-                self.listeners.insert(name, vec![call]);
+                self.listeners.insert(String::from(name), vec![call]);
             }
         };
     }
 
-    fn unregister(&mut self, name: &'static str, call: BusCall) {
+    fn unregister(&mut self, name: &str, call: BusCall) {
         let call = call as *const ();
         match self.listeners.get_mut(name) {
             Some(q) => match q.binary_search(&call) {
@@ -52,7 +54,7 @@ impl BusController {
         };
     }
 
-    pub fn send(&mut self, name: &'static str, data: BusData) {
+    pub fn send(&mut self, name: &str, data: BusData) {
         match self.listeners.get(name) {
             Some(v) => {
                 v.iter().for_each(|call| {
@@ -73,7 +75,12 @@ impl BUS {
     }
 
     #[inline]
-    pub fn send(&mut self, name: &'static str, data: BusData) {
+    pub fn register(&mut self, name: &str, call: BusCall) {
+        self.0.register(name, call);
+    }
+
+    #[inline]
+    pub fn send(&mut self, name: &str, data: BusData) {
         self.0.send(name, data);
     }
 }

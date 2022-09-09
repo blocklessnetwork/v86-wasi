@@ -6,13 +6,14 @@ use std::{
 
 use wasmtime::{Instance, Store};
 
-use crate::{bus::BUS, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Setting, CPU, vga::VGAScreen};
+use crate::{bus::BUS, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Setting, CPU, vga::VGAScreen, uart::UART};
 
 pub(crate) struct InnerEmulator {
     start_time: time::Instant,
     setting: Setting,
     cpu: Option<CPU>,
     bus: Option<BUS>,
+    bios: Option<Vec<u8>>,
 }
 
 impl InnerEmulator {
@@ -22,6 +23,7 @@ impl InnerEmulator {
             setting,
             cpu: None,
             bus: None,
+            bios: None,
         }
     }
 
@@ -69,6 +71,26 @@ impl Emulator {
     #[inline]
     pub(crate) fn vga_mut(&self) -> Option<&mut VGAScreen> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.vga)
+    }
+
+    #[inline]
+    pub(crate) fn uart0_mut(&self) -> Option<&mut UART> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.uart0)
+    }
+
+    #[inline]
+    pub(crate) fn uart0(&self) -> Option<&UART> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &cpu.uart0)
+    }
+
+    #[inline]
+    pub fn bios(&self) -> Option<&Vec<u8>> {
+        self.inner_mut().bios.as_ref()
+    }
+
+    #[inline]
+    pub fn set_bios(&self, b: Vec<u8>) {
+        self.inner_mut().bios = Some(b);
     }
 
     #[inline]

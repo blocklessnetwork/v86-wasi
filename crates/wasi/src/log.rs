@@ -2,7 +2,9 @@ use std::fmt::{Display, Write};
 
 pub enum Module {
     EMPTY,
+    BIOS,
     DEBUG,
+    SERIAL,
     CPU,
     PIC,
     PCI,
@@ -24,6 +26,8 @@ impl Display for Module {
             Self::RTC => f.write_str("RTC"),
             Self::DMA => f.write_str("DMA"),
             Self::DEBUG => f.write_str("DEBUG"),
+            Self::BIOS => f.write_str("BIOS"),
+            Self::SERIAL => f.write_str("SERIAL"),
         }
     }
 }

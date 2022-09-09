@@ -28,9 +28,10 @@ impl Debug {
                 .register_write8(0x402, dev, |dev: &Dev, _port: u32, v: u8| {
                     dev.debug_mut().map(|debug| {
                         if v == b'\n' {
-                            dbg_log!(Module::DEBUG, "{}", unsafe {
-                                std::str::from_utf8_unchecked(&debug.bios_dbg)
-                            });
+                            dbg_log!(
+                                Module::BIOS, "{}", 
+                                unsafe {std::str::from_utf8_unchecked(&debug.bios_dbg)}
+                            );
                             debug.bios_dbg.clear();
                         } else {
                             debug.bios_dbg.push(v);
