@@ -87,7 +87,7 @@ pub(crate) struct VGAScreen {
     svga_height: u16,
     svga_enabled: bool,
     svga_bpp: u16,
-    svga_bank_offset: u16,
+    svga_bank_offset: u32,
     svga_offset: u32,
     dispi_enable_value: u16,
     pci_space: &'static [u8],
@@ -600,6 +600,40 @@ impl VGAScreen {
                     })
                 }
             );
+
+            io.register_write(0x1CE, 
+                Dev::Emulator(self.store.clone()),
+                IO::empty_write8,
+                |dev: &Dev, _addr: u32, v: u16| {
+                    dev.vga_mut().map(|vga| {
+                        vga.port1CE_write(v);
+                    });
+                },
+                IO::empty_write32,
+            );
+
+            io.register_write(0x1CF, 
+                Dev::Emulator(self.store.clone()),
+                IO::empty_write8,
+                |dev: &Dev, _addr: u32, v: u16| {
+                    dev.vga_mut().map(|vga| {
+                        vga.port1CF_write(v);
+                    });
+                },
+                IO::empty_write32,
+            );
+
+            io.register_read(0x1CF, 
+                Dev::Emulator(self.store.clone()),
+                IO::empty_read8,
+                |dev: &Dev, _addr: u32| {
+                    dev.vga_mut().map_or(0, |vga| {
+                        vga.port1CF_read()
+                    })
+                },
+                IO::empty_read32,
+            );
+            
 
             io.mmap_register(
                 0xA0000, 
@@ -1988,7 +2022,7 @@ impl VGAScreen {
                 self.dispi_enable_value = value;
             }
             5 => {
-                self.svga_bank_offset = (value) << 16;
+                self.svga_bank_offset = (value as u32) << 16;
             }
             9 => {
                 // y offset
@@ -2087,7 +2121,7 @@ impl VGAScreen {
             }
             4 => self.dispi_enable_value as u16,
 
-            5 => self.svga_bank_offset >> 16,
+            5 => (self.svga_bank_offset >> 16) as u16,
             6 => {
                 // virtual width
                 if self.screen_width > 0 {
