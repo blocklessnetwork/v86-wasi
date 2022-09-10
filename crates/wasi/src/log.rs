@@ -14,6 +14,24 @@ pub enum Module {
     IO,
 }
 
+impl Module {
+    pub(crate) fn display(&self) -> bool {
+        match *self {
+            Self::EMPTY => true,
+            Self::CPU => true,
+            Self::PIC => true,
+            Self::PCI => true,
+            Self::IO => true,
+            Self::VGA => false,
+            Self::RTC => true,
+            Self::DMA => true,
+            Self::DEBUG => true,
+            Self::BIOS => true,
+            Self::SERIAL => true,
+        }
+    }
+}
+
 impl Display for Module {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
@@ -34,12 +52,16 @@ impl Display for Module {
 
 macro_rules! dbg_log {
     ($m: expr, $fmt:expr, $($arg:tt)*) => {
-        let values = format!($fmt, $($arg)*);
-        println!("[{:5}] {}", $m, &values);
+        if $m.display() {
+            let values = format!($fmt, $($arg)*);
+            println!("[{:5}] {}", $m, &values);
+        }
     };
 
     ($m: expr, $fmt:expr) => {
-        let values = format!($fmt);
-        println!("[{:5}] {}", $m, &values);
+        if $m.display() {
+            let values = format!($fmt);
+            println!("[{:5}] {}", $m, &values);
+        }
     };
 }

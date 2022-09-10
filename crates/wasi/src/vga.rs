@@ -98,7 +98,7 @@ pub(crate) struct VGAScreen {
     name: &'static str,
     stats: VGAStats,
     index_crtc: u8,
-    dac_color_index_write: u8,
+    dac_color_index_write: u32,
     dac_color_index_read: u8,
     dac_state: u8,
     dac_map: Vec<u8>,
@@ -668,7 +668,7 @@ impl VGAScreen {
         let index = (self.dac_color_index_write / 3 | 0) as usize;
         let offset = self.dac_color_index_write % 3;
         let mut color = self.vga256_palette[index];
-        let color_byte = (color_byte & 0x3F) * 255 / 63 | 0;
+        let color_byte: i32 = ((color_byte as i32) & 0x3F) * 255 / 63 | 0;
         if offset == 0 {
             color = color & !0xFF0000 | (color_byte as i32) << 16;
         } else if offset == 1 {
@@ -688,12 +688,12 @@ impl VGAScreen {
 
     #[inline]
     fn port3C8_read(&self) -> u8 {
-        self.dac_color_index_write / 3 & 0xFF
+        (self.dac_color_index_write / 3 & 0xFF) as u8
     }
 
     #[inline]
     fn port3C8_write(&mut self, index: u8) {
-        self.dac_color_index_write = index * 3;
+        self.dac_color_index_write = (index as u32) * 3;
         self.dac_state |= 0x3;
     }
 

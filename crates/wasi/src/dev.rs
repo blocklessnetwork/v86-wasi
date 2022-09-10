@@ -132,6 +132,14 @@ impl Dev {
     }
 
     #[inline]
+    pub(crate) fn vga_bios(self: &Dev) -> Option<&[u8]> {
+        match *self {
+            Dev::Emulator(ref e) => e.emulator().vga_bios().map(|b| &b[..]),
+            _ => None,
+        }
+    }
+
+    #[inline]
     pub(crate) fn vga_mut(self: &Dev) -> Option<&mut VGAScreen> {
         match *self {
             Dev::Emulator(ref e) => e.vga_mut(),

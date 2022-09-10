@@ -14,6 +14,7 @@ pub(crate) struct InnerEmulator {
     cpu: Option<CPU>,
     bus: Option<BUS>,
     bios: Option<Vec<u8>>,
+    vga_bios: Option<Vec<u8>>,
 }
 
 impl InnerEmulator {
@@ -24,6 +25,7 @@ impl InnerEmulator {
             cpu: None,
             bus: None,
             bios: None,
+            vga_bios: None,
         }
     }
 
@@ -91,6 +93,16 @@ impl Emulator {
     #[inline]
     pub fn set_bios(&self, b: Vec<u8>) {
         self.inner_mut().bios = Some(b);
+    }
+
+    #[inline]
+    pub fn vga_bios(&self) -> Option<&Vec<u8>> {
+        self.inner_mut().vga_bios.as_ref()
+    }
+
+    #[inline]
+    pub fn set_vga_bios(&self, b: Vec<u8>) {
+        self.inner_mut().vga_bios = Some(b);
     }
 
     #[inline]

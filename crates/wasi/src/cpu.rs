@@ -73,10 +73,25 @@ struct IOMap {
 }
 
 impl IOMap {
+    #[inline]
     fn mem8_write_slice(&mut self, store: impl AsContextMut, offset: usize, bs: &[u8]) {
         self.mem8
             .as_mut()
             .map(|mem8| mem8.write_slice(store, offset, bs));
+    }
+
+    #[inline]
+    fn mem8_read(&mut self, store: impl AsContextMut, idx: u32) -> u8 {
+        self.mem8
+            .as_ref()
+            .map_or(0, |mem8| mem8.read(store, idx))
+    }
+
+    #[inline]
+    fn mem8_write(&mut self, store: impl AsContextMut, idx: u32, val: u8) {
+        self.mem8
+            .as_mut()
+            .map(|mem8| mem8.write(store, idx, val));
     }
 
     fn new(memory: Memory) -> Self {
@@ -460,29 +475,62 @@ impl CPU {
         let bios = bios.expect("Warning: No BIOS");
         let offset = 0x100000 - bios.len();
         dbg_log!(Module::CPU, "load bois to: {}", offset);
+        // load bios
         self.store_mut().map(|store| {
             self.iomap.mem8_write_slice(store, offset, &bios);
         });
         self.store.emulator_mut().set_bios(bios);
+        // load vga bios
+        let vga_bios = self
+            .emulator_mut()
+            .map(|emu| emu.setting().load_vga_bios_file())
+            .flatten();
+        if vga_bios.is_some() {
+
+            let vga_bios = vga_bios.unwrap();
+            self.store_mut().map(|store| {
+                // older versions of seabios
+                self.iomap.mem8_write_slice(store, 0xC0000, &vga_bios);
+            });
+            self.store.emulator_mut().set_vga_bios(vga_bios);
+            // newer versions of seabios 
+            self.io.mmap_register(
+                0xFEB00000, 
+                0x100000,
+                |dev: &Dev, addr: u32| {
+                    let mut addr: usize = addr as usize;
+                    dev.vga_bios().map_or(0, |b| {
+                        addr = (addr - 0xFEB00000) | 0;
+                        if addr  < b.len()  {
+                            b[addr]
+                        } else {
+                            0
+                        }
+                    })
+                },
+                |dev: &Dev, addr: u32, v: u8| {
+                    assert!(false, "Unexpected write to VGA rom");
+                }, 
+                IO::empty_read32,
+                IO::empty_write32, 
+            );
+        }
+        // seabios expects the bios to be mapped to 0xFFF00000 also
         self.io.mmap_register(
-            0xFEB00000, 
-            0x100000,
-            |dev: &Dev, mut addr: u32| {
-                let mut addr: usize = addr as usize;
-                dev.bios().map_or(0, |b| {
-                    addr = (addr - 0xFEB00000) | 0;
-                    if addr  < b.len()  {
-                        b[addr]
-                    } else {
-                        0
-                    }
+            0xFFF00000, 
+            0x100000, 
+            |dev: &Dev, addr: u32| -> u8 {
+                dev.cpu_mut().map_or(0, |cpu| {
+                    cpu.store_mut().map_or(0, |s| cpu.iomap.mem8_read(s, addr))
                 })
-            }, 
+            },
             |dev: &Dev, addr: u32, v: u8| {
-                assert!(false, "Unexpected write to VGA rom");
+                dev.cpu_mut().map(|cpu| {
+                    cpu.store_mut().map(|s| cpu.iomap.mem8_write(s, addr, v));
+                });
             }, 
-            IO::empty_read32,
-            IO::empty_write32, 
+            IO::empty_read32, 
+            IO::empty_write32,
         );
         #[cfg(feature = "check_bios")]
         self.check_bios(&bios, offset);

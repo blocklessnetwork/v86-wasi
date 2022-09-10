@@ -52,6 +52,7 @@ macro_rules! impl_mem_access {
                 &mut self.mem
             }
 
+            #[inline(always)]
             fn read(&self, store: impl AsContext, idx: u32) -> $t {
                 let mut d = [0u8; $s];
                 self.mem
@@ -61,6 +62,7 @@ macro_rules! impl_mem_access {
                 return rs;
             }
 
+            #[inline(always)]
             fn write(&mut self, store: impl AsContextMut, idx: u32, v: $t) {
                 let d = v.to_le_bytes();
                 self.mem
@@ -354,12 +356,12 @@ impl IO {
         dbg_log!(Module::IO, "mmap_register addr={:#X}  size={:#X}", addr >> 0, size);
         assert!((addr & (MMAP_BLOCK_SIZE as u32 - 1)) == 0);
         assert!(size > 0 && (size & MMAP_BLOCK_SIZE - 1) == 0);
-        let r32 = if r32 as *const () == Self::empty_read8 as *const () {
+        let r32 = if r32 as *const () == Self::empty_read32 as *const () {
             Self::mmap_read32_shim
         } else {
             r32
         };
-
+        
         let w32 = if w32 as *const () == Self::empty_write32 as *const () {
             Self::mmap_write32_shim
         } else {

@@ -68,19 +68,27 @@ impl UART {
     pub fn init(&mut self) {
         self.store.bus_mut().map(|bus| {
             bus.register(&format!("serial{}-input", self.com), |store: &Weak<Store<Emulator>>, data: &BusData|{
-                //TODOstore.ua
+                match data {
+                    BusData::U8(data) => {
+                        store.uart0_mut().map(|uart| {
+                            uart.data_received(*data);
+                        });
+                    }
+                    _ => {}
+                };
             });
         });
         self.store.io_mut().map(|io| {
+            
             io.register_write(
                 self.port,
                 Dev::Emulator(self.store.clone()), 
-                |dev: &Dev, addr: u32, v: u8| {
+                |dev: &Dev, _addr: u32, v: u8| {
                     dev.uart0_mut().map(|uart| {
                         uart.write_data(v);
                     });
                 }, 
-                |dev: &Dev, addr: u32, v: u16| {
+                |dev: &Dev, _addr: u32, v: u16| {
                     dev.uart0_mut().map(|uart| {
                         uart.write_data((v & 0xFF) as u8);
                         uart.write_data((v >> 8) as u8);
@@ -88,10 +96,11 @@ impl UART {
                 },
                 IO::empty_write32
             );
+
             io.register_write8(
                 self.port | 1,
                 Dev::Emulator(self.store.clone()), 
-                |dev: &Dev, addr: u32, out_byte: u8| {
+                |dev: &Dev, _addr: u32, out_byte: u8| {
                     dev.uart0_mut().map(|uart| {
                         if uart.line_control & DLAB > 0 {
                             uart.baud_rate = uart.baud_rate & 0xFF | (out_byte as u16) << 8;
@@ -326,6 +335,15 @@ impl UART {
                 cpu.device_raise_irq(self.irq);
             });
         }
+    }
+
+    #[inline]
+    fn data_received(&mut self, data: u8) {
+        dbg_log!(Module::SERIAL, "input: {:#X}", data);
+        self.input.push(data);
+
+        self.lsr |= UART_LSR_DATA_READY;
+        self.throw_interrupt(UART_IIR_CTI);
     }
 
     #[inline]

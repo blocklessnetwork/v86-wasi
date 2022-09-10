@@ -22,22 +22,24 @@ impl Debug {
             return;
         }
 
-        self.store.cpu_mut().map(|cpu| {
+        self.store.io_mut().map(|io| {
             let dev = Dev::Emulator(self.store.clone());
-            cpu.io
-                .register_write8(0x402, dev, |dev: &Dev, _port: u32, v: u8| {
-                    dev.debug_mut().map(|debug| {
-                        if v == b'\n' {
-                            dbg_log!(
-                                Module::BIOS, "{}", 
-                                unsafe {std::str::from_utf8_unchecked(&debug.bios_dbg)}
-                            );
-                            debug.bios_dbg.clear();
-                        } else {
-                            debug.bios_dbg.push(v);
-                        }
-                    });
+            let dev1 = Dev::Emulator(self.store.clone());
+            let handle = |dev: &Dev, _port: u32, v: u8| {
+                dev.debug_mut().map(|debug| {
+                    if v == b'\n' {
+                        dbg_log!(
+                            Module::BIOS, "{}", 
+                            unsafe {std::str::from_utf8_unchecked(&debug.bios_dbg)}
+                        );
+                        debug.bios_dbg.clear();
+                    } else {
+                        debug.bios_dbg.push(v);
+                    }
                 });
+            };
+            io.register_write8(0x402, dev, handle);
+            io.register_write8(0x500, dev1, handle);
         });
     }
 }
