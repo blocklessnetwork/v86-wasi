@@ -2,10 +2,10 @@ use std::rc::Weak;
 
 use wasmtime::Store;
 
-use crate::{Dev, Emulator, EmulatorTrait, log::Module};
+use crate::{Dev, Emulator, EmulatorTrait, log::Module, StoreT};
 
 pub(crate) struct DMA {
-    store: Weak<Store<Emulator>>,
+    store: StoreT,
     channel_page: Vec<u8>,
     channel_pagehi: Vec<u8>,
     channel_addr: Vec<u16>,
@@ -19,7 +19,7 @@ pub(crate) struct DMA {
 }
 
 impl DMA {
-    pub(crate) fn new(store: Weak<Store<Emulator>>) -> Self {
+    pub(crate) fn new(store: StoreT) -> Self {
         Self {
             store,
             channel_page: vec![0; 8],

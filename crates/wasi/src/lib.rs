@@ -6,12 +6,13 @@ use std::slice;
 
 const ALL_DEBUG: bool = true;
 
-
+type StoreT = Weak<Store<Emulator>>;
 use bus::BUS;
 use dma::DMA;
 use io::IO;
 use pci::PCI;
 use pic::PIC;
+use ps2::PS2;
 use rtc::RTC;
 use uart::UART;
 use vga::VGAScreen;
@@ -24,6 +25,7 @@ mod dev;
 mod dma;
 mod emulator;
 mod io;
+mod ps2;
 mod timewheel;
 mod mem;
 mod pci;
@@ -108,9 +110,12 @@ trait EmulatorTrait {
     fn vga_mut(&self) -> Option<&mut VGAScreen>;
     fn uart0_mut(&self) -> Option<&mut UART>;
     fn uart0(&self) -> Option<&UART>;
+
+    fn ps2_mut(&self) -> Option<&mut PS2>;
+    fn ps2(&self) -> Option<&PS2>;
 }
 
-impl EmulatorTrait for Weak<Store<Emulator>> {
+impl EmulatorTrait for StoreT {
 
     #[inline]
     fn cpu_mut(&self) -> Option<&mut CPU> {
@@ -209,6 +214,16 @@ impl EmulatorTrait for Weak<Store<Emulator>> {
     #[inline]
     fn uart0(&self) -> Option<&UART> {
         self.emulator().uart0()
+    }
+
+    #[inline]
+    fn ps2_mut(&self) -> Option<&mut PS2> {
+        self.emulator_mut().ps2_mut()
+    }
+
+    #[inline]
+    fn ps2(&self) -> Option<&PS2> {
+        self.emulator().ps2()
     }
 }
 

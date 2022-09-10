@@ -11,6 +11,7 @@ pub enum Module {
     DMA,
     VGA,
     RTC,
+    PS2,
     IO,
 }
 
@@ -28,6 +29,7 @@ impl Module {
             Self::DEBUG => true,
             Self::BIOS => true,
             Self::SERIAL => true,
+            Self::PS2 => true,
         }
     }
 }
@@ -46,6 +48,7 @@ impl Display for Module {
             Self::DEBUG => f.write_str("DEBUG"),
             Self::BIOS => f.write_str("BIOS"),
             Self::SERIAL => f.write_str("SERIAL"),
+            Self::PS2 => f.write_str("PS2"),
         }
     }
 }

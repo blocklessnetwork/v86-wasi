@@ -2,15 +2,15 @@ use std::rc::Weak;
 
 use wasmtime::Store;
 
-use crate::{Dev, Emulator, EmulatorTrait, ALL_DEBUG, log::Module};
+use crate::{Dev, Emulator, EmulatorTrait, ALL_DEBUG, log::Module, StoreT};
 
 pub(crate) struct Debug {
     bios_dbg: Vec<u8>,
-    store: Weak<Store<Emulator>>,
+    store: StoreT,
 }
 
 impl Debug {
-    pub fn new(store: Weak<Store<Emulator>>) -> Self {
+    pub fn new(store: StoreT) -> Self {
         Self {
             store,
             bios_dbg: Vec::new(),

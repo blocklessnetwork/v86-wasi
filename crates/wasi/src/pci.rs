@@ -1,7 +1,7 @@
 #![allow(unused)]
 use std::{mem, rc::Weak};
 use wasmtime::Store;
-use crate::{io::IOps, utils::*, Dev, Emulator, EmulatorTrait, IO, log::Module};
+use crate::{io::IOps, utils::*, Dev, Emulator, EmulatorTrait, IO, log::Module, StoreT};
 
 const PCI_CONFIG_ADDRESS: u32 = 0xCF8;
 
@@ -120,7 +120,7 @@ impl Default for Space {
 }
 
 pub(crate) struct PCI {
-    store: Weak<Store<Emulator>>,
+    store: StoreT,
     pci_addr: [u8; 4],
     pci_value: [u8; 4],
     pci_response: [u8; 4],
@@ -131,7 +131,7 @@ pub(crate) struct PCI {
 }
 
 impl PCI {
-    pub fn new(store: Weak<Store<Emulator>>) -> Self {
+    pub fn new(store: StoreT) -> Self {
         const INIT_DEV: Option<Box<dyn PCIDevice>> = None;
         const INIT_SPACE: Option<Space> = None;
         let devices = [INIT_DEV; 256];

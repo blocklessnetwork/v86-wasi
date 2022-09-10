@@ -3,7 +3,7 @@ use std::rc::Weak;
 use chrono::{Datelike, TimeZone, Timelike, Utc};
 use wasmtime::Store;
 
-use crate::{consts::*, Dev, Emulator, EmulatorTrait, CPU, log::Module};
+use crate::{consts::*, Dev, Emulator, EmulatorTrait, CPU, log::Module, StoreT};
 
 pub(crate) struct RTC {
     cmos_index: u8,
@@ -12,7 +12,7 @@ pub(crate) struct RTC {
     last_update: i64,
     next_interrupt: i64,
     next_interrupt_alarm: usize,
-    store: Weak<Store<Emulator>>,
+    store: StoreT,
     periodic_interrupt: bool,
     periodic_interrupt_time: f64,
     nmi_disabled: u8,
@@ -27,7 +27,7 @@ impl RTC {
         self.store.cpu_mut()
     }
 
-    pub fn new(store: Weak<Store<Emulator>>) -> Self {
+    pub fn new(store: StoreT) -> Self {
         let now = Utc::now().timestamp_millis();
         Self {
             store,

@@ -4,13 +4,13 @@ use wasmtime::Store;
 
 use crate::{
     bus::BUS, debug::Debug, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Emulator,
-    EmulatorTrait, CPU, vga::VGAScreen, uart::UART,
+    EmulatorTrait, CPU, vga::VGAScreen, uart::UART, StoreT,
 };
 
 #[derive(Clone)]
 pub enum Dev {
     Empty,
-    Emulator(Weak<Store<Emulator>>),
+    Emulator(StoreT),
 }
 
 impl Dev {

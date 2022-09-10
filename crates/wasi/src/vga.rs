@@ -4,7 +4,7 @@ use std::{rc::Weak, slice};
 
 use wasmtime::Store;
 
-use crate::{pci::{PCIBar, PCIDevice}, Emulator, EmulatorTrait, Dev, io::IO, log::Module, bus::BusData};
+use crate::{pci::{PCIBar, PCIDevice}, Emulator, EmulatorTrait, Dev, io::IO, log::Module, bus::BusData, StoreT};
 
 const VGA_BANK_SIZE: u32 = 64 * 1024;
 
@@ -54,7 +54,7 @@ struct VGAStats {
 }
 
 pub(crate) struct VGAScreen {
-    store: Weak<Store<Emulator>>,
+    store: StoreT,
     vga_memory_size: u32,
     cursor_address: u32,
     cursor_scanline_start: u8,
@@ -141,7 +141,7 @@ pub(crate) struct VGAScreen {
 }
 
 impl VGAScreen {
-    pub fn new(store: Weak<Store<Emulator>>, vga_memory_size: u32) -> Self {
+    pub fn new(store: StoreT, vga_memory_size: u32) -> Self {
         let cursor_address = 0;
         let cursor_scanline_start = 0xE;
         let cursor_scanline_end = 0xF;
@@ -2140,7 +2140,7 @@ impl VGAScreen {
     }
 }
 
-struct VGADev(Weak<Store<Emulator>>);
+struct VGADev(StoreT);
 
 impl PCIDevice for VGADev {
     #[inline]

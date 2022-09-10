@@ -6,7 +6,7 @@ use std::{
 
 use wasmtime::{Instance, Store};
 
-use crate::{bus::BUS, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Setting, CPU, vga::VGAScreen, uart::UART};
+use crate::{bus::BUS, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Setting, CPU, vga::VGAScreen, uart::UART, StoreT, ps2::PS2};
 
 pub(crate) struct InnerEmulator {
     start_time: time::Instant,
@@ -29,7 +29,7 @@ impl InnerEmulator {
         }
     }
 
-    fn init(&mut self, inst: Instance, store: Weak<Store<Emulator>>) {
+    fn init(&mut self, inst: Instance, store: StoreT) {
         self.bus = Some(BUS::new(store.clone()));
         self.cpu = Some(CPU::new(inst, store));
     }
@@ -65,7 +65,7 @@ impl Emulator {
         self.inner().microtick()
     }
 
-    pub fn start(&mut self, inst: Instance, store: Weak<Store<Emulator>>) {
+    pub fn start(&mut self, inst: Instance, store: StoreT) {
         self.inner_mut().init(inst, store);
         self.inner_mut().start();
     }
@@ -83,6 +83,16 @@ impl Emulator {
     #[inline]
     pub(crate) fn uart0(&self) -> Option<&UART> {
         self.inner_mut().cpu.as_mut().map(|cpu| &cpu.uart0)
+    }
+
+    #[inline]
+    pub(crate) fn ps2_mut(&self) -> Option<&mut PS2> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.ps2)
+    }
+
+    #[inline]
+    pub(crate) fn ps2(&self) -> Option<&PS2> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &cpu.ps2)
     }
 
     #[inline]

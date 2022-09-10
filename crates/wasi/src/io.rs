@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use std::{collections::HashMap, marker::PhantomData, ops::Add, rc::Weak};
 use wasmtime::{AsContext, AsContextMut, Memory, Store};
 
-use crate::{Dev, Emulator, EmulatorTrait, MMAP_BLOCK_BITS, MMAP_BLOCK_SIZE, log::Module};
+use crate::{Dev, Emulator, EmulatorTrait, MMAP_BLOCK_BITS, MMAP_BLOCK_SIZE, log::Module, StoreT};
 
 const LOG_ALL_IO: bool = false;
 
@@ -140,7 +140,7 @@ pub(crate) struct ConsIOps {
 pub(crate) struct IO {
     pub ports: Vec<IOps>,
     pub cons_ports: Vec<ConsIOps>,
-    store: Weak<Store<Emulator>>,
+    store: StoreT,
 }
 
 impl IO {
@@ -209,7 +209,7 @@ impl IO {
         }
     }
 
-    pub fn new(store: Weak<Store<Emulator>>) -> IO {
+    pub fn new(store: StoreT) -> IO {
         let mut p = Vec::new();
         for _ in 0..PORTS_SIZE {
             p.push(IO::default_iops());

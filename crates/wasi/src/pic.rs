@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-use crate::{Dev, Emulator, EmulatorTrait, log::Module};
+use crate::{Dev, Emulator, EmulatorTrait, log::Module, StoreT};
 use std::rc::Weak;
 use wasmtime::Store;
 
@@ -25,7 +25,7 @@ fn int_log2_byte(i: u8) -> i8 {
 }
 
 struct InnerPIC {
-    store: Weak<Store<Emulator>>,
+    store: StoreT,
     is_master: bool,
     irq_mask: u8,
     name: &'static str,
@@ -43,7 +43,7 @@ struct InnerPIC {
 }
 
 impl InnerPIC {
-    fn new(store: Weak<Store<Emulator>>, is_master: bool) -> Self {
+    fn new(store: StoreT, is_master: bool) -> Self {
         let name = if is_master { "master" } else { "slave" };
         Self {
             is_master,
@@ -454,6 +454,8 @@ impl InnerPIC {
         }
     }
 
+    
+
     fn set_slave_irq(&mut self, irq_number: u8) {
         assert!(irq_number >= 0 && irq_number < 8);
         let irq_mask = 1 << irq_number;
@@ -492,6 +494,50 @@ impl InnerPIC {
             if PIC_LOG_VERBOSE {
                 dbg_log!(Module::PIC, "master> set irq {}: already set!", irq_number);
             }
+        }
+    }
+
+    fn clear_master_irq(&mut self, irq_number: u8) {
+        assert!(irq_number >= 0 && irq_number < 16);
+        if PIC_LOG_VERBOSE {
+            dbg_log!(Module::PIC, "master> clear irq {}", irq_number);
+        }
+
+        if irq_number >= 8 {
+            self.store.pic_mut().map(|pic| {
+                pic.slave.clear_irq(irq_number - 8);
+            });
+            return;
+        }
+
+        let irq_mask = 1 << irq_number;
+        if self.irq_value & irq_mask > 0 {
+            self.irq_value &= !irq_mask;
+            self.irr &= !irq_mask;
+            self.check_irqs();
+        }
+    }
+
+    fn clear_slave_irq(&mut self, irq_number: u8) {
+        assert!(irq_number >= 0 && irq_number < 8);
+        if PIC_LOG_VERBOSE {
+            dbg_log!(Module::PIC, "slave > clear irq {}", irq_number);
+        }
+
+        let irq_mask = 1 << irq_number;
+        if self.irq_value & irq_mask > 0 {
+            self.irq_value &= !irq_mask;
+            self.irr &= !irq_mask;
+            self.check_irqs();
+        }
+    }
+
+    #[inline]
+    fn clear_irq(&mut self, irq_number: u8) {
+        if self.is_master {
+            self.clear_master_irq(irq_number);
+        } else {
+            self.clear_slave_irq(irq_number);
         }
     }
 
@@ -551,13 +597,13 @@ impl InnerPIC {
 }
 
 pub(crate) struct PIC {
-    store: Weak<Store<Emulator>>,
+    store: StoreT,
     master: InnerPIC,
     slave: InnerPIC,
 }
 
 impl PIC {
-    pub(crate) fn new(store: Weak<Store<Emulator>>) -> Self {
+    pub(crate) fn new(store: StoreT) -> Self {
         let master = InnerPIC::new(store.clone(), true);
         let slave = InnerPIC::new(store.clone(), false);
         Self {
@@ -575,6 +621,11 @@ impl PIC {
     #[inline]
     pub fn set_irq(&mut self, irq_number: u8) {
         self.master.set_irq(irq_number);
+    }
+
+    #[inline]
+    pub fn clear_irq(&mut self, irq_number: u8) {
+        self.master.clear_irq(irq_number);
     }
 
     #[inline]

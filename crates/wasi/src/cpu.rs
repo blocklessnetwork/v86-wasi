@@ -18,7 +18,7 @@ use crate::{
     pci::PCI,
     pic::PIC,
     rtc::RTC,
-    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, vga::VGAScreen, log::Module, timewheel, uart::UART,
+    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, vga::VGAScreen, log::Module, timewheel, uart::UART, StoreT, ps2::PS2,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -273,25 +273,26 @@ impl VMOpers {
     }
 }
 
-type TaskFn = (fn(store: &Weak<Store<Emulator>>, u64), u64);
+type TaskFn = (fn(store: &StoreT, u64), u64);
 
-pub struct CPU {
+pub(crate) struct CPU {
     memory: Memory,
-    store: Weak<Store<Emulator>>,
+    store: StoreT,
     iomap: IOMap,
-    pub(crate) rtc: RTC,
+    pub rtc: RTC,
     vm_opers: VMOpers,
-    pub(crate) mmap_fn: MMapFn,
+    pub mmap_fn: MMapFn,
     a20_byte: u8,
     tick_counter: u64,
     idle: bool,
-    pub(crate) debug: Debug,
-    pub(crate) io: IO,
-    pub(crate) dma: DMA,
-    pub(crate) pic: PIC,
-    pub(crate) pci: PCI,
-    pub(crate) uart0: UART,
-    pub(crate) vga: VGAScreen,
+    pub debug: Debug,
+    pub io: IO,
+    pub dma: DMA,
+    pub pic: PIC,
+    pub pci: PCI,
+    pub ps2: PS2,
+    pub uart0: UART,
+    pub vga: VGAScreen,
     tasks: TimeWheel<TaskFn>,
 }
 
@@ -305,15 +306,17 @@ impl CPU {
         }
     }
 
-    pub fn new(inst: Instance, store: Weak<Store<Emulator>>) -> Self {
+    pub fn new(inst: Instance, store: StoreT) -> Self {
         let s = unsafe { &mut *(store.as_ptr() as *mut Store<Emulator>) };
         let memory = inst.get_memory(s.as_context_mut(), "memory").unwrap();
         let rtc = RTC::new(store.clone());
         let bus = BUS::new(store.clone());
+        let ps2 = PS2::new(store.clone());
         let vga_mem_size = store.setting().vga_memory_size;
         let vga = VGAScreen::new(store.clone(), vga_mem_size);
         let uart0 = UART::new(store.clone(), 0x3F8);
         Self {
+            ps2,
             rtc,
             vga,
             uart0,
@@ -556,6 +559,9 @@ impl CPU {
         self.create_memory(memory_size);
         self.debug.init();
         self.init_io();
+
+        
+        self.ps2.init();
         self.uart0.init();
         self.dma.init();
         self.pic.init();
@@ -610,7 +616,7 @@ impl CPU {
         } else {
             t
         };
-        self.add_task(t as usize, (|store: &Weak<Store<Emulator>>, tick: u64| {
+        self.add_task(t as usize, (|store: &StoreT, tick: u64| {
             store.cpu_mut().map(|cpu| {
                 cpu.yield_callback(tick);
             });
@@ -738,7 +744,7 @@ impl CPU {
         });
     }
 
-    pub(crate) fn fill_cmos(&mut self) {
+    pub fn fill_cmos(&mut self) {
         let boot_order: u32 = 0x213;
         // Used by seabios to determine the boot order
         //   Nibble
@@ -802,12 +808,17 @@ impl CPU {
         }
     }
 
-    pub(crate) fn device_raise_irq(&mut self, i: u8) {
+    pub fn device_raise_irq(&mut self, i: u8) {
         self.pic.set_irq(i);
         //TODO
     }
 
-    pub(crate) fn reboot_internal(&mut self) {
+    pub fn device_lower_irq(&mut self, i: u8) {
+        self.pic.clear_irq(i);
+       //TODO:
+    }
+
+    pub fn reboot_internal(&mut self) {
         self.reset_cpu();
         //TODO:
         //self.fw_value = [];

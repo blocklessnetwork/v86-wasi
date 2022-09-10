@@ -1,6 +1,6 @@
 use std::rc::Weak;
 use wasmtime::Store;
-use crate::{Emulator, EmulatorTrait, log::Module, bus::BusData, IO, Dev};
+use crate::{Emulator, EmulatorTrait, log::Module, bus::BusData, IO, Dev, StoreT};
 
 const UART_IER_MSI: u8  = 0x08; /* Modem Status Changed int. */
 const UART_IIR_THRI: u8 = 0x02; /* Transmitter holding register empty */
@@ -16,7 +16,7 @@ const UART_LSR_TRANSMITTER_EMPTY: u8 = 0x40; // TX empty and line is idle
 
 
 pub(crate) struct UART {
-    store: Weak<Store<Emulator>>,
+    store: StoreT,
     ints: u8,
     ier: u8,
     iir: u8,
@@ -35,7 +35,7 @@ pub(crate) struct UART {
 }
 
 impl UART {
-    pub fn new(store: Weak<Store<Emulator>>, port: u32) -> Self {
+    pub fn new(store: StoreT, port: u32) -> Self {
         let ints = 1 << UART_IIR_THRI;
         let (com, irq) = match port {
             0x3F8 => (0, 4),
@@ -67,7 +67,7 @@ impl UART {
 
     pub fn init(&mut self) {
         self.store.bus_mut().map(|bus| {
-            bus.register(&format!("serial{}-input", self.com), |store: &Weak<Store<Emulator>>, data: &BusData|{
+            bus.register(&format!("serial{}-input", self.com), |store: &StoreT, data: &BusData|{
                 match data {
                     BusData::U8(data) => {
                         store.uart0_mut().map(|uart| {
@@ -79,7 +79,7 @@ impl UART {
             });
         });
         self.store.io_mut().map(|io| {
-            
+
             io.register_write(
                 self.port,
                 Dev::Emulator(self.store.clone()), 

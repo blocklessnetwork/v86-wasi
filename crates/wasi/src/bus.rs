@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Weak};
 
 use wasmtime::Store;
 
-use crate::{Emulator, EmulatorTrait};
+use crate::{Emulator, EmulatorTrait, StoreT};
 
 pub(crate) enum BusData {
     None,
@@ -14,15 +14,15 @@ pub(crate) enum BusData {
     ScreenPutChar(u8, u8, u8, i32, i32)
 }
 
-pub(crate) type BusCall = fn(store: &Weak<Store<Emulator>>, data: &BusData);
+pub(crate) type BusCall = fn(store: &StoreT, data: &BusData);
 
 struct BusController {
     listeners: HashMap<String, Vec<*const ()>>,
-    store: Weak<Store<Emulator>>,
+    store: StoreT,
 }
 
 impl BusController {
-    fn new(store: Weak<Store<Emulator>>) -> Self {
+    fn new(store: StoreT) -> Self {
         Self {
             listeners: HashMap::new(),
             store,
@@ -70,7 +70,7 @@ impl BusController {
 pub(crate) struct BUS(BusController);
 
 impl BUS {
-    pub fn new(store: Weak<Store<Emulator>>) -> Self {
+    pub fn new(store: StoreT) -> Self {
         Self(BusController::new(store))
     }
 
