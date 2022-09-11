@@ -1,11 +1,13 @@
+use std::collections::VecDeque;
+
 use crate::{Emulator, EmulatorTrait, StoreT, bus::BusData, log::Module, Dev};
 
 const PS2_LOG_VERBOSE: bool = false;
 
 pub(crate) struct PS2 {
     store: StoreT,
-    kbd_buffer: Vec<u8>,
-    mouse_buffer: Vec<u8>,
+    kbd_buffer: VecDeque<u8>,
+    mouse_buffer: VecDeque<u8>,
     resolution: u8,
     scaling2: bool,
     use_mouse: bool,
@@ -34,8 +36,8 @@ pub(crate) struct PS2 {
 
 impl PS2 {
     pub fn new(store: StoreT) -> Self {
-        let kbd_buffer = Vec::with_capacity(1024);
-        let mouse_buffer = Vec::with_capacity(1024);
+        let kbd_buffer = VecDeque::with_capacity(1024);
+        let mouse_buffer = VecDeque::with_capacity(1024);
 
         Self {
             store,
@@ -170,13 +172,13 @@ impl PS2 {
             self.store.cpu_mut().map(|cpu| {
                 cpu.device_lower_irq(12);
             });
-            self.last_port60_byte = self.mouse_buffer.pop().unwrap();
+            self.last_port60_byte = self.mouse_buffer.pop_front().unwrap();
             dbg_log!(Module::PS2, "Port 60 read (mouse): {:#X}", self.last_port60_byte);
         } else {
             self.store.cpu_mut().map(|cpu| {
                 cpu.device_lower_irq(1);
             });
-            self.last_port60_byte = self.kbd_buffer.pop().unwrap();
+            self.last_port60_byte = self.kbd_buffer.pop_front().unwrap();
             dbg_log!(Module::PS2, "Port 60 read (kbd)  : {:#X}", self.last_port60_byte);
         }
 
@@ -193,7 +195,7 @@ impl PS2 {
             0x20 => {
                 self.kbd_buffer.clear();
                 self.mouse_buffer.clear();
-                self.kbd_buffer.push(self.command_register);
+                self.kbd_buffer.push_back(self.command_register);
                 self.kbd_irq();
             }
             0x60 => self.read_command_register = true,
@@ -214,20 +216,20 @@ impl PS2 {
                 // test second ps/2 port
                 self.kbd_buffer.clear();
                 self.mouse_buffer.clear();
-                self.kbd_buffer.push(0);
+                self.kbd_buffer.push_back(0);
                 self.kbd_irq();
             }
             0xAA => {
                 self.kbd_buffer.clear();
                 self.mouse_buffer.clear();
-                self.kbd_buffer.push(0x55);
+                self.kbd_buffer.push_back(0x55);
                 self.kbd_irq();
             }
             0xAB => {
                 // Test first PS/2 port
                 self.kbd_buffer.clear();
                 self.mouse_buffer.clear();
-                self.kbd_buffer.push(0);
+                self.kbd_buffer.push_back(0);
                 self.kbd_irq();
             }
             0xAD => {
@@ -259,7 +261,7 @@ impl PS2 {
             self.read_command_register = false;
 
             // not sure, causes "spurious ack" in Linux
-            //this.kbd_buffer.push(0xFA);
+            //this.kbd_buffer.push_back(0xFA);
             //this.kbd_irq();
 
             dbg_log!(Module::PS2, "Keyboard command register = {:#X}", self.command_register);
@@ -267,12 +269,12 @@ impl PS2 {
             self.read_output_register = false;
 
             self.mouse_buffer.clear();
-            self.mouse_buffer.push(write_byte);
+            self.mouse_buffer.push_back(write_byte);
             self.mouse_irq();
         } else if self.next_read_sample {
             self.next_read_sample = false;
             self.mouse_buffer.clear();
-            self.mouse_buffer.push(0xFA);
+            self.mouse_buffer.push_back(0xFA);
 
             self.sample_rate = write_byte;
             dbg_log!(Module::PS2, "mouse sample rate: {:#X}", write_byte);
@@ -284,7 +286,7 @@ impl PS2 {
         } else if self.next_read_resolution {
             self.next_read_resolution = false;
             self.mouse_buffer.clear();
-            self.mouse_buffer.push(0xFA);
+            self.mouse_buffer.push_back(0xFA);
 
             if write_byte > 3 {
                 self.resolution = 4;
@@ -298,23 +300,23 @@ impl PS2 {
         } else if self.next_read_led {
             // nope
             self.next_read_led = false;
-            self.kbd_buffer.push(0xFA);
+            self.kbd_buffer.push_back(0xFA);
             self.kbd_irq(); 
         } else if self.next_handle_scan_code_set {
             self.next_handle_scan_code_set = false;
 
-            self.kbd_buffer.push(0xFA);
+            self.kbd_buffer.push_back(0xFA);
             self.kbd_irq();
 
             if write_byte > 0 {
                 // set scan code set
             } else {
-                self.kbd_buffer.push(2);
+                self.kbd_buffer.push_back(2);
             }
         } else if self.next_read_rate {
             // nope
             self.next_read_rate = false;
-            self.kbd_buffer.push(0xFA);
+            self.kbd_buffer.push_back(0xFA);
             self.kbd_irq();
         } else if self.next_is_mouse_command {
             self.next_is_mouse_command = false;
@@ -327,7 +329,7 @@ impl PS2 {
             // send ack
             self.kbd_buffer.clear();
             self.mouse_buffer.clear();
-            self.mouse_buffer.push(0xFA);
+            self.mouse_buffer.push_back(0xFA);
 
             match write_byte {
                 0xE6 => {
@@ -355,8 +357,8 @@ impl PS2 {
                 }
                 0xF2 => {
                     //  MouseID Byte
-                    self.mouse_buffer.push(0);
-                    self.mouse_buffer.push(0);
+                    self.mouse_buffer.push_back(0);
+                    self.mouse_buffer.push_back(0);
                     self.mouse_delta_y = 0;
                     self.mouse_clicks = 0;
                     self.mouse_delta_x = 0;
@@ -390,8 +392,8 @@ impl PS2 {
                 0xFF => {
                     // reset, send completion code
                     dbg_log!(Module::PS2, "Mouse reset");
-                    self.mouse_buffer.push(0xAA);
-                    self.mouse_buffer.push(0);
+                    self.mouse_buffer.push_back(0xAA);
+                    self.mouse_buffer.push_back(0);
 
                     self.use_mouse = true;
                     self.store.bus_mut().map(|bus| {
@@ -423,7 +425,7 @@ impl PS2 {
             // send ack
             self.mouse_buffer.clear();
             self.kbd_buffer.clear();
-            self.kbd_buffer.push(0xFA);
+            self.kbd_buffer.push_back(0xFA);
 
             match write_byte {
                 0xED => self.next_read_led = true,
@@ -431,8 +433,8 @@ impl PS2 {
                 0xF0 => self.next_handle_scan_code_set = true,
                 0xF2 => {
                     // identify
-                    self.kbd_buffer.push(0xAB);
-                    self.kbd_buffer.push(83);
+                    self.kbd_buffer.push_back(0xAB);
+                    self.kbd_buffer.push_back(83);
                 }
                 //  Set typematic rate and delay
                 0xF3 => self.next_read_rate = true,
@@ -449,9 +451,9 @@ impl PS2 {
                 0xF6 => {}
                 0xFF => {
                     self.kbd_buffer.clear();
-                    self.kbd_buffer.push(0xFA);
-                    self.kbd_buffer.push(0xAA);
-                    self.kbd_buffer.push(0);
+                    self.kbd_buffer.push_back(0xFA);
+                    self.kbd_buffer.push_back(0xAA);
+                    self.kbd_buffer.push_back(0);
                 }
                 _ => {
                     dbg_log!(Module::PS2, "Unimplemented keyboard command: {:#X}", write_byte); 
@@ -464,7 +466,7 @@ impl PS2 {
     fn kbd_send_code(&mut self, code: u8) {
         if self.enable_keyboard_stream {
             dbg_log!(Module::PS2, "adding kbd code: {:#X}", code);
-            self.kbd_buffer.push(code);
+            self.kbd_buffer.push_back(code);
             self.raise_irq();
         }
     }
@@ -593,9 +595,9 @@ impl PS2 {
         //    delta_y = this.apply_scaling2(delta_y);
         //}
 
-        self.mouse_buffer.push(info_byte);
-        self.mouse_buffer.push(delta_x);
-        self.mouse_buffer.push(delta_y);
+        self.mouse_buffer.push_back(info_byte);
+        self.mouse_buffer.push_back(delta_x);
+        self.mouse_buffer.push_back(delta_y);
 
         if PS2_LOG_VERBOSE {
             dbg_log!(Module::PS2, "adding mouse packets: {} {} {}", info_byte, dx, dy);

@@ -29,7 +29,7 @@ impl Module {
             Self::DEBUG => true,
             Self::BIOS => true,
             Self::SERIAL => true,
-            Self::PS2 => true,
+            Self::PS2 => false,
         }
     }
 }
