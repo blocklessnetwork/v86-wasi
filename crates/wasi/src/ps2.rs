@@ -41,18 +41,18 @@ impl PS2 {
             store,
             kbd_buffer,
             mouse_buffer,
-            resolution: 0,
+            resolution: 4,
             mouse_clicks: 0,
             sample_rate: 100,
             mouse_delta_x: 0,
             mouse_delta_y: 0,
             scaling2: false,
             use_mouse: false,
-            have_mouse: false,
-            command_register: 0,
+            have_mouse: true,
             last_port60_byte: 0,
             next_read_led: false,
             next_read_rate: false,
+            command_register: 1 | 4,
             next_byte_is_aux: false,
             next_read_sample: false,
             controller_output_port: 0,
@@ -567,12 +567,12 @@ impl PS2 {
         
         let delta_x = dx;
         let delta_y = dy;
-        let dy: u8 = if dy < 0 {
+        let dy: u8 = if dy > 127 {
             1
         } else {
             0
         };
-        let dx: u8 = if dx < 0 {
+        let dx: u8 = if dx > 127 {
             1
         } else {
             0

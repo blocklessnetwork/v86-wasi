@@ -37,7 +37,7 @@ impl InnerEmulator {
 
     #[inline]
     pub(crate) fn microtick(&self) -> f64 {
-        self.start_time.elapsed().as_micros() as f64/1000.
+        self.start_time.elapsed().as_micros() as f64
     }
 
     fn start(&mut self) {
