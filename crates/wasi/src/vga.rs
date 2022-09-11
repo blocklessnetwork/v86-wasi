@@ -1,8 +1,6 @@
 #![allow(unused)]
 #![allow(non_snake_case)]
-use std::{rc::Weak, slice};
-
-use wasmtime::Store;
+use std::slice;
 
 use crate::{pci::{PCIBar, PCIDevice}, Emulator, EmulatorTrait, Dev, io::IO, log::Module, bus::BusData, StoreT};
 

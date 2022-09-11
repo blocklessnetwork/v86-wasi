@@ -1,4 +1,4 @@
-use std::fmt::{Display, Write};
+use std::fmt::Display;
 
 pub enum Module {
     EMPTY,
@@ -29,7 +29,7 @@ impl Module {
             Self::DEBUG => true,
             Self::BIOS => true,
             Self::SERIAL => true,
-            Self::PS2 => true,
+            Self::PS2 => false,
         }
     }
 }
@@ -37,18 +37,18 @@ impl Module {
 impl Display for Module {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
+            Self::IO => f.write_str("IO"),
             Self::EMPTY => f.write_str(""),
             Self::CPU => f.write_str("CPU"),
             Self::PIC => f.write_str("PIC"),
             Self::PCI => f.write_str("PCI"),
-            Self::IO => f.write_str("IO"),
             Self::VGA => f.write_str("VGA"),
             Self::RTC => f.write_str("RTC"),
             Self::DMA => f.write_str("DMA"),
-            Self::DEBUG => f.write_str("DEBUG"),
-            Self::BIOS => f.write_str("BIOS"),
-            Self::SERIAL => f.write_str("SERIAL"),
             Self::PS2 => f.write_str("PS2"),
+            Self::BIOS => f.write_str("BIOS"),
+            Self::DEBUG => f.write_str("DEBUG"),
+            Self::SERIAL => f.write_str("SERIAL"),
         }
     }
 }

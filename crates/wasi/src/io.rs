@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
-use std::{collections::HashMap, marker::PhantomData, ops::Add, rc::Weak};
-use wasmtime::{AsContext, AsContextMut, Memory, Store};
+use std::{collections::HashMap, marker::PhantomData, ops::Add};
+use wasmtime::{AsContext, AsContextMut, Memory};
 
 use crate::{Dev, Emulator, EmulatorTrait, MMAP_BLOCK_BITS, MMAP_BLOCK_SIZE, log::Module, StoreT};
 

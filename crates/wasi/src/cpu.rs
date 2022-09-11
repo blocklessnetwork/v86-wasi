@@ -275,24 +275,24 @@ impl VMOpers {
 
 type TaskFn = (fn(store: &StoreT, u64), u64);
 
-pub(crate) struct CPU {
-    memory: Memory,
-    store: StoreT,
-    iomap: IOMap,
-    pub rtc: RTC,
-    vm_opers: VMOpers,
-    pub mmap_fn: MMapFn,
-    a20_byte: u8,
-    tick_counter: u64,
+pub struct CPU {
     idle: bool,
-    pub debug: Debug,
-    pub io: IO,
-    pub dma: DMA,
-    pub pic: PIC,
-    pub pci: PCI,
-    pub ps2: PS2,
-    pub uart0: UART,
-    pub vga: VGAScreen,
+    a20_byte: u8,
+    iomap: IOMap,
+    store: StoreT,
+    memory: Memory,
+    vm_opers: VMOpers,
+    tick_counter: u64,
+    pub(crate) io: IO,
+    pub(crate) dma: DMA,
+    pub(crate) pic: PIC,
+    pub(crate) pci: PCI,
+    pub(crate) ps2: PS2,
+    pub(crate) rtc: RTC,
+    pub(crate) uart0: UART,
+    pub(crate) debug: Debug,
+    pub(crate) mmap_fn: MMapFn,
+    pub(crate) vga: VGAScreen,
     tasks: TimeWheel<TaskFn>,
 }
 

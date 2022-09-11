@@ -1,7 +1,4 @@
-use std::rc::Weak;
-
 use chrono::{Datelike, TimeZone, Timelike, Utc};
-use wasmtime::Store;
 
 use crate::{consts::*, Dev, Emulator, EmulatorTrait, CPU, log::Module, StoreT};
 

@@ -1,10 +1,6 @@
-use std::rc::Weak;
-
-use wasmtime::Store;
-
 use crate::{
     bus::BUS, debug::Debug, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Emulator,
-    EmulatorTrait, CPU, vga::VGAScreen, uart::UART, StoreT,
+    EmulatorTrait, CPU, vga::VGAScreen, uart::UART, StoreT, ps2::PS2,
 };
 
 #[derive(Clone)]
@@ -151,6 +147,22 @@ impl Dev {
     pub(crate) fn vga(self: &Dev) -> Option<&VGAScreen> {
         match *self {
             Dev::Emulator(ref e) => e.vga(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn ps2_mut(self: &Dev) -> Option<&mut PS2> {
+        match *self {
+            Dev::Emulator(ref e) => e.ps2_mut(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn ps2(self: &Dev) -> Option<&PS2> {
+        match *self {
+            Dev::Emulator(ref e) => e.ps2(),
             _ => None,
         }
     }

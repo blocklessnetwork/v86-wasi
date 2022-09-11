@@ -1,7 +1,3 @@
-use std::rc::Weak;
-
-use wasmtime::Store;
-
 use crate::{Dev, Emulator, EmulatorTrait, ALL_DEBUG, log::Module, StoreT};
 
 pub(crate) struct Debug {

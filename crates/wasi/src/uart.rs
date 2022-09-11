@@ -1,5 +1,3 @@
-use std::rc::Weak;
-use wasmtime::Store;
 use crate::{Emulator, EmulatorTrait, log::Module, bus::BusData, IO, Dev, StoreT};
 
 const UART_IER_MSI: u8  = 0x08; /* Modem Status Changed int. */

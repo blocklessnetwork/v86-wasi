@@ -1,6 +1,5 @@
 #![allow(unused)]
-use std::{mem, rc::Weak};
-use wasmtime::Store;
+use std::mem;
 use crate::{io::IOps, utils::*, Dev, Emulator, EmulatorTrait, IO, log::Module, StoreT};
 
 const PCI_CONFIG_ADDRESS: u32 = 0xCF8;

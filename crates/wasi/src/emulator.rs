@@ -1,10 +1,10 @@
 use std::{
     cell::Cell,
-    rc::{Rc, Weak},
+    rc::Rc,
     time,
 };
 
-use wasmtime::{Instance, Store};
+use wasmtime::{Instance};
 
 use crate::{bus::BUS, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Setting, CPU, vga::VGAScreen, uart::UART, StoreT, ps2::PS2};
 
@@ -29,13 +29,15 @@ impl InnerEmulator {
         }
     }
 
+    #[inline]
     fn init(&mut self, inst: Instance, store: StoreT) {
         self.bus = Some(BUS::new(store.clone()));
         self.cpu = Some(CPU::new(inst, store));
     }
 
+    #[inline]
     pub(crate) fn microtick(&self) -> f64 {
-        self.start_time.elapsed().as_millis() as f64
+        self.start_time.elapsed().as_millis() as f64 /1000.
     }
 
     fn start(&mut self) {

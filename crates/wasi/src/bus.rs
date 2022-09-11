@@ -1,6 +1,4 @@
-use std::{collections::HashMap, rc::Weak};
-
-use wasmtime::Store;
+use std::collections::HashMap;
 
 use crate::{Emulator, EmulatorTrait, StoreT};
 
@@ -10,6 +8,7 @@ pub(crate) enum BusData {
     Bool(bool),
     U8(u8),
     U8Tuple(u8, u8),
+    MouseEvent(u8, u8, u8),
     ScreenSetSizeGraphical(u32, u32, u32, u32, u16),
     ScreenPutChar(u8, u8, u8, i32, i32)
 }
