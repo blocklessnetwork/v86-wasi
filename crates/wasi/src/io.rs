@@ -90,27 +90,32 @@ type Wr16Fn = fn(&Dev, u32, u16);
 type Wr32Fn = fn(&Dev, u32, u32);
 
 pub(crate) struct MMapFn {
-    pub memory_map_read8: Vec<Rd8Fn>,
-    pub memory_map_read32: Vec<Rd32Fn>,
-    pub memory_map_write8: Vec<Wr8Fn>,
-    pub memory_map_write32: Vec<Wr32Fn>,
+    pub memory_map_read8: HashMap<u32, Rd8Fn>,
+    pub memory_map_read32: HashMap<u32,Rd32Fn>,
+    pub memory_map_write8: HashMap<u32,Wr8Fn>,
+    pub memory_map_write32: HashMap<u32,Wr32Fn>,
 }
 
 impl MMapFn {
     pub fn new() -> Self {
         Self {
-            memory_map_read8: Vec::new(),
-            memory_map_read32: Vec::new(),
-            memory_map_write8: Vec::new(),
-            memory_map_write32: Vec::new(),
+            memory_map_read8: HashMap::new(),
+            memory_map_read32: HashMap::new(),
+            memory_map_write8: HashMap::new(),
+            memory_map_write32: HashMap::new(),
         }
     }
 
     pub(crate) fn init(&mut self, s: usize) {
-        self.memory_map_read8 = vec![IO::empty_read8; s];
-        self.memory_map_read32 = vec![IO::empty_read32; s];
-        self.memory_map_write8 = vec![IO::empty_write8; s];
-        self.memory_map_write32 = vec![IO::empty_write32; s];
+        let s = s >> MMAP_BLOCK_BITS+1;
+        let mut i: u32 = 0;
+        while (i<<MMAP_BLOCK_BITS) < s as u32 {
+            self.memory_map_read8.insert(i, IO::empty_read8);
+            self.memory_map_read32.insert(i, IO::empty_read32);
+            self.memory_map_write8.insert(i, IO::empty_write8);
+            self.memory_map_write32.insert(i, IO::empty_write32);
+            i += 1;
+        }
     }
 }
 
@@ -371,11 +376,10 @@ impl IO {
             let mut aligned_addr = addr >> MMAP_BLOCK_BITS;
             let mut size = size;
             while size > 0 {
-                println!("size {}", size);
-                cpu.mmap_fn.memory_map_read8[aligned_addr as usize] = r8;
-                cpu.mmap_fn.memory_map_read32[aligned_addr as usize] = r32;
-                cpu.mmap_fn.memory_map_write8[aligned_addr as usize] = w8;
-                cpu.mmap_fn.memory_map_write32[aligned_addr as usize] = w32;
+                cpu.mmap_fn.memory_map_read8.insert(aligned_addr, r8);
+                cpu.mmap_fn.memory_map_read32.insert(aligned_addr, r32);
+                cpu.mmap_fn.memory_map_write8.insert(aligned_addr, w8);
+                cpu.mmap_fn.memory_map_write32.insert(aligned_addr, w32);
                 size -= MMAP_BLOCK_SIZE;
                 aligned_addr += 1;
             }
@@ -386,7 +390,7 @@ impl IO {
     fn mmap_write32_shim(dev: &Dev, addr: u32, val: u32) {
         let aligned_addr = addr >> MMAP_BLOCK_BITS;
         dev.cpu_mut().map(|cpu| {
-            let mmp_fn = cpu.mmap_fn.memory_map_write8[aligned_addr as usize];
+            let mmp_fn = cpu.mmap_fn.memory_map_write8.get(&aligned_addr).unwrap();
             (mmp_fn)(dev, addr, (val & 0xFF) as u8);
             (mmp_fn)(dev, addr, (val >> 8 & 0xFF) as u8);
             (mmp_fn)(dev, addr, (val >> 16 & 0xFF) as u8);
@@ -398,7 +402,7 @@ impl IO {
     fn mmap_read32_shim(dev: &Dev, addr: u32) -> u32 {
         let aligned_addr = addr >> MMAP_BLOCK_BITS;
         dev.cpu_mut().map_or(0, |cpu| {
-            let mmp_fn = cpu.mmap_fn.memory_map_read8[aligned_addr as usize];
+            let mmp_fn = cpu.mmap_fn.memory_map_read8.get(&aligned_addr).unwrap();
             (mmp_fn)(dev, addr) as u32
                 | ((mmp_fn)(dev, addr + 1) as u32) << 8
                 | ((mmp_fn)(dev, addr + 2) as u32) << 16

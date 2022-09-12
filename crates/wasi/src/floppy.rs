@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 #![allow(unused)]
 use crate::{StoreT, EmulatorTrait, Dev, log::Module, CMOS_FLOPPY_DRIVE_TYPE};
 

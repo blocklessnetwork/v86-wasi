@@ -9,6 +9,7 @@ struct Slot<T> {
 
 pub struct TimeWheel<T: Copy> {
     hashed: HashMap<usize, Vec<Slot<T>>>,
+    total: usize,
     steps: usize,
     tick: usize,
 }
@@ -17,17 +18,23 @@ impl<T: Copy> TimeWheel<T> {
     // create new hashed time wheel instance
     pub fn new(steps: usize) -> Self {
         TimeWheel {
+            total: 0,
             steps: steps,
             hashed: HashMap::new(),
             tick: 0,
         }
     }
 
+    #[inline]
+    pub fn total(&self) -> usize {
+        self.total
+    }
+
     pub fn add(&mut self, timeout: usize, value: T) {
         let slot = (timeout + self.tick) % self.steps;
 
         let slots = self.hashed.entry(slot).or_insert(Vec::new());
-
+        self.total += 1;
         slots.push(Slot {
             t: value,
             round: (timeout + self.tick) / self.steps,
@@ -45,6 +52,7 @@ impl<T: Copy> TimeWheel<T> {
 
             for slot in slots {
                 if slot.round == 0 {
+                    self.total -= 1;
                     current.push(slot.t);
                 } else {
                     reserved.push(Slot::<T> {

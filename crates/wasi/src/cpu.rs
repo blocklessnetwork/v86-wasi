@@ -336,20 +336,20 @@ impl CPU {
             dma: DMA::new(store.clone()),
             debug: Debug::new(store.clone()),
             vm_opers: VMOpers::new(&inst, s),
-            tasks: TimeWheel::new(60*60*1000),
+            tasks: TimeWheel::new(60),
         }
     }
 
     #[inline]
     pub fn mmap_read8(&mut self, addr: u32) -> u8 {
-        let mfn = self.mmap_fn.memory_map_read8[(addr >> MMAP_BLOCK_BITS) as usize];
+        let mfn = self.mmap_fn.memory_map_read8.get(&(addr >> MMAP_BLOCK_BITS)).unwrap();
         let dev = Dev::Emulator(self.store.clone());
         (mfn)(&dev, addr)
     }
 
     #[inline]
     pub fn mmap_read16(&mut self, addr: u32) -> u16 {
-        let mfn = self.mmap_fn.memory_map_read8[(addr >> MMAP_BLOCK_BITS) as usize];
+        let mfn = self.mmap_fn.memory_map_read8.get(&(addr >> MMAP_BLOCK_BITS)).unwrap();
         let dev = Dev::Emulator(self.store.clone());
         let value = mfn(&dev, addr) as u16 | (mfn(&dev, addr + 1 | 0) as u16) << 8;
         value
@@ -357,21 +357,21 @@ impl CPU {
 
     #[inline]
     pub fn mmap_read32(&mut self, addr: u32) -> u32 {
-        let mfn = self.mmap_fn.memory_map_read32[(addr >> MMAP_BLOCK_BITS) as usize];
+        let mfn = self.mmap_fn.memory_map_read32.get(&(addr >> MMAP_BLOCK_BITS)).unwrap();
         let dev = Dev::Emulator(self.store.clone());
         mfn(&dev, addr)
     }
 
     #[inline]
     pub fn mmap_write8(&mut self, addr: u32, value: u8) {
-        let mfn = self.mmap_fn.memory_map_write8[(addr >> MMAP_BLOCK_BITS) as usize];
+        let mfn = self.mmap_fn.memory_map_write8.get(&(addr >> MMAP_BLOCK_BITS)).unwrap();
         let dev = Dev::Emulator(self.store.clone());
         (mfn)(&dev, addr, value);
     }
 
     #[inline]
     pub fn mmap_write16(&mut self, addr: u32, value: u16) {
-        let mfn = self.mmap_fn.memory_map_write8[(addr >> MMAP_BLOCK_BITS) as usize];
+        let mfn = self.mmap_fn.memory_map_write8.get(&(addr >> MMAP_BLOCK_BITS)).unwrap();
         let dev = Dev::Emulator(self.store.clone());
         mfn(&dev, addr, (value & 0xFF) as u8);
         mfn(&dev, addr + 1, (value >> 8) as u8);
@@ -379,7 +379,7 @@ impl CPU {
 
     #[inline]
     pub fn mmap_write32(&mut self, addr: u32, value: u32) {
-        let mfn = self.mmap_fn.memory_map_write32[(addr >> MMAP_BLOCK_BITS) as usize];
+        let mfn = self.mmap_fn.memory_map_write32.get(&(addr >> MMAP_BLOCK_BITS)).unwrap();
         let dev = Dev::Emulator(self.store.clone());
         mfn(&dev, addr, value)
     }
@@ -601,40 +601,26 @@ impl CPU {
     #[inline]
     fn in_hlt(&mut self) -> bool {
         self.store_mut()
-            .map_or(false, |store| self.iomap.in_hlt_io.read(store, 1) > 0)
+            .map_or(false, |store| self.iomap.in_hlt_io.read(store, 0) > 0)
     }
 
     #[inline]
-    pub fn next_tick(&mut self, t: u64) {
+    pub fn next_tick(&mut self, t: u64) -> i32 {
         self.tick_counter += 1;
         let tick = self.tick_counter;
         self.idle = true;
-        self.cpu_yield(t, tick);
+        self.cpu_yield(t, tick)
     }
 
     #[inline]
-    fn cpu_yield(&mut self, t: u64, tick: u64) {
-        let t = if t < 1 {
-            0
-        } else {
-            t
-        };
-        self.add_task(t as usize, (|store: &StoreT, tick: u64| {
-            store.cpu_mut().map(|cpu| {
-                cpu.yield_callback(tick);
-            });
-        }, tick));
+    fn cpu_yield(&mut self, t: u64, tick: u64) -> i32 {
+        self.do_tick()
     }
 
     #[inline]
-    fn yield_callback(&mut self, tick: u64) {
-        self.do_tick();
-    }
-
-    #[inline]
-    fn do_tick(&mut self) {
+    fn do_tick(&mut self) -> i32 {
         self.idle = false;
-        let t = self.main_run();
+        self.main_run()
         //self.next_tick(t as u64);
     }
 
@@ -727,26 +713,6 @@ impl CPU {
             }
         }
         return 0;
-    }
-
-    #[inline]
-    fn add_task(&mut self, t: usize, task: TaskFn) {
-        self.tasks.add(t, task);
-    }
-
-    #[inline]
-    pub fn tasks_trigger(&mut self) -> i32 {
-        let mut rs = 100;
-        let tasks = match self.tasks.tick() {
-            Poll::Ready(v) => v,
-            Poll::Pending => return rs,
-        };
-        
-        tasks.iter().for_each(|task| {
-            rs = task.1 as i32;
-            (task.0)(&self.store, task.1);
-        });
-        rs
     }
 
     pub fn fill_cmos(&mut self) {

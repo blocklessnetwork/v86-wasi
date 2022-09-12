@@ -18,5 +18,4 @@ fn main() {
     linker.module(&mut store, "", &module).unwrap();
     let inst = linker.instantiate(&mut store, &module).unwrap();
     emulator.start(inst, Rc::downgrade(&Rc::new(store)));
-    std::thread::sleep(Duration::from_secs(1000));
 }

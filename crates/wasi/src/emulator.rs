@@ -44,15 +44,13 @@ impl InnerEmulator {
     fn start(&mut self) {
         self.cpu.as_mut().map(|c| {
             c.init();
-            
-            // let mut t = c.main_run();
-            // loop {
-            //     c.next_tick(t as u64);
-            //     t = c.tasks_trigger();
-            //     if t != 0 {
-            //         std::thread::sleep(time::Duration::from_nanos(t as u64));
-            //     }
-            // }
+            let mut t = c.main_run();
+            loop {
+                t = c.next_tick(t as u64);
+                if t > 0 {
+                    std::thread::sleep(time::Duration::from_millis(t as u64));
+                }
+            }
         });
     }
 }
