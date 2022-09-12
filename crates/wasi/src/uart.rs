@@ -1,4 +1,4 @@
-use crate::{Emulator, EmulatorTrait, log::Module, bus::BusData, IO, Dev, StoreT};
+use crate::{ContextTrait, log::Module, bus::BusData, IO, Dev, StoreT};
 
 const UART_IER_MSI: u8  = 0x08; /* Modem Status Changed int. */
 const UART_IIR_THRI: u8 = 0x02; /* Transmitter holding register empty */

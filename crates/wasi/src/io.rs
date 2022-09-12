@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use std::{collections::HashMap, marker::PhantomData, ops::Add};
 use wasmtime::{AsContext, AsContextMut, Memory};
 
-use crate::{Dev, Emulator, EmulatorTrait, MMAP_BLOCK_BITS, MMAP_BLOCK_SIZE, log::Module, StoreT};
+use crate::{Dev, ContextTrait, MMAP_BLOCK_BITS, MMAP_BLOCK_SIZE, log::Module, StoreT};
 
 const LOG_ALL_IO: bool = false;
 
@@ -11,10 +11,12 @@ pub(crate) trait MemAccessTrait<T> {
     fn offset(&self) -> usize;
     fn memory(&mut self) -> &mut Memory;
     fn write(&mut self, store: impl AsContextMut, idx: u32, v: T);
+    #[inline]
     fn write_slice(&mut self, store: impl AsContextMut, off: usize, bs: &[u8]) {
         let offset = self.offset();
         self.memory().write(store, offset + off, bs).unwrap();
     }
+    #[inline]
     fn read_slice(&mut self, store: impl AsContextMut, off: usize, bs: &mut [u8]) {
         let offset = self.offset();
         self.memory().read(store, offset + off, bs).unwrap();

@@ -7,7 +7,7 @@ use std::{
 
 use wasmtime::{Instance};
 
-use crate::{bus::BUS, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Setting, CPU, vga::VGAScreen, uart::UART, StoreT, ps2::PS2, floppy::FloppyController};
+use crate::{bus::BUS, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Setting, CPU, vga::VGAScreen, uart::UART, StoreT, ps2::PS2, floppy::FloppyController, pit::PIT};
 
 pub(crate) struct InnerEmulator {
     start_time: time::Instant,
@@ -38,7 +38,7 @@ impl InnerEmulator {
 
     #[inline]
     pub(crate) fn microtick(&self) -> f64 {
-        self.start_time.elapsed().as_micros() as f64
+        (self.start_time.elapsed().as_micros() as f64)/1000.
     }
 
     fn start(&mut self) {
@@ -79,6 +79,16 @@ impl Emulator {
     #[inline]
     pub(crate) fn vga_mut(&self) -> Option<&mut VGAScreen> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.vga)
+    }
+
+    #[inline]
+    pub(crate) fn pit_mut(&self) -> Option<&mut PIT> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.pit)
+    }
+
+    #[inline]
+    pub(crate) fn pit(&self) -> Option<&PIT> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &cpu.pit)
     }
 
     #[inline]

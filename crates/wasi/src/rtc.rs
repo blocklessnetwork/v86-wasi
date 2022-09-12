@@ -1,6 +1,6 @@
 use chrono::{Datelike, TimeZone, Timelike, Utc};
 
-use crate::{consts::*, Dev, Emulator, EmulatorTrait, CPU, log::Module, StoreT};
+use crate::{consts::*, Dev, ContextTrait, CPU, log::Module, StoreT};
 
 pub(crate) struct RTC {
     cmos_index: u8,
@@ -169,6 +169,39 @@ impl RTC {
                 }
             }
         })
+    }
+
+    pub fn timer(&mut self, _time: f64) -> i64 {
+        let time = Utc::now().timestamp_millis(); // XXX
+        self.rtc_time += time - self.last_update;
+        self.last_update = time;
+
+        if self.periodic_interrupt && self.next_interrupt < time {
+            self.store.cpu_mut().map(|cpu| {
+                cpu.device_raise_irq(8);
+            });
+            self.cmos_c |= 1 << 6 | 1 << 7;
+
+            self.next_interrupt += (self.periodic_interrupt_time *
+                (((time - self.next_interrupt) as f64) / self.periodic_interrupt_time).ceil()) as i64;
+        } else if self.next_interrupt_alarm > 0 && self.next_interrupt_alarm < time as usize {
+            self.store.cpu_mut().map(|cpu| {
+                cpu.device_raise_irq(8);
+            });
+            self.cmos_c |= 1 << 5 | 1 << 7;
+
+            self.next_interrupt_alarm = 0;
+        }
+
+        let mut  t = 100;
+
+        if self.periodic_interrupt && self.next_interrupt > 0 {
+            t = t.min(0.max(self.next_interrupt - time));
+        }
+        if self.next_interrupt_alarm > 0 {
+            t = t.min(0.max(self.next_interrupt_alarm as i64 - time));
+        }
+        return t;
     }
 
     fn cmos_port_write8(dev: &Dev, _port: u32, v: u8) {

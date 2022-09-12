@@ -1,4 +1,4 @@
-use crate::{Dev, Emulator, EmulatorTrait, log::Module, StoreT};
+use crate::{Dev, ContextTrait, log::Module, StoreT};
 
 type WR_DONE_FN = fn(&StoreT, bool);
 

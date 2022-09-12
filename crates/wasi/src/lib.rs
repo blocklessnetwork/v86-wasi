@@ -13,6 +13,7 @@ use floppy::FloppyController;
 use io::IO;
 use pci::PCI;
 use pic::PIC;
+use pit::PIT;
 use ps2::PS2;
 use rtc::RTC;
 use uart::UART;
@@ -31,6 +32,7 @@ mod timewheel;
 mod mem;
 mod pci;
 mod pic;
+mod pit;
 mod rtc;
 mod uart;
 mod floppy;
@@ -92,7 +94,7 @@ pub(crate) mod utils {
     write_impl!(write_i16, i16, 2);
 }
 
-trait EmulatorTrait {
+trait ContextTrait {
     fn cpu_mut(&self) -> Option<&mut CPU>;
     fn cpu(&self) -> Option<&CPU>;
     
@@ -126,9 +128,14 @@ trait EmulatorTrait {
 
     fn fdc_mut(&self) -> Option<&mut FloppyController>;
     fn fdc(&self) -> Option<&FloppyController>;
+
+    fn pit_mut(&self) -> Option<&mut PIT>;
+    fn pit(&self) -> Option<&PIT>;
+
+    fn microtick(&self) -> f64;
 }
 
-impl EmulatorTrait for StoreT {
+impl ContextTrait for StoreT {
 
     #[inline]
     fn cpu_mut(&self) -> Option<&mut CPU> {
@@ -194,11 +201,16 @@ impl EmulatorTrait for StoreT {
     }
 
     #[inline]
+    fn microtick(&self) -> f64 {
+        self.emulator().microtick()
+    }
+
+    #[inline(always)]
     fn emulator(&self) -> &Emulator {
         unsafe { (*(self.as_ptr() as *mut Store<_>)).data() }
     }
 
-    #[inline]
+    #[inline(always)]
     fn emulator_mut(&self) -> &mut Emulator {
         unsafe { (*(self.as_ptr() as *mut Store<_>)).data_mut() }
     }
@@ -247,6 +259,16 @@ impl EmulatorTrait for StoreT {
     #[inline]
     fn fdc(&self) -> Option<&FloppyController> {
         self.emulator().fdc()
+    }
+
+    #[inline]
+    fn pit_mut(&self) -> Option<&mut PIT> {
+        self.emulator().pit_mut()
+    }
+
+    #[inline]
+    fn pit(&self) -> Option<&PIT> {
+        self.emulator().pit()
     }
 }
 

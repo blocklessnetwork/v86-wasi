@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::{Emulator, EmulatorTrait, StoreT, bus::BusData, log::Module, Dev};
+use crate::{ContextTrait, StoreT, bus::BusData, log::Module, Dev};
 
 const PS2_LOG_VERBOSE: bool = false;
 

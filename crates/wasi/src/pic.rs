@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-use crate::{Dev, Emulator, EmulatorTrait, log::Module, StoreT};
+use crate::{Dev, ContextTrait, log::Module, StoreT};
 
 const PIC_LOG_VERBOSE: bool = false;
 
@@ -170,7 +170,7 @@ impl InnerPIC {
     }
 
     fn port20_write(&mut self, data_byte: u8) {
-        //dbg_log("20 write: " + h(data_byte), LOG_PIC);
+        dbg_log!(Module::PIC, "20 write: {:#X}", data_byte);
         if data_byte & 0x10 > 0 {
             // icw1
             dbg_log!(Module::PIC, "icw1 = {:x}", data_byte);
@@ -496,7 +496,7 @@ impl InnerPIC {
     }
 
     fn clear_master_irq(&mut self, irq_number: u8) {
-        assert!(irq_number >= 0 && irq_number < 16);
+        assert!(irq_number < 16);
         if PIC_LOG_VERBOSE {
             dbg_log!(Module::PIC, "master> clear irq {}", irq_number);
         }

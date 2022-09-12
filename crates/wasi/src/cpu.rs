@@ -8,7 +8,7 @@
 use std::{rc::Weak, task::Poll};
 
 use crate::{
-    EmulatorTrait,
+    ContextTrait,
     bus::BUS,
     timewheel::TimeWheel,
     consts::*,
@@ -18,7 +18,7 @@ use crate::{
     pci::PCI,
     pic::PIC,
     rtc::RTC,
-    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, vga::VGAScreen, log::Module, timewheel, uart::UART, StoreT, ps2::PS2, floppy::FloppyController,
+    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, vga::VGAScreen, log::Module, timewheel, uart::UART, StoreT, ps2::PS2, floppy::FloppyController, pit::PIT,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -287,6 +287,7 @@ pub struct CPU {
     pub(crate) io: IO,
     pub(crate) dma: DMA,
     pub(crate) pic: PIC,
+    pub(crate) pit: PIT,
     pub(crate) pci: PCI,
     pub(crate) ps2: PS2,
     pub(crate) rtc: RTC,
@@ -311,6 +312,7 @@ impl CPU {
         let s = unsafe { &mut *(store.as_ptr() as *mut Store<Emulator>) };
         let memory = inst.get_memory(s.as_context_mut(), "memory").unwrap();
         let rtc = RTC::new(store.clone());
+        let pit = PIT::new(store.clone());
         let bus = BUS::new(store.clone());
         let ps2 = PS2::new(store.clone());
         let fdc = FloppyController::new(store.clone());
@@ -320,6 +322,7 @@ impl CPU {
         Self {
             ps2,
             rtc,
+            pit,
             fdc,
             vga,
             uart0,
@@ -562,8 +565,9 @@ impl CPU {
         self.create_memory(memory_size);
         self.debug.init();
         self.init_io();
-
         self.pci.init();
+        
+        self.pit.init();
         self.pic.init();
         self.ps2.init();
         self.uart0.init();
@@ -593,6 +597,7 @@ impl CPU {
         //TODO: IO 0x511
 
         self.rtc.init();
+        
 
         //TODO device loading
         self.fill_cmos();
@@ -627,7 +632,6 @@ impl CPU {
     pub fn handle_irqs(&mut self) {
         if self.has_interrupt() {
             self.pic_acknowledge();
-
         }
     }
 
@@ -675,9 +679,11 @@ impl CPU {
     }
 
     #[inline]
-    fn run_hardware_timers(&self, now: f64) -> i32 {
+    fn run_hardware_timers(&mut self, now: f64) -> i32 {
         //TODO:
-        100
+        let rtc_time = self.rtc.timer(now) as i32;
+        let pit_time = self.pit.timer(now, false) as i32;
+        100.min(rtc_time).min(pit_time)
     }
 
     #[inline]
@@ -691,8 +697,6 @@ impl CPU {
         self.do_many_cycles_native();
         //TODO:
     }
-
-
 
     pub fn main_run(&mut self) -> i32 {
         if self.in_hlt() {

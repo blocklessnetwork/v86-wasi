@@ -1,4 +1,4 @@
-use crate::{Dev, Emulator, EmulatorTrait, ALL_DEBUG, log::Module, StoreT};
+use crate::{Dev, ContextTrait, ALL_DEBUG, log::Module, StoreT};
 
 pub(crate) struct Debug {
     bios_dbg: Vec<u8>,

@@ -2,7 +2,7 @@
 #![allow(non_snake_case)]
 use std::slice;
 
-use crate::{pci::{PCIBar, PCIDevice}, Emulator, EmulatorTrait, Dev, io::IO, log::Module, bus::BusData, StoreT};
+use crate::{pci::{PCIBar, PCIDevice}, ContextTrait, Dev, io::IO, log::Module, bus::BusData, StoreT};
 
 const VGA_BANK_SIZE: u32 = 64 * 1024;
 

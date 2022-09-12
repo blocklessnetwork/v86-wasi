@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
-use crate::{StoreT, EmulatorTrait, Dev, log::Module, CMOS_FLOPPY_DRIVE_TYPE};
+use crate::{StoreT, ContextTrait, Dev, log::Module, CMOS_FLOPPY_DRIVE_TYPE};
 
 const DEBUG: bool = false;
 
