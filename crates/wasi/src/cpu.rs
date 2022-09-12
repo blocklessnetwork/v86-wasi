@@ -18,7 +18,7 @@ use crate::{
     pci::PCI,
     pic::PIC,
     rtc::RTC,
-    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, vga::VGAScreen, log::Module, timewheel, uart::UART, StoreT, ps2::PS2,
+    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, vga::VGAScreen, log::Module, timewheel, uart::UART, StoreT, ps2::PS2, floppy::FloppyController,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -283,6 +283,7 @@ pub struct CPU {
     memory: Memory,
     vm_opers: VMOpers,
     tick_counter: u64,
+    tasks: TimeWheel<TaskFn>,
     pub(crate) io: IO,
     pub(crate) dma: DMA,
     pub(crate) pic: PIC,
@@ -293,7 +294,7 @@ pub struct CPU {
     pub(crate) debug: Debug,
     pub(crate) mmap_fn: MMapFn,
     pub(crate) vga: VGAScreen,
-    tasks: TimeWheel<TaskFn>,
+    pub(crate) fdc: FloppyController,
 }
 
 impl CPU {
@@ -312,12 +313,14 @@ impl CPU {
         let rtc = RTC::new(store.clone());
         let bus = BUS::new(store.clone());
         let ps2 = PS2::new(store.clone());
+        let fdc = FloppyController::new(store.clone());
         let vga_mem_size = store.setting().vga_memory_size;
         let vga = VGAScreen::new(store.clone(), vga_mem_size);
         let uart0 = UART::new(store.clone(), 0x3F8);
         Self {
             ps2,
             rtc,
+            fdc,
             vga,
             uart0,
             memory,
@@ -560,12 +563,12 @@ impl CPU {
         self.debug.init();
         self.init_io();
 
-        
+        self.pci.init();
+        self.pic.init();
         self.ps2.init();
         self.uart0.init();
         self.dma.init();
-        self.pic.init();
-        self.pci.init();
+        self.fdc.init();
         self.vga.init();
         self.reset_cpu();
         self.load_bios();

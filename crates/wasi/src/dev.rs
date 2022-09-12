@@ -1,6 +1,7 @@
+#![allow(unused)]
 use crate::{
     bus::BUS, debug::Debug, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Emulator,
-    EmulatorTrait, CPU, vga::VGAScreen, uart::UART, StoreT, ps2::PS2,
+    EmulatorTrait, CPU, vga::VGAScreen, uart::UART, StoreT, ps2::PS2, floppy::FloppyController,
 };
 
 #[derive(Clone)]
@@ -163,6 +164,22 @@ impl Dev {
     pub(crate) fn ps2(self: &Dev) -> Option<&PS2> {
         match *self {
             Dev::Emulator(ref e) => e.ps2(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn fdc_mut(self: &Dev) -> Option<&mut FloppyController> {
+        match *self {
+            Dev::Emulator(ref e) => e.fdc_mut(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn fdc(self: &Dev) -> Option<&FloppyController> {
+        match *self {
+            Dev::Emulator(ref e) => e.fdc(),
             _ => None,
         }
     }

@@ -5,6 +5,7 @@ pub enum Module {
     BIOS,
     DEBUG,
     SERIAL,
+    FLOPPY,
     CPU,
     PIC,
     PCI,
@@ -19,6 +20,7 @@ impl Module {
     pub(crate) fn display(&self) -> bool {
         match *self {
             Self::EMPTY => true,
+            Self::FLOPPY => true,
             Self::CPU => true,
             Self::PIC => true,
             Self::PCI => true,
@@ -49,6 +51,7 @@ impl Display for Module {
             Self::BIOS => f.write_str("BIOS"),
             Self::DEBUG => f.write_str("DEBUG"),
             Self::SERIAL => f.write_str("SERIAL"),
+            Self::FLOPPY => f.write_str("FLOPPY"),
         }
     }
 }

@@ -9,6 +9,7 @@ const ALL_DEBUG: bool = true;
 type StoreT = Weak<Store<Emulator>>;
 use bus::BUS;
 use dma::DMA;
+use floppy::FloppyController;
 use io::IO;
 use pci::PCI;
 use pic::PIC;
@@ -32,6 +33,7 @@ mod pci;
 mod pic;
 mod rtc;
 mod uart;
+mod floppy;
 mod setting;
 mod vga;
 pub use consts::*;
@@ -93,26 +95,37 @@ pub(crate) mod utils {
 trait EmulatorTrait {
     fn cpu_mut(&self) -> Option<&mut CPU>;
     fn cpu(&self) -> Option<&CPU>;
+    
     fn rtc_mut(&self) -> Option<&mut RTC>;
     fn io_mut(&self) -> Option<&mut IO>;
     fn dma_mut(&self) -> Option<&mut DMA>;
+    
     fn pic_mut(&self) -> Option<&mut PIC>;
     fn pic(&self) -> Option<&PIC>;
+    
     fn io(&self) -> Option<&IO>;
     fn bus_mut(&self) -> Option<&mut BUS>;
     fn bus(&self) -> Option<&BUS>;
+    
     fn pci_mut(&self) -> Option<&mut PCI>;
     fn pci(&self) -> Option<&PCI>;
+    
     fn emulator(&self) -> &Emulator;
     fn emulator_mut(&self) -> &mut Emulator;
+    
     fn setting(&self) -> &Setting;
+    
     fn vga(&self) -> Option<&VGAScreen>;
     fn vga_mut(&self) -> Option<&mut VGAScreen>;
+
     fn uart0_mut(&self) -> Option<&mut UART>;
     fn uart0(&self) -> Option<&UART>;
 
     fn ps2_mut(&self) -> Option<&mut PS2>;
     fn ps2(&self) -> Option<&PS2>;
+
+    fn fdc_mut(&self) -> Option<&mut FloppyController>;
+    fn fdc(&self) -> Option<&FloppyController>;
 }
 
 impl EmulatorTrait for StoreT {
@@ -224,6 +237,16 @@ impl EmulatorTrait for StoreT {
     #[inline]
     fn ps2(&self) -> Option<&PS2> {
         self.emulator().ps2()
+    }
+
+    #[inline]
+    fn fdc_mut(&self) -> Option<&mut FloppyController> {
+        self.emulator().fdc_mut()
+    }
+
+    #[inline]
+    fn fdc(&self) -> Option<&FloppyController> {
+        self.emulator().fdc()
     }
 }
 

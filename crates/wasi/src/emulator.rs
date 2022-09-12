@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::{
     cell::Cell,
     rc::Rc,
@@ -6,7 +7,7 @@ use std::{
 
 use wasmtime::{Instance};
 
-use crate::{bus::BUS, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Setting, CPU, vga::VGAScreen, uart::UART, StoreT, ps2::PS2};
+use crate::{bus::BUS, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Setting, CPU, vga::VGAScreen, uart::UART, StoreT, ps2::PS2, floppy::FloppyController};
 
 pub(crate) struct InnerEmulator {
     start_time: time::Instant,
@@ -201,5 +202,15 @@ impl Emulator {
     #[inline]
     pub fn setting(&self) -> &Setting {
         &self.inner().setting
+    }
+
+    #[inline]
+    pub(crate) fn fdc_mut(&self) -> Option<&mut FloppyController> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.fdc)
+    }
+
+    #[inline]
+    pub(crate) fn fdc(&self) -> Option<&FloppyController> {
+        self.inner_mut().cpu.as_ref().map(|cpu| &cpu.fdc)
     }
 }

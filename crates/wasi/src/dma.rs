@@ -1,5 +1,7 @@
 use crate::{Dev, Emulator, EmulatorTrait, log::Module, StoreT};
 
+type WR_DONE_FN = fn(&StoreT, bool);
+
 pub(crate) struct DMA {
     store: StoreT,
     channel_page: Vec<u8>,
@@ -159,6 +161,65 @@ impl DMA {
         });
     }
 
+    // TODO
+    // fn do_write(&mut self, buffer: &mut [u8], start: usize, len: usize, channel: usize, done_fn: WR_DONE_FN) {
+    //     let mut read_count = (self.channel_count[channel] + 1) & 0xFFFF;
+    //     let mut bytes_per_count = if channel >= 5 {
+    //         2
+    //     } else {
+    //         1
+    //     };
+    //     let mut read_bytes = read_count * bytes_per_count;
+    //     let mut addr = self.address_get_8bit(channel);
+    //     let mut unfinished = false;
+    //     let mut want_more = false;
+    //     let mut autoinit = self.channel_mode[channel] & 0x10;
+
+    //     dbg_log!(Module::DMA, "DMA write channel {}", channel);
+    //     dbg_log!(Module::DMA, "to {:#X} len {#X}", addr, read_bytes);
+
+    //     if len < read_bytes {
+    //         dbg_log!(Module::DMA, "DMA should read more than provided");
+    //         read_count = Math.floor(len / bytes_per_count);
+    //         read_bytes = read_count * bytes_per_count;
+    //         unfinished = true;
+    //     } else if(len > read_bytes) {
+    //         dbg_log(Module::DMA, "DMA attempted to read more than provided");
+    //         want_more = true;
+    //     }
+
+    //     if start + read_bytes > buffer.len() {
+    //         dbg_log!(Module::DMA, "DMA write outside of buffer");
+    //         done_fn(&self.store, true);
+    //     } else {
+    //         self.channel_addr[channel] += read_count;
+    //         self.channel_count[channel] -= read_count;
+    //         // when complete, counter should underflow to 0xFFFF
+
+    //         if !unfinished && autoinit {
+    //             dbg_log!(Module::DMA, "DMA autoinit");
+    //             self.channel_addr[channel] = self.channel_addr_init[channel];
+    //             self.channel_count[channel] = self.channel_count_init[channel];
+    //         }
+    //         // TODO
+    //         // buffer.set(start,
+    //         //     this.cpu.mem8.subarray(addr, addr + read_bytes),
+    //         //     () =>
+    //         //     {
+    //         //         if(want_more && autoinit)
+    //         //         {
+    //         //             dbg_log("DMA continuing from start", LOG_DMA);
+    //         //             this.do_write(buffer, start + read_bytes, len - read_bytes, channel, fn);
+    //         //         }
+    //         //         else
+    //         //         {
+    //         //             fn(false);
+    //         //         }
+    //         //     }
+    //         // );
+    //     }
+    // }
+
     fn portc_write(&mut self, _data_byte: u8) {
         dbg_log!(Module::DMA, "flipflop reset");
         self.lsb_msb_flipflop = 0;
@@ -205,6 +266,8 @@ impl DMA {
             }
         }
     }
+
+    
 
     fn port_pagehi_write(&mut self, channel: usize, data_byte: u8) {
         dbg_log!(Module::DMA, "pagehi write [{}] = {:#X}", channel, data_byte);
