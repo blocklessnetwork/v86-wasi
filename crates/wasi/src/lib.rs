@@ -289,7 +289,7 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
                 unsafe {
                     let ptr = mem.as_ptr().offset(off as _);
                     let sl = slice::from_raw_parts(ptr, len as _);
-                    println!("{}", std::str::from_utf8_unchecked(sl));
+                    dbg_log!(Module::CPU, "{}", std::str::from_utf8_unchecked(sl));
                 }
                 Ok(())
             },
