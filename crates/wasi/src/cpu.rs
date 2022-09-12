@@ -628,16 +628,14 @@ impl CPU {
 
     #[inline]
     fn yield_callback(&mut self, tick: u64) {
-        if tick == self.tick_counter {
-            self.do_tick();
-        }
+        self.do_tick();
     }
 
     #[inline]
     fn do_tick(&mut self) {
         self.idle = false;
         let t = self.main_run();
-        self.next_tick(t as u64);
+        //self.next_tick(t as u64);
     }
 
     pub fn handle_irqs(&mut self) {
@@ -737,14 +735,18 @@ impl CPU {
     }
 
     #[inline]
-    pub fn tasks_trigger(&mut self) {
+    pub fn tasks_trigger(&mut self) -> i32 {
+        let mut rs = 100;
         let tasks = match self.tasks.tick() {
             Poll::Ready(v) => v,
-            Poll::Pending => return,
+            Poll::Pending => return rs,
         };
+        
         tasks.iter().for_each(|task| {
+            rs = task.1 as i32;
             (task.0)(&self.store, task.1);
         });
+        rs
     }
 
     pub fn fill_cmos(&mut self) {

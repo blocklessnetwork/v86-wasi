@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{rc::Rc, time::Duration};
 
 use v86_wasi::{add_x86_to_linker, Emulator, Setting};
 use wasmtime::*;
@@ -18,4 +18,5 @@ fn main() {
     linker.module(&mut store, "", &module).unwrap();
     let inst = linker.instantiate(&mut store, &module).unwrap();
     emulator.start(inst, Rc::downgrade(&Rc::new(store)));
+    std::thread::sleep(Duration::from_secs(1000));
 }

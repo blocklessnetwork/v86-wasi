@@ -44,11 +44,15 @@ impl InnerEmulator {
     fn start(&mut self) {
         self.cpu.as_mut().map(|c| {
             c.init();
-            c.main_run();
-            loop {
-                c.next_tick(0);
-                c.tasks_trigger();
-            }
+            
+            // let mut t = c.main_run();
+            // loop {
+            //     c.next_tick(t as u64);
+            //     t = c.tasks_trigger();
+            //     if t != 0 {
+            //         std::thread::sleep(time::Duration::from_nanos(t as u64));
+            //     }
+            // }
         });
     }
 }
@@ -63,6 +67,7 @@ impl Emulator {
         let inner = Rc::new(Cell::new(InnerEmulator::new(setting)));
         Emulator { inner: inner }
     }
+
     #[inline]
     pub fn microtick(&self) -> f64 {
         self.inner().microtick()

@@ -371,6 +371,7 @@ impl IO {
             let mut aligned_addr = addr >> MMAP_BLOCK_BITS;
             let mut size = size;
             while size > 0 {
+                println!("size {}", size);
                 cpu.mmap_fn.memory_map_read8[aligned_addr as usize] = r8;
                 cpu.mmap_fn.memory_map_read32[aligned_addr as usize] = r32;
                 cpu.mmap_fn.memory_map_write8[aligned_addr as usize] = w8;
