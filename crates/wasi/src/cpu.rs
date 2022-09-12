@@ -529,11 +529,13 @@ impl CPU {
             0xFFF00000, 
             0x100000, 
             |dev: &Dev, addr: u32| -> u8 {
+                let addr = addr & 0xFFFFF;
                 dev.cpu_mut().map_or(0, |cpu| {
                     cpu.store_mut().map_or(0, |s| cpu.iomap.mem8_read(s, addr))
                 })
             },
             |dev: &Dev, addr: u32, v: u8| {
+                let addr = addr & 0xFFFFF;
                 dev.cpu_mut().map(|cpu| {
                     cpu.store_mut().map(|s| cpu.iomap.mem8_write(s, addr, v));
                 });

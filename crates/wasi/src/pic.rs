@@ -517,7 +517,7 @@ impl InnerPIC {
     }
 
     fn clear_slave_irq(&mut self, irq_number: u8) {
-        assert!(irq_number >= 0 && irq_number < 8);
+        assert!(irq_number < 8);
         if PIC_LOG_VERBOSE {
             dbg_log!(Module::PIC, "slave > clear irq {}", irq_number);
         }

@@ -26,7 +26,7 @@ impl Module {
             Self::CPU => true,
             Self::PIC => false,
             Self::PCI => true,
-            Self::IO => true,
+            Self::IO => false,
             Self::VGA => false,
             Self::RTC => true,
             Self::DMA => true,
