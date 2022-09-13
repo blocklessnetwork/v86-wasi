@@ -23,7 +23,7 @@ impl Module {
             Self::EMPTY => true,
             Self::FLOPPY => true,
             Self::DEBUG => true,
-            Self::CPU => true,
+            Self::CPU => false,
             Self::PIC => false,
             Self::PCI => true,
             Self::IO => false,

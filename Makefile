@@ -21,6 +21,8 @@ WASM_OPT ?= false
 
 default: target/v86-debug.wasm
 
+release: target/v86.wasm
+
 CARGO_FLAGS_SAFE=\
 		--target wasm32-unknown-unknown \
 		-- \
@@ -55,7 +57,7 @@ crates/v86/src/gen/analyzer0f.rs: $(ANALYZER_DEPENDENCIES)
 target/v86.wasm: $(RUST_FILES) target/softfloat.o target/zstddeclib.o Cargo.toml
 	mkdir -p target/
 	-BLOCK_SIZE=K ls -l target/v86.wasm
-	cargo rustc --release $(CARGO_FLAGS) 
+	cd  crates/v86 && CARGO_TARGET_PATH=$(V86_TARGET_PATH) cargo rustc --release $(CARGO_FLAGS) 
 	mv target/wasm32-unknown-unknown/release/v86.wasm target/v86.wasm
 	-$(WASM_OPT) && wasm-opt -O2 --strip-debug target/v86.wasm -o target/v86.wasm
 	BLOCK_SIZE=K ls -l target/v86.wasm
