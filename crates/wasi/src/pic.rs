@@ -455,7 +455,7 @@ impl InnerPIC {
     
 
     fn set_slave_irq(&mut self, irq_number: u8) {
-        assert!(irq_number >= 0 && irq_number < 8);
+        assert!(irq_number < 8);
         let irq_mask = 1 << irq_number;
         if (self.irq_value & irq_mask) == 0 {
             if PIC_LOG_VERBOSE {
@@ -472,7 +472,7 @@ impl InnerPIC {
     }
 
     fn set_master_irq(&mut self, irq_number: u8) {
-        assert!(irq_number >= 0 && irq_number < 16);
+        assert!(irq_number < 16);
         if irq_number >= 8 {
             self.store.pic_mut().map(|pic| {
                 pic.slave.set_irq(irq_number - 8);

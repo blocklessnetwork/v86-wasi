@@ -42,3 +42,19 @@ pub const CMOS_MEM_HIGHMEM_LOW: u8 = 0x5b;
 pub const CMOS_MEM_HIGHMEM_MID: u8 = 0x5c;
 pub const CMOS_MEM_HIGHMEM_HIGH: u8 = 0x5d;
 pub const CMOS_BIOS_SMP_COUNT: u8 = 0x5f;
+
+pub const WASM_TABLE_SIZE: u32 = 900;
+
+/** @const */
+pub const WASM_TABLE_OFFSET: u32 = 1024;
+
+pub const FW_CFG_SIGNATURE: u16 = 0x00;
+pub const FW_CFG_ID: u16 = 0x01;
+pub const FW_CFG_RAM_SIZE: u16 = 0x03;
+pub const FW_CFG_NB_CPUS: u16 = 0x05;
+pub const FW_CFG_MAX_CPUS: u16 = 0x0F;
+pub const FW_CFG_NUMA: u16 = 0x0D;
+pub const FW_CFG_FILE_DIR: u16 = 0x19;
+pub const FW_CFG_CUSTOM_START: u16 = 0x8000;
+pub const FW_CFG_FILE_START: u16 = 0xC000;
+pub const FW_CFG_SIGNATURE_QEMU: u32 = 0x554D4551;

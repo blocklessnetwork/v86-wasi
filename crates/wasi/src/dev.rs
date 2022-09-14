@@ -1,4 +1,6 @@
 #![allow(unused)]
+use std::rc::Rc;
+
 use crate::{
     bus::BUS, debug::Debug, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Emulator,
     ContextTrait, CPU, vga::VGAScreen, uart::UART, StoreT, ps2::PS2, floppy::FloppyController, pit::PIT,
@@ -207,4 +209,9 @@ impl Dev {
             _ => None,
         }
     }
+}
+
+pub(crate) struct OptionRom {
+    pub name: String,
+    pub data: Rc<Vec<u8>>,
 }

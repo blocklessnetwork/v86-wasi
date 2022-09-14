@@ -36,6 +36,7 @@ mod pit;
 mod rtc;
 mod uart;
 mod floppy;
+mod kernel;
 mod setting;
 mod vga;
 pub use consts::*;
@@ -272,7 +273,8 @@ impl ContextTrait for StoreT {
     }
 }
 
-pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
+pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
+    linker.define("env", "__indirect_function_table", table).unwrap();
     linker
         .func_wrap(
             "env",
@@ -339,7 +341,7 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>) {
             "env",
             "get_rand_int",
             move |mut _caller: Caller<'_, Emulator>| -> i32 {
-                panic!("env get_rand_int call.");
+                rand::random::<i32>()
             },
         )
         .unwrap();

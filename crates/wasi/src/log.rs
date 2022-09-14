@@ -1,9 +1,8 @@
 use std::fmt::Display;
 
 pub enum Module {
-    EMPTY,
+    E,
     BIOS,
-    DEBUG,
     SERIAL,
     FLOPPY,
     CPU,
@@ -20,20 +19,19 @@ pub enum Module {
 impl Module {
     pub(crate) fn display(&self) -> bool {
         match *self {
-            Self::EMPTY => true,
+            Self::E => true,
             Self::FLOPPY => true,
-            Self::DEBUG => true,
-            Self::CPU => false,
-            Self::PIC => false,
+            Self::CPU => true,
+            Self::PIC => true,
             Self::PCI => true,
-            Self::IO => false,
+            Self::IO => true,
             Self::VGA => false,
             Self::RTC => true,
             Self::DMA => true,
             Self::PIT => false,
             Self::BIOS => true,
             Self::SERIAL => true,
-            Self::PS2 => false,
+            Self::PS2 => true,
         }
     }
 }
@@ -42,7 +40,7 @@ impl Display for Module {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
             Self::IO => f.write_str("IO"),
-            Self::EMPTY => f.write_str(""),
+            Self::E => f.write_str("  "),
             Self::CPU => f.write_str("CPU"),
             Self::PIC => f.write_str("PIC"),
             Self::PIT => f.write_str("PIT"),
@@ -52,7 +50,6 @@ impl Display for Module {
             Self::DMA => f.write_str("DMA"),
             Self::PS2 => f.write_str("PS2"),
             Self::BIOS => f.write_str("BIOS"),
-            Self::DEBUG => f.write_str("DEBUG"),
             Self::SERIAL => f.write_str("SERIAL"),
             Self::FLOPPY => f.write_str("FLOPPY"),
         }
@@ -65,6 +62,7 @@ macro_rules! dbg_log {
             let values = format!($fmt, $($arg)*);
             println!("[{:5}] {}", $m, &values);
         }
+        
     };
 
     ($m: expr, $fmt:expr) => {

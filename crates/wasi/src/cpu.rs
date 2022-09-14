@@ -5,7 +5,7 @@
 // https://www-ssl.intel.com/content/www/us/en/processors/architectures-software-developer-manuals.html
 // http://ref.x86asm.net/geek32.html
 
-use std::{rc::Weak, task::Poll};
+use std::{rc::{Weak, Rc}, task::Poll};
 
 use crate::{
     ContextTrait,
@@ -18,7 +18,7 @@ use crate::{
     pci::PCI,
     pic::PIC,
     rtc::RTC,
-    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, vga::VGAScreen, log::Module, timewheel, uart::UART, StoreT, ps2::PS2, floppy::FloppyController, pit::PIT,
+    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, vga::VGAScreen, log::Module, timewheel, uart::UART, StoreT, ps2::PS2, floppy::FloppyController, pit::PIT, kernel::load_kernel, dev::OptionRom,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -283,7 +283,10 @@ pub struct CPU {
     memory: Memory,
     vm_opers: VMOpers,
     tick_counter: u64,
+    fw_value: Rc<Vec<u8>>,
+    fw_pointer: usize,
     tasks: TimeWheel<TaskFn>,
+    option_roms: Vec<OptionRom>,
     pub(crate) io: IO,
     pub(crate) dma: DMA,
     pub(crate) pic: PIC,
@@ -329,17 +332,20 @@ impl CPU {
             memory,
             idle: true,
             a20_byte: 0,
+            fw_pointer: 0,
             tick_counter: 0,
             store: store.clone(),
             mmap_fn: MMapFn::new(),
+            option_roms: Vec::new(),
             iomap: IOMap::new(memory),
+            tasks: TimeWheel::new(60),
             io: IO::new(store.clone()),
             pic: PIC::new(store.clone()),
             pci: PCI::new(store.clone()),
             dma: DMA::new(store.clone()),
+            fw_value: Rc::new(Vec::new()),
             debug: Debug::new(store.clone()),
             vm_opers: VMOpers::new(&inst, s),
-            tasks: TimeWheel::new(60),
         }
     }
 
@@ -476,6 +482,20 @@ impl CPU {
         self.iomap.mem32s = Some(MemAccess::new(offset as _, size >> 2, self.memory));
     }
 
+    #[inline]
+    pub fn mem8_write_slice(&mut self, idx: usize, s: &[u8]) {
+        self.store_mut().map(|store| {
+            self.iomap.mem8_write_slice(store, idx, s);
+        });
+    }
+
+    #[inline]
+    pub fn mem8_write(&mut self, idx: u32, s: u8) {
+        self.store_mut().map(|store| {
+            self.iomap.mem8_write(store, idx, s);
+        });
+    }
+
     fn load_bios(&mut self) {
         let bios = self
             .emulator_mut()
@@ -559,6 +579,21 @@ impl CPU {
         self.io.init();
     }
 
+    #[inline]
+    fn load_kernel(&mut self) {
+        let setting = self.store.setting();
+        if setting.bzimage_file.is_some() {
+            let bzimage = setting.load_bzimage_file().unwrap();
+            let initrd = setting.load_initrd_file();
+            let cmd = setting.cmdline.clone().unwrap_or_default();
+            load_kernel(self, bzimage, initrd, cmd).map(|option_roms| 
+                self.option_roms.push(option_roms)
+            );
+
+            
+        }
+    }
+
     pub fn init(&mut self) {
         self.set_tsc(0, 0);
         let memory_size = self
@@ -578,6 +613,83 @@ impl CPU {
         self.vga.init();
         self.reset_cpu();
         self.load_bios();
+        self.load_kernel();
+        
+        self.io.register_read8(
+            0x511, 
+            Dev::Emulator(self.store.clone()), 
+            |dev: &Dev, _: u32| {
+                dev.cpu_mut().map_or(0, |cpu| {
+                    if cpu.fw_pointer < cpu.fw_value.len() {
+                        let rs = cpu.fw_value[cpu.fw_pointer];
+                        cpu.fw_pointer += 1;
+                        rs
+                    } else {
+                        assert!(false, "config port: Read past value");
+                        0
+                    }
+                })
+            }
+        );
+
+        self.io.register_write(
+            0x510, 
+            Dev::Emulator(self.store.clone()), 
+            IO::empty_write8,
+            |dev: &Dev, _: u32, value: u16| {
+                dev.cpu_mut().map(|cpu| {
+                    dbg_log!(Module::E, "bios config port, index={:#X}", value);
+                    let vi32 = |i:i32| -> Rc<Vec<u8>> {
+                        Rc::new(Vec::from(i.to_le_bytes()))
+                    };
+                    cpu.fw_pointer = 0;
+                    if value == FW_CFG_SIGNATURE {
+                        // Pretend to be qemu (for seabios)
+                        cpu.fw_value = vi32(FW_CFG_SIGNATURE_QEMU as i32);
+                    } else if value == FW_CFG_ID {
+                        cpu.fw_value = vi32(0);
+                    } else if value == FW_CFG_RAM_SIZE {
+                        cpu.fw_value = vi32(cpu.read_mem_size() as i32);
+                    } else if value == FW_CFG_NB_CPUS {
+                        cpu.fw_value = vi32(1);
+                    } else if value == FW_CFG_MAX_CPUS {
+                        cpu.fw_value = vi32(1);
+                    } else if value == FW_CFG_NUMA {
+                        cpu.fw_value = Rc::new(vec![0; 16]);
+                    } else if value == FW_CFG_FILE_DIR {
+                        let buffer_size = 4 + 64 * cpu.option_roms.len();
+                        let mut buffer8 = vec![0u8; buffer_size*4];
+                        let buffer32 = unsafe {
+                            std::slice::from_raw_parts_mut(buffer8.as_mut_ptr() as *mut i32, buffer_size)
+                        };
+                        buffer32[0] = (cpu.option_roms.len() as i32).to_be();
+                        for i in 0..cpu.option_roms.len() {
+                            let rom = &cpu.option_roms[i];
+                            let name = rom.name.as_bytes();
+                            let data = &rom.data;
+                            let file_struct_ptr = 4 + 64 * i;
+                            assert!((FW_CFG_FILE_START as usize + i) < 0x10000);
+                            buffer32[file_struct_ptr + 0 >> 2] = (data.len() as i32).to_be();
+                            buffer32[file_struct_ptr + 4 >> 2] = (FW_CFG_FILE_START + i as u16).to_be() as i32;
+                            assert!(name.len() < 64 - 8);
+                            let start = file_struct_ptr + 8;
+                            let end = start + name.len();
+                            buffer8[start..end].copy_from_slice(name);
+                        }
+                        cpu.fw_value = Rc::new(buffer8);
+                    } else if value >= FW_CFG_CUSTOM_START && value < FW_CFG_FILE_START {
+                        cpu.fw_value = vi32(0);
+                    } else if value >= FW_CFG_FILE_START && value - FW_CFG_FILE_START < cpu.option_roms.len() as u16 {
+                        let i = value - FW_CFG_FILE_START;
+                        cpu.fw_value = cpu.option_roms[i as usize].data.clone();
+                    } else {
+                        dbg_log!(Module::E, "Warning: Unimplemented fw index: {:#X}", value);
+                        cpu.fw_value = vi32(0);
+                    }
+                });
+            },
+            IO::empty_write32,
+        );
 
         self.io
             .register_read8(0xB3, Dev::Empty, |_: &Dev, _: u32| -> u8 {
@@ -596,7 +708,7 @@ impl CPU {
                 d.cpu_mut().map(|cpu| cpu.a20_byte = v);
             },
         );
-        //TODO: IO 0x511
+        
 
         self.rtc.init();
         

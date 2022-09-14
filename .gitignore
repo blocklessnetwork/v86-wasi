@@ -9,6 +9,7 @@ target/
 *.fixture
 *.fuse_hidden*
 *.DS_Store
+.vscode/
 node_modules/
 Cargo.lock
 crates/v86/src/gen/interpreter.rs
