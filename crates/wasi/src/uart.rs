@@ -387,7 +387,7 @@ impl UART {
         if out_byte == b'\n' {
             //TODO const line = String.fromCharCode.apply("", this.current_line).trimRight().replace(/[\x00-\x08\x0b-\x1f\x7f\x80-\xff]/g, "");
             let line = unsafe { std::str::from_utf8_unchecked(&self.current_line) };
-            dbg_log!(Module::SERIAL, "SERIAL: {}", line);
+            dbg_log!(Module::E, "SERIAL: {}", line);
             self.store.bus_mut().map(|bus| {
                 bus.send(
                     &format!("serial{}-output-line", self.com),

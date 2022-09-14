@@ -1,4 +1,28 @@
 use std::fmt::Display;
+use std::fs::{File, OpenOptions};
+use std::io::Write;
+use std::sync::Once;
+
+static LOG_FNAME: &str = "debug.log";
+
+#[inline]
+pub fn log(record: &[u8]) {
+    static mut LOG_FILE: Option<File> = None;
+    static mut LOG_FILE_ONCE: Once = Once::new();
+    unsafe {
+        LOG_FILE_ONCE.call_once(|| {
+            LOG_FILE = OpenOptions::new()
+                .write(true)
+                .append(true)
+                .create(true)
+                .open(LOG_FNAME)
+                .ok();
+        });
+        LOG_FILE.as_mut().map(|f| {
+            let _ = f.write_all(record);
+        });
+    }
+}
 
 pub enum Module {
     E,
@@ -22,7 +46,7 @@ impl Module {
             Self::E => true,
             Self::FLOPPY => true,
             Self::CPU => true,
-            Self::PIC => true,
+            Self::PIC => false,
             Self::PCI => true,
             Self::IO => true,
             Self::VGA => false,
@@ -60,7 +84,8 @@ macro_rules! dbg_log {
     ($m: expr, $fmt:expr, $($arg:tt)*) => {
         if $m.display() {
             let values = format!($fmt, $($arg)*);
-            println!("[{:5}] {}", $m, &values);
+            let record = format!("[{:>5}] {}\n", $m, &values);
+            crate::log::log(record.as_bytes());
         }
 
     };
@@ -68,7 +93,8 @@ macro_rules! dbg_log {
     ($m: expr, $fmt:expr) => {
         if $m.display() {
             let values = format!($fmt);
-            println!("[{:5}] {}", $m, &values);
+            let record = format!("[{:>5}] {}\n", $m, &values);
+            crate::log::log(record.as_bytes());
         }
     };
 }
