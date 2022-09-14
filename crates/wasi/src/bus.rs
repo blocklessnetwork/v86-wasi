@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Emulator, ContextTrait, StoreT};
+use crate::{ContextTrait, Emulator, StoreT};
 
 pub(crate) enum BusData {
     None,
@@ -11,7 +11,7 @@ pub(crate) enum BusData {
     MouseEvent(u8, u8, u8),
     PcspeakerUpdate(u8, u16),
     ScreenSetSizeGraphical(u32, u32, u32, u32, u16),
-    ScreenPutChar(u8, u8, u8, i32, i32)
+    ScreenPutChar(u8, u8, u8, i32, i32),
 }
 
 pub(crate) type BusCall = fn(store: &StoreT, data: &BusData);

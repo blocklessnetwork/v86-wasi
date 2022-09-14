@@ -1,13 +1,12 @@
 #![allow(unused)]
-use std::{
-    cell::Cell,
-    rc::Rc,
-    time,
+use std::{cell::Cell, rc::Rc, time};
+
+use wasmtime::Instance;
+
+use crate::{
+    bus::BUS, dma::DMA, floppy::FloppyController, io::IO, pci::PCI, pic::PIC, pit::PIT, ps2::PS2,
+    rtc::RTC, uart::UART, vga::VGAScreen, Setting, StoreT, CPU,
 };
-
-use wasmtime::{Instance};
-
-use crate::{bus::BUS, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Setting, CPU, vga::VGAScreen, uart::UART, StoreT, ps2::PS2, floppy::FloppyController, pit::PIT};
 
 pub(crate) struct InnerEmulator {
     start_time: time::Instant,
@@ -38,7 +37,7 @@ impl InnerEmulator {
 
     #[inline]
     pub(crate) fn microtick(&self) -> f64 {
-        (self.start_time.elapsed().as_micros() as f64)/1000.
+        (self.start_time.elapsed().as_micros() as f64) / 1000.
     }
 
     fn start(&mut self) {

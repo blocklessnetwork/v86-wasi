@@ -1,6 +1,6 @@
-use crate::{ContextTrait, log::Module, bus::BusData, IO, Dev, StoreT};
+use crate::{bus::BusData, log::Module, ContextTrait, Dev, StoreT, IO};
 
-const UART_IER_MSI: u8  = 0x08; /* Modem Status Changed int. */
+const UART_IER_MSI: u8 = 0x08; /* Modem Status Changed int. */
 const UART_IIR_THRI: u8 = 0x02; /* Transmitter holding register empty */
 const UART_IER_THRI: u8 = 0x02; /* Enable Transmitter holding register int. */
 const DLAB: u8 = 0x80;
@@ -8,10 +8,9 @@ const UART_IIR_CTI: u8 = 0x0c; /* Character timeout */
 const UART_IER_RDI: u8 = 0x01; /* Enable receiver data interrupt */
 const UART_IIR_MSI: u8 = 0x00; /* Modem status interrupt (Low priority) */
 const UART_IIR_NO_INT: u8 = 0x01;
-const UART_LSR_DATA_READY: u8 = 0x1;  // data available
+const UART_LSR_DATA_READY: u8 = 0x1; // data available
 const UART_LSR_TX_EMPTY: u8 = 0x20; // TX (THR) buffer is empty
 const UART_LSR_TRANSMITTER_EMPTY: u8 = 0x40; // TX empty and line is idle
-
 
 pub(crate) struct UART {
     store: StoreT,
@@ -65,56 +64,58 @@ impl UART {
 
     pub fn init(&mut self) {
         self.store.bus_mut().map(|bus| {
-            bus.register(&format!("serial{}-input", self.com), |store: &StoreT, data: &BusData|{
-                match data {
-                    BusData::U8(data) => {
-                        store.uart0_mut().map(|uart| {
-                            uart.data_received(*data);
-                        });
-                    }
-                    _ => {}
-                };
-            });
+            bus.register(
+                &format!("serial{}-input", self.com),
+                |store: &StoreT, data: &BusData| {
+                    match data {
+                        BusData::U8(data) => {
+                            store.uart0_mut().map(|uart| {
+                                uart.data_received(*data);
+                            });
+                        }
+                        _ => {}
+                    };
+                },
+            );
         });
         self.store.io_mut().map(|io| {
-
             io.register_write(
                 self.port,
-                Dev::Emulator(self.store.clone()), 
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, v: u8| {
                     dev.uart0_mut().map(|uart| {
                         uart.write_data(v);
                     });
-                }, 
+                },
                 |dev: &Dev, _addr: u32, v: u16| {
                     dev.uart0_mut().map(|uart| {
                         uart.write_data((v & 0xFF) as u8);
                         uart.write_data((v >> 8) as u8);
                     });
                 },
-                IO::empty_write32
+                IO::empty_write32,
             );
 
             io.register_write8(
                 self.port | 1,
-                Dev::Emulator(self.store.clone()), 
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, out_byte: u8| {
                     dev.uart0_mut().map(|uart| {
                         if uart.line_control & DLAB > 0 {
                             uart.baud_rate = uart.baud_rate & 0xFF | (out_byte as u16) << 8;
-                            dbg_log!(Module::SERIAL, "baud rate: {:#X}" ,uart.baud_rate);
+                            dbg_log!(Module::SERIAL, "baud rate: {:#X}", uart.baud_rate);
                         } else {
                             uart.ier = out_byte & 0xF;
-                            dbg_log!(Module::SERIAL, "interrupt enable: {:#X}" ,out_byte);
+                            dbg_log!(Module::SERIAL, "interrupt enable: {:#X}", out_byte);
                             uart.check_interrupt();
                         }
                     });
-                }
+                },
             );
             //register port read8
             io.register_read8(
-                self.port, 
-                Dev::Emulator(self.store.clone()), 
+                self.port,
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32| {
                     dev.uart0_mut().map_or(0, |uart| {
                         if uart.line_control & DLAB > 0 {
@@ -141,13 +142,13 @@ impl UART {
                             return data;
                         }
                     })
-                }
+                },
             );
 
             //register port|1 read8
             io.register_read8(
-                self.port | 1, 
-                Dev::Emulator(self.store.clone()), 
+                self.port | 1,
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32| {
                     dev.uart0_mut().map_or(0, |uart| {
                         if uart.line_control & DLAB > 0 {
@@ -156,153 +157,164 @@ impl UART {
                             return (uart.ier & 0xF) as u8;
                         }
                     })
-                }
+                },
             );
 
             //register port|2 read8
             io.register_read8(
-                self.port | 2, 
-                Dev::Emulator(self.store.clone()), 
+                self.port | 2,
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32| {
                     dev.uart0_mut().map_or(0, |uart| {
                         let ret = uart.iir & 0xF | 0xC0;
-                        dbg_log!(Module::SERIAL, "read interrupt identification: {:#X}", uart.iir);
-                
+                        dbg_log!(
+                            Module::SERIAL,
+                            "read interrupt identification: {:#X}",
+                            uart.iir
+                        );
+
                         if uart.iir == UART_IIR_THRI {
                             uart.clear_interrupt(UART_IIR_THRI);
                         }
                         return ret;
                     })
-                }
+                },
             );
 
             //register port|2 write8
             io.register_write8(
-                self.port | 2, 
-                Dev::Emulator(self.store.clone()), 
+                self.port | 2,
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, out_byte: u8| {
                     dev.uart0_mut().map(|uart| {
                         dbg_log!(Module::SERIAL, "fifo control: {:#X}", out_byte);
                         uart.fifo_control = out_byte;
                     });
-                }
+                },
             );
 
-             //register port|3 read8
-             io.register_read8(
-                self.port | 3, 
-                Dev::Emulator(self.store.clone()), 
+            //register port|3 read8
+            io.register_read8(
+                self.port | 3,
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32| {
                     dev.uart0_mut().map_or(0, |uart| {
-                        dbg_log!(Module::SERIAL, "read line control: {:#X}", uart.line_control);
+                        dbg_log!(
+                            Module::SERIAL,
+                            "read line control: {:#X}",
+                            uart.line_control
+                        );
                         return uart.line_control;
                     })
-                }
+                },
             );
 
             //register port|3 write8
             io.register_write8(
-                self.port | 3, 
-                Dev::Emulator(self.store.clone()), 
+                self.port | 3,
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, out_byte: u8| {
                     dev.uart0_mut().map(|uart| {
                         dbg_log!(Module::SERIAL, "line control: {:#X}", out_byte);
                         uart.fifo_control = out_byte;
                     });
-                }
+                },
             );
 
             //register port|4 read8
             io.register_read8(
-                self.port | 4, 
-                Dev::Emulator(self.store.clone()), 
+                self.port | 4,
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32| {
                     dev.uart0_mut().map_or(0, |uart| {
                         return uart.modem_control;
                     })
-                }
+                },
             );
 
             //register port|4 write8
             io.register_write8(
-                self.port | 4, 
-                Dev::Emulator(self.store.clone()), 
+                self.port | 4,
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, out_byte: u8| {
                     dev.uart0_mut().map(|uart| {
                         dbg_log!(Module::SERIAL, "modem control: {:#X}", out_byte);
                         uart.modem_control = out_byte;
                     });
-                }
+                },
             );
 
             //register port|5 read8
             io.register_read8(
-                self.port | 5, 
-                Dev::Emulator(self.store.clone()), 
+                self.port | 5,
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32| {
                     dev.uart0_mut().map_or(0, |uart| {
                         dbg_log!(Module::SERIAL, "read line status: {:#X}", uart.line_control);
                         return uart.lsr;
                     })
-                }
+                },
             );
 
             //register port|5 write8
             io.register_write8(
-                self.port | 5, 
-                Dev::Emulator(self.store.clone()), 
+                self.port | 5,
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, _out_byte: u8| {
                     dev.uart0_mut().map(|uart| {
                         dbg_log!(Module::SERIAL, "Factory test write");
                     });
-                }
+                },
             );
 
             //register port|6 read8
             io.register_read8(
-                self.port | 6, 
-                Dev::Emulator(self.store.clone()), 
+                self.port | 6,
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32| {
                     dev.uart0_mut().map_or(0, |uart| {
-                        dbg_log!(Module::SERIAL, "read modem status: {:#X}", uart.modem_status);
+                        dbg_log!(
+                            Module::SERIAL,
+                            "read modem status: {:#X}",
+                            uart.modem_status
+                        );
                         return uart.lsr;
                     })
-                }
+                },
             );
 
             //register port|6 write8
             io.register_write8(
-                self.port | 6, 
-                Dev::Emulator(self.store.clone()), 
+                self.port | 6,
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, _out_byte: u8| {
                     dev.uart0_mut().map(|uart| {
                         dbg_log!(Module::SERIAL, "Unkown register write (base+6)");
                     });
-                }
+                },
             );
 
             //register port|7 read8
             io.register_read8(
-                self.port | 7, 
-                Dev::Emulator(self.store.clone()), 
+                self.port | 7,
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32| {
                     dev.uart0_mut().map_or(0, |uart| {
                         return uart.scratch_register;
                     })
-                }
+                },
             );
 
             //register port|7 write8
             io.register_write8(
-                self.port | 7, 
-                Dev::Emulator(self.store.clone()), 
+                self.port | 7,
+                Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, out_byte: u8| {
                     dev.uart0_mut().map(|uart| {
                         uart.scratch_register = out_byte;
                     });
-                }
+                },
             );
-
         });
     }
 
@@ -312,7 +324,7 @@ impl UART {
     }
 
     fn check_interrupt(&mut self) {
-        if (self.ints as u16 & ((1 as u16) << UART_IIR_CTI)) > 0  && (self.ier & UART_IER_RDI) > 0 {
+        if (self.ints as u16 & ((1 as u16) << UART_IIR_CTI)) > 0 && (self.ier & UART_IER_RDI) > 0 {
             self.iir = UART_IIR_CTI;
             self.store.cpu_mut().map(|cpu| {
                 cpu.device_raise_irq(self.irq);
@@ -322,7 +334,7 @@ impl UART {
             self.store.cpu_mut().map(|cpu| {
                 cpu.device_raise_irq(self.irq);
             });
-        } else if (self.ints & (1 << UART_IIR_MSI)) > 0  && (self.ier & UART_IER_MSI) > 0 {
+        } else if (self.ints & (1 << UART_IIR_MSI)) > 0 && (self.ier & UART_IER_MSI) > 0 {
             self.iir = UART_IIR_MSI;
             self.store.cpu_mut().map(|cpu| {
                 cpu.device_raise_irq(self.irq);
@@ -364,20 +376,25 @@ impl UART {
             return;
         }
         self.store.bus_mut().map(|bus| {
-            bus.send(&format!("serial{}-output-char", self.com), BusData::U8(out_byte))
+            bus.send(
+                &format!("serial{}-output-char", self.com),
+                BusData::U8(out_byte),
+            )
         });
-        
+
         self.current_line.push(out_byte);
 
         if out_byte == b'\n' {
             //TODO const line = String.fromCharCode.apply("", this.current_line).trimRight().replace(/[\x00-\x08\x0b-\x1f\x7f\x80-\xff]/g, "");
-            let line = unsafe {std::str::from_utf8_unchecked(&self.current_line)};
+            let line = unsafe { std::str::from_utf8_unchecked(&self.current_line) };
             dbg_log!(Module::SERIAL, "SERIAL: {}", line);
             self.store.bus_mut().map(|bus| {
-                bus.send(&format!("serial{}-output-line", self.com), BusData::String(line.into()));
+                bus.send(
+                    &format!("serial{}-output-line", self.com),
+                    BusData::String(line.into()),
+                );
             });
             self.current_line.clear();
         }
     }
-
 }

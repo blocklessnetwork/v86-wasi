@@ -1,4 +1,4 @@
-use crate::{Dev, ContextTrait, ALL_DEBUG, log::Module, StoreT};
+use crate::{log::Module, ContextTrait, Dev, StoreT, ALL_DEBUG};
 
 pub(crate) struct Debug {
     bios_dbg: Vec<u8>,
@@ -24,10 +24,9 @@ impl Debug {
             let handle = |dev: &Dev, _port: u32, v: u8| {
                 dev.debug_mut().map(|debug| {
                     if v == b'\n' {
-                        dbg_log!(
-                            Module::BIOS, "{}", 
-                            unsafe {std::str::from_utf8_unchecked(&debug.bios_dbg)}
-                        );
+                        dbg_log!(Module::BIOS, "{}", unsafe {
+                            std::str::from_utf8_unchecked(&debug.bios_dbg)
+                        });
                         debug.bios_dbg.clear();
                     } else {
                         debug.bios_dbg.push(v);

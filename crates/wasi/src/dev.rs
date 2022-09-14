@@ -2,8 +2,8 @@
 use std::rc::Rc;
 
 use crate::{
-    bus::BUS, debug::Debug, dma::DMA, io::IO, pci::PCI, pic::PIC, rtc::RTC, Emulator,
-    ContextTrait, CPU, vga::VGAScreen, uart::UART, StoreT, ps2::PS2, floppy::FloppyController, pit::PIT,
+    bus::BUS, debug::Debug, dma::DMA, floppy::FloppyController, io::IO, pci::PCI, pic::PIC,
+    pit::PIT, ps2::PS2, rtc::RTC, uart::UART, vga::VGAScreen, ContextTrait, Emulator, StoreT, CPU,
 };
 
 #[derive(Clone)]

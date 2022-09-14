@@ -5,20 +5,31 @@
 // https://www-ssl.intel.com/content/www/us/en/processors/architectures-software-developer-manuals.html
 // http://ref.x86asm.net/geek32.html
 
-use std::{rc::{Weak, Rc}, task::Poll};
+use std::{
+    rc::{Rc, Weak},
+    task::Poll,
+};
 
 use crate::{
-    ContextTrait,
     bus::BUS,
-    timewheel::TimeWheel,
     consts::*,
     debug::Debug,
+    dev::OptionRom,
     dma::DMA,
+    floppy::FloppyController,
     io::{MMapFn, MemAccess, MemAccessTrait, IO},
+    kernel::load_kernel,
+    log::Module,
     pci::PCI,
     pic::PIC,
+    pit::PIT,
+    ps2::PS2,
     rtc::RTC,
-    Dev, Emulator, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, vga::VGAScreen, log::Module, timewheel, uart::UART, StoreT, ps2::PS2, floppy::FloppyController, pit::PIT, kernel::load_kernel, dev::OptionRom,
+    timewheel,
+    timewheel::TimeWheel,
+    uart::UART,
+    vga::VGAScreen,
+    ContextTrait, Dev, Emulator, StoreT, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -82,16 +93,12 @@ impl IOMap {
 
     #[inline]
     fn mem8_read(&mut self, store: impl AsContextMut, idx: u32) -> u8 {
-        self.mem8
-            .as_ref()
-            .map_or(0, |mem8| mem8.read(store, idx))
+        self.mem8.as_ref().map_or(0, |mem8| mem8.read(store, idx))
     }
 
     #[inline]
     fn mem8_write(&mut self, store: impl AsContextMut, idx: u32, val: u8) {
-        self.mem8
-            .as_mut()
-            .map(|mem8| mem8.write(store, idx, val));
+        self.mem8.as_mut().map(|mem8| mem8.write(store, idx, val));
     }
 
     fn new(memory: Memory) -> Self {
@@ -351,14 +358,22 @@ impl CPU {
 
     #[inline]
     pub fn mmap_read8(&mut self, addr: u32) -> u8 {
-        let mfn = self.mmap_fn.memory_map_read8.get(&(addr >> MMAP_BLOCK_BITS)).unwrap();
+        let mfn = self
+            .mmap_fn
+            .memory_map_read8
+            .get(&(addr >> MMAP_BLOCK_BITS))
+            .unwrap();
         let dev = Dev::Emulator(self.store.clone());
         (mfn)(&dev, addr)
     }
 
     #[inline]
     pub fn mmap_read16(&mut self, addr: u32) -> u16 {
-        let mfn = self.mmap_fn.memory_map_read8.get(&(addr >> MMAP_BLOCK_BITS)).unwrap();
+        let mfn = self
+            .mmap_fn
+            .memory_map_read8
+            .get(&(addr >> MMAP_BLOCK_BITS))
+            .unwrap();
         let dev = Dev::Emulator(self.store.clone());
         let value = mfn(&dev, addr) as u16 | (mfn(&dev, addr + 1 | 0) as u16) << 8;
         value
@@ -366,21 +381,33 @@ impl CPU {
 
     #[inline]
     pub fn mmap_read32(&mut self, addr: u32) -> u32 {
-        let mfn = self.mmap_fn.memory_map_read32.get(&(addr >> MMAP_BLOCK_BITS)).unwrap();
+        let mfn = self
+            .mmap_fn
+            .memory_map_read32
+            .get(&(addr >> MMAP_BLOCK_BITS))
+            .unwrap();
         let dev = Dev::Emulator(self.store.clone());
         mfn(&dev, addr)
     }
 
     #[inline]
     pub fn mmap_write8(&mut self, addr: u32, value: u8) {
-        let mfn = self.mmap_fn.memory_map_write8.get(&(addr >> MMAP_BLOCK_BITS)).unwrap();
+        let mfn = self
+            .mmap_fn
+            .memory_map_write8
+            .get(&(addr >> MMAP_BLOCK_BITS))
+            .unwrap();
         let dev = Dev::Emulator(self.store.clone());
         (mfn)(&dev, addr, value);
     }
 
     #[inline]
     pub fn mmap_write16(&mut self, addr: u32, value: u16) {
-        let mfn = self.mmap_fn.memory_map_write8.get(&(addr >> MMAP_BLOCK_BITS)).unwrap();
+        let mfn = self
+            .mmap_fn
+            .memory_map_write8
+            .get(&(addr >> MMAP_BLOCK_BITS))
+            .unwrap();
         let dev = Dev::Emulator(self.store.clone());
         mfn(&dev, addr, (value & 0xFF) as u8);
         mfn(&dev, addr + 1, (value >> 8) as u8);
@@ -388,7 +415,11 @@ impl CPU {
 
     #[inline]
     pub fn mmap_write32(&mut self, addr: u32, value: u32) {
-        let mfn = self.mmap_fn.memory_map_write32.get(&(addr >> MMAP_BLOCK_BITS)).unwrap();
+        let mfn = self
+            .mmap_fn
+            .memory_map_write32
+            .get(&(addr >> MMAP_BLOCK_BITS))
+            .unwrap();
         let dev = Dev::Emulator(self.store.clone());
         mfn(&dev, addr, value)
     }
@@ -515,22 +546,21 @@ impl CPU {
             .map(|emu| emu.setting().load_vga_bios_file())
             .flatten();
         if vga_bios.is_some() {
-
             let vga_bios = vga_bios.unwrap();
             self.store_mut().map(|store| {
                 // older versions of seabios
                 self.iomap.mem8_write_slice(store, 0xC0000, &vga_bios);
             });
             self.store.emulator_mut().set_vga_bios(vga_bios);
-            // newer versions of seabios 
+            // newer versions of seabios
             self.io.mmap_register(
-                0xFEB00000, 
+                0xFEB00000,
                 0x100000,
                 |dev: &Dev, addr: u32| {
                     let mut addr: usize = addr as usize;
                     dev.vga_bios().map_or(0, |b| {
                         addr = (addr - 0xFEB00000) | 0;
-                        if addr  < b.len()  {
+                        if addr < b.len() {
                             b[addr]
                         } else {
                             0
@@ -539,15 +569,15 @@ impl CPU {
                 },
                 |dev: &Dev, addr: u32, v: u8| {
                     assert!(false, "Unexpected write to VGA rom");
-                }, 
+                },
                 IO::empty_read32,
-                IO::empty_write32, 
+                IO::empty_write32,
             );
         }
         // seabios expects the bios to be mapped to 0xFFF00000 also
         self.io.mmap_register(
-            0xFFF00000, 
-            0x100000, 
+            0xFFF00000,
+            0x100000,
             |dev: &Dev, addr: u32| -> u8 {
                 let addr = addr & 0xFFFFF;
                 dev.cpu_mut().map_or(0, |cpu| {
@@ -559,8 +589,8 @@ impl CPU {
                 dev.cpu_mut().map(|cpu| {
                     cpu.store_mut().map(|s| cpu.iomap.mem8_write(s, addr, v));
                 });
-            }, 
-            IO::empty_read32, 
+            },
+            IO::empty_read32,
             IO::empty_write32,
         );
         #[cfg(feature = "check_bios")]
@@ -586,11 +616,8 @@ impl CPU {
             let bzimage = setting.load_bzimage_file().unwrap();
             let initrd = setting.load_initrd_file();
             let cmd = setting.cmdline.clone().unwrap_or_default();
-            load_kernel(self, bzimage, initrd, cmd).map(|option_roms| 
-                self.option_roms.push(option_roms)
-            );
-
-            
+            load_kernel(self, bzimage, initrd, cmd)
+                .map(|option_roms| self.option_roms.push(option_roms));
         }
     }
 
@@ -603,7 +630,7 @@ impl CPU {
         self.debug.init();
         self.init_io();
         self.pci.init();
-        
+
         self.pit.init();
         self.pic.init();
         self.ps2.init();
@@ -614,10 +641,10 @@ impl CPU {
         self.reset_cpu();
         self.load_bios();
         self.load_kernel();
-        
+
         self.io.register_read8(
-            0x511, 
-            Dev::Emulator(self.store.clone()), 
+            0x511,
+            Dev::Emulator(self.store.clone()),
             |dev: &Dev, _: u32| {
                 dev.cpu_mut().map_or(0, |cpu| {
                     if cpu.fw_pointer < cpu.fw_value.len() {
@@ -629,26 +656,23 @@ impl CPU {
                         0
                     }
                 })
-            }
+            },
         );
 
         self.io.register_write8(
             0x80,
-            Dev::Emulator(self.store.clone()), 
-            |dev: &Dev, _: u32, value: u8| {
-            }
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32, value: u8| {},
         );
 
         self.io.register_write(
-            0x510, 
-            Dev::Emulator(self.store.clone()), 
+            0x510,
+            Dev::Emulator(self.store.clone()),
             IO::empty_write8,
             |dev: &Dev, _: u32, value: u16| {
                 dev.cpu_mut().map(|cpu| {
                     dbg_log!(Module::E, "bios config port, index={:#X}", value);
-                    let vi32 = |i:i32| -> Rc<Vec<u8>> {
-                        Rc::new(Vec::from(i.to_le_bytes()))
-                    };
+                    let vi32 = |i: i32| -> Rc<Vec<u8>> { Rc::new(Vec::from(i.to_le_bytes())) };
                     cpu.fw_pointer = 0;
                     if value == FW_CFG_SIGNATURE {
                         // Pretend to be qemu (for seabios)
@@ -665,9 +689,12 @@ impl CPU {
                         cpu.fw_value = Rc::new(vec![0; 16]);
                     } else if value == FW_CFG_FILE_DIR {
                         let buffer_size = 4 + 64 * cpu.option_roms.len();
-                        let mut buffer8 = vec![0u8; buffer_size*4];
+                        let mut buffer8 = vec![0u8; buffer_size * 4];
                         let buffer32 = unsafe {
-                            std::slice::from_raw_parts_mut(buffer8.as_mut_ptr() as *mut i32, buffer_size)
+                            std::slice::from_raw_parts_mut(
+                                buffer8.as_mut_ptr() as *mut i32,
+                                buffer_size,
+                            )
                         };
                         buffer32[0] = (cpu.option_roms.len() as i32).to_be();
                         for i in 0..cpu.option_roms.len() {
@@ -677,7 +704,8 @@ impl CPU {
                             let file_struct_ptr = 4 + 64 * i;
                             assert!((FW_CFG_FILE_START as usize + i) < 0x10000);
                             buffer32[file_struct_ptr + 0 >> 2] = (data.len() as i32).to_be();
-                            buffer32[file_struct_ptr + 4 >> 2] = (FW_CFG_FILE_START + i as u16).to_be() as i32;
+                            buffer32[file_struct_ptr + 4 >> 2] =
+                                (FW_CFG_FILE_START + i as u16).to_be() as i32;
                             assert!(name.len() < 64 - 8);
                             let start = file_struct_ptr + 8;
                             let end = start + name.len();
@@ -686,7 +714,9 @@ impl CPU {
                         cpu.fw_value = Rc::new(buffer8);
                     } else if value >= FW_CFG_CUSTOM_START && value < FW_CFG_FILE_START {
                         cpu.fw_value = vi32(0);
-                    } else if value >= FW_CFG_FILE_START && value - FW_CFG_FILE_START < cpu.option_roms.len() as u16 {
+                    } else if value >= FW_CFG_FILE_START
+                        && value - FW_CFG_FILE_START < cpu.option_roms.len() as u16
+                    {
                         let i = value - FW_CFG_FILE_START;
                         cpu.fw_value = cpu.option_roms[i as usize].data.clone();
                     } else {
@@ -715,10 +745,8 @@ impl CPU {
                 d.cpu_mut().map(|cpu| cpu.a20_byte = v);
             },
         );
-        
 
         self.rtc.init();
-        
 
         //TODO device loading
         self.fill_cmos();
@@ -911,7 +939,7 @@ impl CPU {
 
     pub fn device_lower_irq(&mut self, i: u8) {
         self.pic.clear_irq(i);
-       //TODO:
+        //TODO:
     }
 
     pub fn reboot_internal(&mut self) {

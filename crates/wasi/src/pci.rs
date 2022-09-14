@@ -1,6 +1,6 @@
 #![allow(unused)]
+use crate::{io::IOps, log::Module, utils::*, ContextTrait, Dev, Emulator, StoreT, IO};
 use std::mem;
-use crate::{io::IOps, utils::*, Dev, Emulator, ContextTrait, IO, log::Module, StoreT};
 
 const PCI_CONFIG_ADDRESS: u32 = 0xCF8;
 
@@ -281,7 +281,12 @@ impl PCI {
 
     pub fn register_device(&mut self, mut dev: impl PCIDevice + 'static) {
         let device_id: usize = dev.pci_id() as _;
-        dbg_log!(Module::PCI, "PCI register bdf=0x{:x} ({})", device_id, dev.name());
+        dbg_log!(
+            Module::PCI,
+            "PCI register bdf=0x{:x} ({})",
+            device_id,
+            dev.name()
+        );
         assert!(self.devices[device_id].is_none());
         assert!(dev.pci_space().len() >= 64);
         assert!(device_id < self.devices.len());
@@ -331,7 +336,7 @@ impl PCI {
         );
 
         dbg_log!(
-            Module::PCI, 
+            Module::PCI,
             "PCI write8 dev={:#02x} ({}) addr={:#04x} value={:#02X}",
             bdf >> 3,
             device.unwrap().name(),
@@ -356,7 +361,7 @@ impl PCI {
         if addr >= 0x10 && addr < 0x2C {
             // Bochs bios
             dbg_log!(
-                Module::PCI, 
+                Module::PCI,
                 "Warning: PCI: Expected 32-bit write, got 16-bit (addr: {:#X})",
                 addr
             );
@@ -370,7 +375,7 @@ impl PCI {
         );
 
         dbg_log!(
-            Module::PCI, 
+            Module::PCI,
             "PCI writ16 dev=0x{:02x} ({}) addr={:#x} value={:#X}",
             bdf,
             device.unwrap().name(),
@@ -401,7 +406,7 @@ impl PCI {
             };
             let bar_yn = if bar.is_some() { "y" } else { "n" };
             dbg_log!(
-                Module::PCI, 
+                Module::PCI,
                 "BAR {} exists={} changed to 0x{:#x} dev=0x{:#02x} ({})",
                 bar_nr,
                 bar_yn,
@@ -438,7 +443,10 @@ impl PCI {
 
                         if (written & !0xF) != (original_bar & !0xF) {
                             // seabios
-                            dbg_log!(Module::PCI, "Warning: Changing memory bar not supported, ignored");
+                            dbg_log!(
+                                Module::PCI,
+                                "Warning: Changing memory bar not supported, ignored"
+                            );
                         }
 
                         // changing isn't supported yet, reset to default
@@ -458,7 +466,7 @@ impl PCI {
                     let from = sp_val & 0xfffffffe & 0xFFFF;
                     let to = written & 0xfffffffe & 0xFFFF;
                     dbg_log!(
-                        Module::PCI, 
+                        Module::PCI,
                         "io bar changed from {:x} to {:x} size={}",
                         from >> 0,
                         to >> 0,
@@ -481,7 +489,7 @@ impl PCI {
             dbg_log!(Module::PCI, "BAR effective value: {:x}", sp_val >> 0);
         } else if addr == 0x30 {
             dbg_log!(
-                Module::PCI, 
+                Module::PCI,
                 "PCI write rom address dev=0x{:02x}, ({}) value=0x{:X}",
                 bdf >> 3,
                 device.name(),
@@ -506,7 +514,7 @@ impl PCI {
             }
         } else if addr == 0x04 {
             dbg_log!(
-                Module::PCI, 
+                Module::PCI,
                 "PCI write dev={:#X} ({}) addr={:#X} value={:#X}",
                 bdf >> 3,
                 device.name(),
@@ -515,7 +523,7 @@ impl PCI {
             );
         } else {
             dbg_log!(
-                Module::PCI, 
+                Module::PCI,
                 "PCI write dev={:#X} ({}) addr={:#X} value={:#X}",
                 bdf >> 3,
                 device.name(),
@@ -584,7 +592,7 @@ impl PCI {
     fn set_io_bars(&self, bar: &PCIBar, from: u32, to: u32) {
         let count = bar.size;
         dbg_log!(
-            Module::PCI, 
+            Module::PCI,
             "Move io bars: from={:#X} to={:#X} count={}",
             from,
             to,
@@ -604,7 +612,7 @@ impl PCI {
                     && old_entry.write8 as *const () == IO::empty_write8 as *const ()
                 {
                     dbg_log!(
-                        Module::PCI, 
+                        Module::PCI,
                         "Warning: Bad IO bar: Source not mapped, port=0x{:#X}",
                         from + i
                     );
@@ -623,7 +631,7 @@ impl PCI {
                     // These can fail if the os maps an io port in multiple bars (indicating a bug)
                     // XXX: Fails during restore_state
                     dbg_log!(
-                        Module::PCI, 
+                        Module::PCI,
                         "Warning: Bad IO bar: Target already mapped, port={:#X}",
                         to + i
                     );

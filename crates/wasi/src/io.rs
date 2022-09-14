@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use std::{collections::HashMap, marker::PhantomData, ops::Add};
 use wasmtime::{AsContext, AsContextMut, Memory};
 
-use crate::{Dev, ContextTrait, MMAP_BLOCK_BITS, MMAP_BLOCK_SIZE, log::Module, StoreT};
+use crate::{log::Module, ContextTrait, Dev, StoreT, MMAP_BLOCK_BITS, MMAP_BLOCK_SIZE};
 
 const LOG_ALL_IO: bool = false;
 
@@ -93,9 +93,9 @@ type Wr32Fn = fn(&Dev, u32, u32);
 
 pub(crate) struct MMapFn {
     pub memory_map_read8: HashMap<u32, Rd8Fn>,
-    pub memory_map_read32: HashMap<u32,Rd32Fn>,
-    pub memory_map_write8: HashMap<u32,Wr8Fn>,
-    pub memory_map_write32: HashMap<u32,Wr32Fn>,
+    pub memory_map_read32: HashMap<u32, Rd32Fn>,
+    pub memory_map_write8: HashMap<u32, Wr8Fn>,
+    pub memory_map_write32: HashMap<u32, Wr32Fn>,
 }
 
 impl MMapFn {
@@ -109,9 +109,9 @@ impl MMapFn {
     }
 
     pub(crate) fn init(&mut self, s: usize) {
-        let s = s >> MMAP_BLOCK_BITS+1;
+        let s = s >> MMAP_BLOCK_BITS + 1;
         let mut i: u32 = 0;
-        while (i<<MMAP_BLOCK_BITS) < s as u32 {
+        while (i << MMAP_BLOCK_BITS) < s as u32 {
             self.memory_map_read8.insert(i, IO::empty_read8);
             self.memory_map_read32.insert(i, IO::empty_read32);
             self.memory_map_write8.insert(i, IO::empty_write8);
@@ -153,7 +153,7 @@ pub(crate) struct IO {
 impl IO {
     pub fn empty_read8(_: &Dev, p: u32) -> u8 {
         if LOG_ALL_IO {
-            dbg_log!(Module::IO,"empty_read8: {}", p);
+            dbg_log!(Module::IO, "empty_read8: {}", p);
         }
         0xFF
     }
@@ -265,7 +265,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.read8 as *const () == Self::empty_read8 as *const () || LOG_ALL_IO {
             dbg_log!(
-                Module::IO, 
+                Module::IO,
                 "read8 port  #{:02X} {}",
                 port,
                 self.get_port_description(port)
@@ -279,7 +279,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.read16 as *const () == Self::empty_read16 as *const () || LOG_ALL_IO {
             dbg_log!(
-                Module::IO, 
+                Module::IO,
                 "read16 port  #{:02X} {}",
                 port,
                 self.get_port_description(port)
@@ -293,7 +293,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.read32 as *const () == Self::empty_read32 as *const () || LOG_ALL_IO {
             dbg_log!(
-                Module::IO, 
+                Module::IO,
                 "read32 port #{:02X} {}",
                 port,
                 self.get_port_description(port)
@@ -307,7 +307,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.write8 as *const () == Self::empty_write8 as *const () || LOG_ALL_IO {
             dbg_log!(
-                Module::IO, 
+                Module::IO,
                 "write8 port  #{:02X} <- {:#02X} {}",
                 port,
                 data,
@@ -321,7 +321,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.write16 as *const () == Self::empty_write16 as *const () || LOG_ALL_IO {
             dbg_log!(
-                Module::IO, 
+                Module::IO,
                 "write16 port  #{:02X} <- {:#02X} {}",
                 port,
                 data,
@@ -335,7 +335,7 @@ impl IO {
         let iops = &self.ports[port as usize];
         if iops.write32 as *const () == Self::empty_write32 as *const () || LOG_ALL_IO {
             dbg_log!(
-                Module::IO, 
+                Module::IO,
                 "write32 port  #{:02x} <- {:#02X} {}",
                 port,
                 data,
@@ -360,7 +360,12 @@ impl IO {
         r32: Rd32Fn,
         w32: Wr32Fn,
     ) {
-        dbg_log!(Module::IO, "mmap_register addr={:#X}  size={:#X}", addr >> 0, size);
+        dbg_log!(
+            Module::IO,
+            "mmap_register addr={:#X}  size={:#X}",
+            addr >> 0,
+            size
+        );
         assert!((addr & (MMAP_BLOCK_SIZE as u32 - 1)) == 0);
         assert!(size > 0 && (size & MMAP_BLOCK_SIZE - 1) == 0);
         let r32 = if r32 as *const () == Self::empty_read32 as *const () {
@@ -368,7 +373,7 @@ impl IO {
         } else {
             r32
         };
-        
+
         let w32 = if w32 as *const () == Self::empty_write32 as *const () {
             Self::mmap_write32_shim
         } else {
@@ -549,24 +554,32 @@ impl IO {
             m_size,
             0x100000000 - m_size as usize,
             |_: &Dev, addr: u32| {
-                dbg_log!(Module::IO, "Read from unmapped memory space, addr={:#X}", addr >> 0);
+                dbg_log!(
+                    Module::IO,
+                    "Read from unmapped memory space, addr={:#X}",
+                    addr >> 0
+                );
                 0xFF
             },
             |_: &Dev, addr: u32, v: u8| {
                 dbg_log!(
-                    Module::IO, 
+                    Module::IO,
                     "Write to unmapped memory space, addr={:#X} value={:#X}",
                     addr >> 0,
                     v
                 );
             },
             |_: &Dev, addr: u32| {
-                dbg_log!(Module::IO, "Read from unmapped memory space, addr={:#X}", addr >> 0);
+                dbg_log!(
+                    Module::IO,
+                    "Read from unmapped memory space, addr={:#X}",
+                    addr >> 0
+                );
                 0xFFFFFFFF
             },
             |_: &Dev, addr: u32, v: u32| {
                 dbg_log!(
-                    Module::IO, 
+                    Module::IO,
                     "Write to unmapped memory space, addr={:#X} value={:#X}",
                     addr >> 0,
                     v

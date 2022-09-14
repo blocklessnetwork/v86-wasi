@@ -22,7 +22,7 @@ impl Module {
             Self::E => true,
             Self::FLOPPY => true,
             Self::CPU => true,
-            Self::PIC => false,
+            Self::PIC => true,
             Self::PCI => true,
             Self::IO => true,
             Self::VGA => false,
@@ -31,7 +31,7 @@ impl Module {
             Self::PIT => false,
             Self::BIOS => true,
             Self::SERIAL => true,
-            Self::PS2 => true,
+            Self::PS2 => false,
         }
     }
 }
@@ -62,7 +62,7 @@ macro_rules! dbg_log {
             let values = format!($fmt, $($arg)*);
             println!("[{:5}] {}", $m, &values);
         }
-        
+
     };
 
     ($m: expr, $fmt:expr) => {

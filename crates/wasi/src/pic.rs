@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-use crate::{Dev, ContextTrait, log::Module, StoreT};
+use crate::{log::Module, ContextTrait, Dev, StoreT};
 
 const PIC_LOG_VERBOSE: bool = false;
 
@@ -239,7 +239,12 @@ impl InnerPIC {
                 // icw4
                 self.expect_icw4 = false;
                 self.auto_eoi = data_byte & 2;
-                dbg_log!(Module::PIC, "icw4: 0x{:0x} autoeoi={}", data_byte, self.auto_eoi);
+                dbg_log!(
+                    Module::PIC,
+                    "icw4: 0x{:0x} autoeoi={}",
+                    data_byte,
+                    self.auto_eoi
+                );
 
                 if (data_byte & 1) == 0 {
                     assert!(false, "unimplemented: not 8086 mode");
@@ -250,7 +255,7 @@ impl InnerPIC {
 
                 if PIC_LOG_VERBOSE {
                     dbg_log!(
-                        Module::PIC, 
+                        Module::PIC,
                         "interrupt mask: 0x{:x} ({})",
                         self.irq_mask & 0xFF,
                         self.name
@@ -262,7 +267,7 @@ impl InnerPIC {
             // icw2
             self.irq_map = data_byte;
             dbg_log!(
-                Module::PIC, 
+                Module::PIC,
                 "interrupts are mapped to 0x{:x} ({})",
                 self.irq_map,
                 self.name
@@ -302,7 +307,11 @@ impl InnerPIC {
     fn check_master_irqs(&mut self) {
         if self.requested_irq >= 0 {
             if PIC_LOG_VERBOSE {
-                dbg_log!(Module::PIC, "master> Already requested irq: {}", self.requested_irq);
+                dbg_log!(
+                    Module::PIC,
+                    "master> Already requested irq: {}",
+                    self.requested_irq
+                );
             }
             self.store.cpu_mut().map(|cpu| cpu.handle_irqs());
             return;
@@ -311,7 +320,7 @@ impl InnerPIC {
         if enabled_irr == 0 {
             if PIC_LOG_VERBOSE {
                 dbg_log!(
-                    Module::PIC, 
+                    Module::PIC,
                     "master> no unmasked irrs. irr=0x{:x} mask=0x{:x} isr=0x{:x}",
                     self.irr,
                     self.irq_mask & 0xff,
@@ -327,9 +336,9 @@ impl InnerPIC {
             0xFF
         };
         let isr: i8 = self.isr as i8;
-        if self.isr > 0 && ((isr & -isr) as u8 & special_mask) <= irq_mask {
+        if self.isr != 0 && ((isr & -isr) as u8 & special_mask) <= irq_mask {
             dbg_log!(
-                Module::PIC, 
+                Module::PIC,
                 "master> higher prio: isr=0x{:02x} mask=0x{:02x} irq=0x{:02x}",
                 self.isr,
                 self.irq_mask & 0xff,
@@ -364,7 +373,11 @@ impl InnerPIC {
 
         if self.irr == 0 {
             if PIC_LOG_VERBOSE {
-                dbg_log!(Module::PIC, "master> spurious requested={}", self.requested_irq);
+                dbg_log!(
+                    Module::PIC,
+                    "master> spurious requested={}",
+                    self.requested_irq
+                );
             }
             self.requested_irq = -1;
             return;
@@ -405,7 +418,11 @@ impl InnerPIC {
 
         if self.irr == 0 {
             if PIC_LOG_VERBOSE {
-                dbg_log!(Module::PIC, "slave > spurious requested={}", self.requested_irq);
+                dbg_log!(
+                    Module::PIC,
+                    "slave > spurious requested={}",
+                    self.requested_irq
+                );
                 self.requested_irq = -1;
                 self.store.pic_mut().map(|pic| {
                     pic.master.irq_value &= !(1 << 2);
@@ -451,8 +468,6 @@ impl InnerPIC {
             self.set_slave_irq(irq_number);
         }
     }
-
-    
 
     fn set_slave_irq(&mut self, irq_number: u8) {
         assert!(irq_number < 8);
@@ -542,7 +557,11 @@ impl InnerPIC {
     fn check_slave_irqs(&mut self) {
         if self.requested_irq >= 0 {
             if PIC_LOG_VERBOSE {
-                dbg_log!(Module::PIC, "slave > Already requested irq:  {}", self.requested_irq);
+                dbg_log!(
+                    Module::PIC,
+                    "slave > Already requested irq:  {}",
+                    self.requested_irq
+                );
             }
             self.store.cpu_mut().map(|cpu| {
                 cpu.handle_irqs();
@@ -555,7 +574,7 @@ impl InnerPIC {
         if enabled_irr == 0 {
             if PIC_LOG_VERBOSE {
                 dbg_log!(
-                    Module::PIC, 
+                    Module::PIC,
                     "slave > no unmasked irrs. irr=0x{:02x} mask=0x{:02x} isr=0x{:02x}",
                     self.irr,
                     self.irq_mask & 0xff,
@@ -575,7 +594,7 @@ impl InnerPIC {
         if self.isr > 0 && ((isr & -isr) as u8 & special_mask) <= irq_mask {
             // wait for eoi of higher or same priority interrupt
             dbg_log!(
-                Module::PIC, 
+                Module::PIC,
                 "slave > higher prio: isr=0x{:02x} irq=0x{:02x}",
                 self.isr,
                 self.irq_mask
@@ -595,7 +614,6 @@ impl InnerPIC {
 }
 
 pub(crate) struct PIC {
-    store: StoreT,
     master: InnerPIC,
     slave: InnerPIC,
 }
@@ -604,11 +622,7 @@ impl PIC {
     pub(crate) fn new(store: StoreT) -> Self {
         let master = InnerPIC::new(store.clone(), true);
         let slave = InnerPIC::new(store.clone(), false);
-        Self {
-            store,
-            master,
-            slave,
-        }
+        Self { master, slave }
     }
 
     #[inline]

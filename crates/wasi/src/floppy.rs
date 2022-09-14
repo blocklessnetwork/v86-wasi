@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
-use crate::{StoreT, ContextTrait, Dev, log::Module, CMOS_FLOPPY_DRIVE_TYPE};
+use crate::{log::Module, ContextTrait, Dev, StoreT, CMOS_FLOPPY_DRIVE_TYPE};
 
 const DEBUG: bool = false;
 
@@ -24,8 +24,7 @@ pub(crate) struct FloppyController {
     receiving_command: Vec<u8>,
 }
 
-fn empty(_:&mut FloppyController) {
-}
+fn empty(_: &mut FloppyController) {}
 
 impl FloppyController {
     pub fn new(store: StoreT) -> Self {
@@ -53,61 +52,58 @@ impl FloppyController {
     pub fn init(&mut self) {
         if self.fda_image.is_none() {
             self.store.rtc_mut().map(|rtc| {
-                rtc.cmos_write(CMOS_FLOPPY_DRIVE_TYPE, 4<<4);
+                rtc.cmos_write(CMOS_FLOPPY_DRIVE_TYPE, 4 << 4);
             });
         } else {
             //TODO:
         }
         self.store.io_mut().map(|io| {
-            io.register_read8(0x3F0, 
+            io.register_read8(
+                0x3F0,
                 Dev::Emulator(self.store.clone()),
-                |dev: &Dev, _addr: u32| {
-                    dev.fdc().map_or(0, |fdc| fdc.port3F0_read())
-                }
+                |dev: &Dev, _addr: u32| dev.fdc().map_or(0, |fdc| fdc.port3F0_read()),
             );
 
-            io.register_read8(0x3F2, 
+            io.register_read8(
+                0x3F2,
                 Dev::Emulator(self.store.clone()),
-                |dev: &Dev, _addr: u32| {
-                    dev.fdc().map_or(0, |fdc| fdc.port3F2_read())
-                }
+                |dev: &Dev, _addr: u32| dev.fdc().map_or(0, |fdc| fdc.port3F2_read()),
             );
 
-            io.register_read8(0x3F4, 
+            io.register_read8(
+                0x3F4,
                 Dev::Emulator(self.store.clone()),
-                |dev: &Dev, _addr: u32| {
-                    dev.fdc().map_or(0, |fdc| fdc.port3F4_read())
-                }
+                |dev: &Dev, _addr: u32| dev.fdc().map_or(0, |fdc| fdc.port3F4_read()),
             );
 
-            io.register_read8(0x3F5, 
+            io.register_read8(
+                0x3F5,
                 Dev::Emulator(self.store.clone()),
-                |dev: &Dev, _addr: u32| {
-                    dev.fdc_mut().map_or(0, |fdc| fdc.port3F5_read())
-                }
+                |dev: &Dev, _addr: u32| dev.fdc_mut().map_or(0, |fdc| fdc.port3F5_read()),
             );
 
-            io.register_read8(0x3F7, 
+            io.register_read8(
+                0x3F7,
                 Dev::Emulator(self.store.clone()),
-                |dev: &Dev, _addr: u32| {
-                    dev.fdc_mut().map_or(0, |fdc| fdc.port3F7_read())
-                }
+                |dev: &Dev, _addr: u32| dev.fdc_mut().map_or(0, |fdc| fdc.port3F7_read()),
             );
 
-            io.register_write8(0x3F2, 
+            io.register_write8(
+                0x3F2,
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, val: u8| {
                     dev.fdc_mut().map(|fdc| fdc.port3F2_write(val));
-                }
+                },
             );
 
-            io.register_write8(0x3F5, 
+            io.register_write8(
+                0x3F5,
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, val: u8| {
                     dev.fdc_mut().map(|fdc| fdc.port3F5_write(val));
-                }
+                },
             );
-        });   
+        });
     }
 
     #[inline]
@@ -115,7 +111,7 @@ impl FloppyController {
         dbg_log!(Module::FLOPPY, "3F0 read");
         return 0;
     }
-    
+
     #[inline]
     fn port3F2_read(&self) -> u8 {
         dbg_log!(Module::FLOPPY, "read 3F2: DOR");
@@ -198,15 +194,14 @@ impl FloppyController {
                     }
                     dbg_log!(Module::FLOPPY, "{}", log);
                 }
-                let args: &'static [u8] = unsafe {
-                    std::mem::transmute::<_, &[u8]>(&self.receiving_command[..])
-                };
+                let args: &'static [u8] =
+                    unsafe { std::mem::transmute::<_, &[u8]>(&self.receiving_command[..]) };
                 (self.next_command)(self);
             }
         } else {
             match reg_byte {
-            // TODO
-            //case 2:
+                // TODO
+                //case 2:
                 //this.next_command = read_complete_track;
                 //this.bytes_expecting = 8;
                 //break;
@@ -218,12 +213,16 @@ impl FloppyController {
                     self.next_command = Self::check_drive_status;
                     self.bytes_expecting = 1;
                 }
-                0x05|0xC5 => {
-                    self.next_command = |f: &mut FloppyController| { f.do_sector(true); };
+                0x05 | 0xC5 => {
+                    self.next_command = |f: &mut FloppyController| {
+                        f.do_sector(true);
+                    };
                     self.bytes_expecting = 8;
                 }
                 0xE6 => {
-                    self.next_command =  |f: &mut FloppyController| { f.do_sector(false); };
+                    self.next_command = |f: &mut FloppyController| {
+                        f.do_sector(false);
+                    };
                     self.bytes_expecting = 8;
                 }
                 0x07 => {
@@ -278,10 +277,10 @@ impl FloppyController {
     fn check_interrupt_status(&mut self) {
         // do not trigger an interrupt here
         dbg_log!(Module::FLOPPY, "floppy check interrupt status");
-    
+
         self.response_index = 0;
         self.response_length = 2;
-    
+
         self.response_data[0] = 1 << 5;
         self.response_data[1] = self.last_cylinder;
     }
@@ -301,7 +300,6 @@ impl FloppyController {
         self.raise_irq();
     }
 
-
     fn do_sector(&mut self, is_write: bool) {
         let args = &self.receiving_command[..];
         let head = args[2];
@@ -310,18 +308,24 @@ impl FloppyController {
         let sector_size = 128 << args[4];
         let read_count = args[5] - args[3] + 1;
 
-        let read_offset = ((head + self.number_of_heads * cylinder) * self.sectors_per_track + sector - 1) * sector_size;
-        let rw = if is_write { 
-            "Write" 
-        } else { 
-            "Read" 
-        };
+        let read_offset =
+            ((head + self.number_of_heads * cylinder) * self.sectors_per_track + sector - 1)
+                * sector_size;
+        let rw = if is_write { "Write" } else { "Read" };
         dbg_log!(Module::FLOPPY, "Floppy {}", is_write);
-        dbg_log!(Module::FLOPPY, "from {:#X} length {:#X}", read_offset, read_count * sector_size);
+        dbg_log!(
+            Module::FLOPPY,
+            "from {:#X} length {:#X}",
+            read_offset,
+            read_count * sector_size
+        );
         dbg_log!(Module::FLOPPY, "{} / {} / {}", cylinder, head, sector);
 
         if args[4] == 0 {
-            dbg_log!(Module::FLOPPY, "FDC: sector count is zero, use data length instead");
+            dbg_log!(
+                Module::FLOPPY,
+                "FDC: sector count is zero, use data length instead"
+            );
         }
 
         if self.fda_image.is_none() {

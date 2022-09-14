@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use v86_wasi::{add_x86_to_linker, Emulator, Setting, WASM_TABLE_SIZE, WASM_TABLE_OFFSET};
+use v86_wasi::{add_x86_to_linker, Emulator, Setting, WASM_TABLE_OFFSET, WASM_TABLE_SIZE};
 use wasmtime::*;
 
 fn main() {

@@ -26,24 +26,24 @@ mod debug;
 mod dev;
 mod dma;
 mod emulator;
+mod floppy;
 mod io;
-mod ps2;
-mod timewheel;
+mod kernel;
 mod mem;
 mod pci;
 mod pic;
 mod pit;
+mod ps2;
 mod rtc;
-mod uart;
-mod floppy;
-mod kernel;
 mod setting;
+mod timewheel;
+mod uart;
 mod vga;
 pub use consts::*;
 pub use cpu::CPU;
 pub use emulator::Emulator;
-pub use setting::*;
 pub(crate) use log::Module;
+pub use setting::*;
 
 pub use dev::Dev;
 
@@ -98,26 +98,26 @@ pub(crate) mod utils {
 trait ContextTrait {
     fn cpu_mut(&self) -> Option<&mut CPU>;
     fn cpu(&self) -> Option<&CPU>;
-    
+
     fn rtc_mut(&self) -> Option<&mut RTC>;
     fn io_mut(&self) -> Option<&mut IO>;
     fn dma_mut(&self) -> Option<&mut DMA>;
-    
+
     fn pic_mut(&self) -> Option<&mut PIC>;
     fn pic(&self) -> Option<&PIC>;
-    
+
     fn io(&self) -> Option<&IO>;
     fn bus_mut(&self) -> Option<&mut BUS>;
     fn bus(&self) -> Option<&BUS>;
-    
+
     fn pci_mut(&self) -> Option<&mut PCI>;
     fn pci(&self) -> Option<&PCI>;
-    
+
     fn emulator(&self) -> &Emulator;
     fn emulator_mut(&self) -> &mut Emulator;
-    
+
     fn setting(&self) -> &Setting;
-    
+
     fn vga(&self) -> Option<&VGAScreen>;
     fn vga_mut(&self) -> Option<&mut VGAScreen>;
 
@@ -137,7 +137,6 @@ trait ContextTrait {
 }
 
 impl ContextTrait for StoreT {
-
     #[inline]
     fn cpu_mut(&self) -> Option<&mut CPU> {
         let emu = self.emulator_mut();
@@ -149,7 +148,7 @@ impl ContextTrait for StoreT {
         let emu = self.emulator();
         emu.cpu()
     }
-    
+
     #[inline]
     fn rtc_mut(&self) -> Option<&mut RTC> {
         let emu = self.emulator();
@@ -274,7 +273,9 @@ impl ContextTrait for StoreT {
 }
 
 pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
-    linker.define("env", "__indirect_function_table", table).unwrap();
+    linker
+        .define("env", "__indirect_function_table", table)
+        .unwrap();
     linker
         .func_wrap(
             "env",
@@ -340,9 +341,7 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
         .func_wrap(
             "env",
             "get_rand_int",
-            move |mut _caller: Caller<'_, Emulator>| -> i32 {
-                rand::random::<i32>()
-            },
+            move |mut _caller: Caller<'_, Emulator>| -> i32 { rand::random::<i32>() },
         )
         .unwrap();
 

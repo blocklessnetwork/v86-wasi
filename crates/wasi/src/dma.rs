@@ -1,4 +1,4 @@
-use crate::{Dev, ContextTrait, log::Module, StoreT};
+use crate::{log::Module, ContextTrait, Dev, StoreT};
 
 type WR_DONE_FN = fn(&StoreT, bool);
 
@@ -251,7 +251,12 @@ impl DMA {
     fn port_singlemask_write(&mut self, channel_offset: usize, data_byte: u8) {
         let channel = (data_byte & 0x3) as usize + channel_offset;
         let value = if data_byte & 0x4 > 0 { 1 } else { 0 };
-        dbg_log!(Module::DMA, "singlechannel mask write [{}] = {}", channel, value);
+        dbg_log!(
+            Module::DMA,
+            "singlechannel mask write [{}] = {}",
+            channel,
+            value
+        );
         self.update_mask(channel, value);
     }
 
@@ -266,8 +271,6 @@ impl DMA {
             }
         }
     }
-
-    
 
     fn port_pagehi_write(&mut self, channel: usize, data_byte: u8) {
         dbg_log!(Module::DMA, "pagehi write [{}] = {:#X}", channel, data_byte);
@@ -307,7 +310,7 @@ impl DMA {
 
     fn port_addr_read(&mut self, channel: usize) -> u8 {
         dbg_log!(
-            Module::DMA, 
+            Module::DMA,
             "addr read [{}] -> {:#X}",
             channel,
             self.channel_addr[channel]
@@ -317,7 +320,7 @@ impl DMA {
 
     fn port_count_read(&mut self, channel: usize) -> u8 {
         dbg_log!(
-            Module::DMA, 
+            Module::DMA,
             "count read [{}] -> {:#X}",
             channel,
             self.channel_count[channel]

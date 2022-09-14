@@ -1,6 +1,6 @@
-use crate::{CPU, log::Module, dev::OptionRom};
+use crate::{dev::OptionRom, log::Module, CPU};
 
-use std::{slice, rc::Rc};
+use std::{rc::Rc, slice};
 
 const LINUX_BOOT_HDR_SETUP_SECTS: u16 = 0x1F1;
 const LINUX_BOOT_HDR_SYSSIZE: u16 = 0x1F4;
@@ -8,7 +8,7 @@ const LINUX_BOOT_HDR_VIDMODE: u16 = 0x1FA;
 const LINUX_BOOT_HDR_BOOT_FLAG: u16 = 0x1FE;
 const LINUX_BOOT_HDR_HEADER: u16 = 0x202;
 const LINUX_BOOT_HDR_VERSION: u16 = 0x206;
-const LINUX_BOOT_HDR_TYPE_OF_LOADER: u16= 0x210;
+const LINUX_BOOT_HDR_TYPE_OF_LOADER: u16 = 0x210;
 const LINUX_BOOT_HDR_LOADFLAGS: u16 = 0x211;
 const LINUX_BOOT_HDR_CODE32_START: u16 = 0x214;
 const LINUX_BOOT_HDR_RAMDISK_IMAGE: u16 = 0x218;
@@ -37,25 +37,21 @@ const LINUX_BOOT_HDR_LOADFLAGS_KEEP_SEGMENTS: u8 = 1 << 6;
 const LINUX_BOOT_HDR_LOADFLAGS_CAN_USE_HEAPS: u8 = 1 << 7;
 
 pub(crate) fn load_kernel(
-    cpu: &mut CPU, 
-    mut bzimage: Vec<u8>, 
+    cpu: &mut CPU,
+    mut bzimage: Vec<u8>,
     initrd: Option<Vec<u8>>,
     mut cmdline: String,
 ) -> Option<OptionRom> {
     const KERNEL_HIGH_ADDRESS: u32 = 0x100000;
     const INITRD_ADDRESS: u32 = 64 << 20;
     let bzimage_ptr = bzimage.as_mut_ptr();
-    let bzimage8 = unsafe{
-        slice::from_raw_parts_mut(bzimage_ptr, bzimage.len())
-    };
-    const quiet: bool = false;
-    
-    let bzimage16 =  unsafe{
-        slice::from_raw_parts_mut(bzimage_ptr as *mut u16, bzimage.len()/2)
-    };
-    let bzimage32 =  unsafe{
-        slice::from_raw_parts_mut(bzimage_ptr as *mut u32, bzimage.len()/4)
-    };
+    let bzimage8 = unsafe { slice::from_raw_parts_mut(bzimage_ptr, bzimage.len()) };
+    const QUIET: bool = false;
+
+    let bzimage16 =
+        unsafe { slice::from_raw_parts_mut(bzimage_ptr as *mut u16, bzimage.len() / 2) };
+    let bzimage32 =
+        unsafe { slice::from_raw_parts_mut(bzimage_ptr as *mut u32, bzimage.len() / 4) };
     let setup_sects = bzimage8[LINUX_BOOT_HDR_SETUP_SECTS as usize];
     if setup_sects > 0 {
         setup_sects
@@ -68,9 +64,8 @@ pub(crate) fn load_kernel(
         return None;
     }
 
-    let checksum2 =
-        bzimage16[LINUX_BOOT_HDR_HEADER as usize >> 1] as u32 |
-        (bzimage16[LINUX_BOOT_HDR_HEADER as usize + 2 >> 1] as u32) << 16;
+    let checksum2 = bzimage16[LINUX_BOOT_HDR_HEADER as usize >> 1] as u32
+        | (bzimage16[LINUX_BOOT_HDR_HEADER as usize + 2 >> 1] as u32) << 16;
     if checksum2 != LINUX_BOOT_HDR_CHECKSUM2 as u32 {
         dbg_log!(Module::E, "Bad checksum2: {:#X}", checksum2);
         return None;
@@ -86,34 +81,47 @@ pub(crate) fn load_kernel(
     let min_alignment = bzimage8[LINUX_BOOT_HDR_MIN_ALIGNMENT as usize];
     let cmdline_size = bzimage32[(LINUX_BOOT_HDR_CMDLINE_SIZE as usize) >> 2];
     let payload_offset = bzimage32[(LINUX_BOOT_HDR_PAYLOAD_OFFSET as usize) >> 2];
-    let payload_length = bzimage32[(LINUX_BOOT_HDR_PAYLOAD_LENGTH  as usize) >> 2];
-    let pref_address = bzimage32[(LINUX_BOOT_HDR_PREF_ADDRESS  as usize) >> 2];
-    let pref_address_high = bzimage32[(LINUX_BOOT_HDR_PREF_ADDRESS  as usize) + 4 >> 2];
-    let init_size = bzimage32[(LINUX_BOOT_HDR_INIT_SIZE  as usize) >> 2];
+    let payload_length = bzimage32[(LINUX_BOOT_HDR_PAYLOAD_LENGTH as usize) >> 2];
+    let pref_address = bzimage32[(LINUX_BOOT_HDR_PREF_ADDRESS as usize) >> 2];
+    let pref_address_high = bzimage32[(LINUX_BOOT_HDR_PREF_ADDRESS as usize) + 4 >> 2];
+    let init_size = bzimage32[(LINUX_BOOT_HDR_INIT_SIZE as usize) >> 2];
     dbg_log!(Module::E, "kernel boot protocol version: {:#X}", protocol);
     dbg_log!(Module::E, "flags= {:#X}  xflags={:#X}", flags, flags2);
-    dbg_log!(Module::E, "code32_start={:#X}", bzimage32[(LINUX_BOOT_HDR_CODE32_START as usize) >> 2]);
+    dbg_log!(
+        Module::E,
+        "code32_start={:#X}",
+        bzimage32[(LINUX_BOOT_HDR_CODE32_START as usize) >> 2]
+    );
     dbg_log!(Module::E, "initrd_addr_max={:#X}", initrd_addr_max);
     dbg_log!(Module::E, "kernel_alignment={:#X}", kernel_alignment);
     dbg_log!(Module::E, "relocatable={}", relocatable_kernel);
     dbg_log!(Module::E, "min_alignment={:#X}", min_alignment);
     dbg_log!(Module::E, "cmdline max={:#X}", cmdline_size);
-    dbg_log!(Module::E, "payload offset={:#X} size={:#X}", payload_offset, payload_length);
-    dbg_log!(Module::E, "pref_address={:#X}:{:#X}", pref_address_high, pref_address);
+    dbg_log!(
+        Module::E,
+        "payload offset={:#X} size={:#X}",
+        payload_offset,
+        payload_length
+    );
+    dbg_log!(
+        Module::E,
+        "pref_address={:#X}:{:#X}",
+        pref_address_high,
+        pref_address
+    );
     dbg_log!(Module::E, "init_size={:#X}", init_size);
-    let real_mode_segment:u16 = 0x8000;
+    let real_mode_segment: u16 = 0x8000;
     let base_ptr = (real_mode_segment as u32) << 4;
 
     let heap_end = 0xE000;
     let heap_end_ptr = heap_end - 0x200;
     bzimage8[LINUX_BOOT_HDR_TYPE_OF_LOADER as usize] = LINUX_BOOT_HDR_TYPE_OF_LOADER_NOT_ASSIGNED;
-    let new_flags = if quiet  {
-            flags | LINUX_BOOT_HDR_LOADFLAGS_QUIET_FLAG 
-        } else {
-            flags & !LINUX_BOOT_HDR_LOADFLAGS_QUIET_FLAG
-        } & 
-        !LINUX_BOOT_HDR_LOADFLAGS_KEEP_SEGMENTS| 
-        LINUX_BOOT_HDR_LOADFLAGS_CAN_USE_HEAPS;
+    let new_flags = if QUIET {
+        flags | LINUX_BOOT_HDR_LOADFLAGS_QUIET_FLAG
+    } else {
+        flags & !LINUX_BOOT_HDR_LOADFLAGS_QUIET_FLAG
+    } & !LINUX_BOOT_HDR_LOADFLAGS_KEEP_SEGMENTS
+        | LINUX_BOOT_HDR_LOADFLAGS_CAN_USE_HEAPS;
     bzimage8[LINUX_BOOT_HDR_LOADFLAGS as usize] = new_flags;
     bzimage16[(LINUX_BOOT_HDR_HEAP_END_PTR as usize) >> 1] = heap_end_ptr;
     // should parse the vga=... paramter from cmdline here, but we don't really care
@@ -126,11 +134,14 @@ pub(crate) fn load_kernel(
     bzimage32[(LINUX_BOOT_HDR_CMD_LINE_PTR as usize) >> 2] = cmd_line_ptr as u32;
     cpu.mem8_write_slice(cmd_line_ptr as usize, cmdline.as_bytes());
     let prot_mode_kernel_start = (setup_sects as usize + 1) * 512;
-    dbg_log!(Module::E, "prot_mode_kernel_start={:#X}", prot_mode_kernel_start);
+    dbg_log!(
+        Module::E,
+        "prot_mode_kernel_start={:#X}",
+        prot_mode_kernel_start
+    );
 
     let real_mode_kernel = &bzimage[0..prot_mode_kernel_start];
     let protected_mode_kernel = &bzimage[prot_mode_kernel_start..];
-
 
     let mut ramdisk_address = 0;
     let mut ramdisk_size = 0;

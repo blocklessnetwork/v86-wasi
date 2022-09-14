@@ -1,6 +1,6 @@
 use chrono::{Datelike, TimeZone, Timelike, Utc};
 
-use crate::{consts::*, Dev, ContextTrait, CPU, log::Module, StoreT};
+use crate::{consts::*, log::Module, ContextTrait, Dev, StoreT, CPU};
 
 pub(crate) struct RTC {
     cmos_index: u8,
@@ -164,7 +164,12 @@ impl RTC {
                 }
                 _ => {
                     let data = rtc.cmos_data[rtc.cmos_index as usize];
-                    dbg_log!(Module::RTC, "cmos read from index {:#02X}: data: {:#02X}", index, data);
+                    dbg_log!(
+                        Module::RTC,
+                        "cmos read from index {:#02X}: data: {:#02X}",
+                        index,
+                        data
+                    );
                     data
                 }
             }
@@ -182,8 +187,9 @@ impl RTC {
             });
             self.cmos_c |= 1 << 6 | 1 << 7;
 
-            self.next_interrupt += (self.periodic_interrupt_time *
-                (((time - self.next_interrupt) as f64) / self.periodic_interrupt_time).ceil()) as i64;
+            self.next_interrupt += (self.periodic_interrupt_time
+                * (((time - self.next_interrupt) as f64) / self.periodic_interrupt_time).ceil())
+                as i64;
         } else if self.next_interrupt_alarm > 0 && self.next_interrupt_alarm < time as usize {
             self.store.cpu_mut().map(|cpu| {
                 cpu.device_raise_irq(8);
@@ -193,7 +199,7 @@ impl RTC {
             self.next_interrupt_alarm = 0;
         }
 
-        let mut  t = 100;
+        let mut t = 100;
 
         if self.periodic_interrupt && self.next_interrupt > 0 {
             t = t.min(0.max(self.next_interrupt - time));
@@ -210,7 +216,7 @@ impl RTC {
                 rtc.cmos_a = v & 0x7F;
                 rtc.periodic_interrupt_time = 1000.0 / (32768 >> (rtc.cmos_a & 0xF) - 1) as f64;
                 dbg_log!(
-                    Module::RTC, 
+                    Module::RTC,
                     "Periodic interrupt, a= 0x{:02}  t={}",
                     rtc.cmos_a,
                     rtc.periodic_interrupt_time
@@ -235,7 +241,7 @@ impl RTC {
                         .and_hms(hours, minus, secs);
                     let ms_from_now = alarm_date.timestamp_millis() - now.timestamp_millis();
                     dbg_log!(
-                        Module::RTC, 
+                        Module::RTC,
                         "RTC alarm scheduled for {} hh:mm:ss={}:{}:{} ms_from_now={}",
                         alarm_date.to_string(),
                         hours,
@@ -250,7 +256,12 @@ impl RTC {
                 rtc.cmos_write(rtc.cmos_index as _, v);
             }
             _ => {
-                dbg_log!(Module::RTC, "cmos write index {:#X}: {:#X}", rtc.cmos_index, v);
+                dbg_log!(
+                    Module::RTC,
+                    "cmos write index {:#X}: {:#X}",
+                    rtc.cmos_index,
+                    v
+                );
             }
         });
     }
