@@ -22,7 +22,7 @@ impl Module {
             Self::E => true,
             Self::FLOPPY => true,
             Self::CPU => true,
-            Self::PIC => true,
+            Self::PIC => false,
             Self::PCI => true,
             Self::IO => true,
             Self::VGA => false,

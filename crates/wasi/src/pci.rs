@@ -15,7 +15,7 @@ pub(crate) struct PCIBar {
 }
 
 pub(crate) trait PCIDevice {
-    fn pci_id(&self) -> u8;
+    fn pci_id(&self) -> u16;
 
     fn name(&self) -> &str;
 
@@ -126,7 +126,7 @@ pub(crate) struct PCI {
     pci_status: [u8; 4],
     devices: [Option<Box<dyn PCIDevice>>; 256],
     device_spaces: [Option<Space>; 256],
-    isa_bridge_id: u8,
+    isa_bridge_id: u16,
 }
 
 impl PCI {
@@ -547,7 +547,11 @@ impl PCI {
             enabled, bdf, dev, addr
         );
 
-        let device = self.device_spaces[bdf as usize].as_ref();
+        let device = if bdf < self.device_spaces.len() as u16 {
+            self.device_spaces[bdf as usize].as_ref()
+        } else {
+            None
+        };
 
         if device.is_some() {
             let device = device.unwrap();
@@ -653,7 +657,7 @@ impl PCI {
 }
 
 pub(crate) struct GenericPCIDevice {
-    pci_id: u8,
+    pci_id: u16,
     pci_space: Vec<u8>,
     pci_bars: Vec<Option<PCIBar>>,
     name: String,
@@ -662,7 +666,7 @@ pub(crate) struct GenericPCIDevice {
 }
 
 impl GenericPCIDevice {
-    pub fn new(pci_id: u8, pci_space: Vec<u8>, pci_bars: Vec<Option<PCIBar>>, name: &str) -> Self {
+    pub fn new(pci_id: u16, pci_space: Vec<u8>, pci_bars: Vec<Option<PCIBar>>, name: &str) -> Self {
         Self {
             pci_id,
             pci_space,
@@ -675,7 +679,7 @@ impl GenericPCIDevice {
 }
 
 impl PCIDevice for GenericPCIDevice {
-    fn pci_id(&self) -> u8 {
+    fn pci_id(&self) -> u16 {
         self.pci_id
     }
 

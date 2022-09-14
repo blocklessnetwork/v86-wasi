@@ -89,7 +89,7 @@ pub(crate) struct VGAScreen {
     svga_offset: u32,
     dispi_enable_value: u16,
     pci_space: &'static [u8],
-    pci_id: u8,
+    pci_id: u16,
     pci_bars: Vec<Option<PCIBar>>,
     pci_rom_size: u32,
     pci_rom_address: u32,
@@ -2142,7 +2142,7 @@ struct VGADev(StoreT);
 
 impl PCIDevice for VGADev {
     #[inline]
-    fn pci_id(&self) -> u8 {
+    fn pci_id(&self) -> u16 {
         self.0.vga().map_or(0, |vga| vga.pci_id)
     }
 

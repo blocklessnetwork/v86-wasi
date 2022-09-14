@@ -632,6 +632,13 @@ impl CPU {
             }
         );
 
+        self.io.register_write8(
+            0x80,
+            Dev::Emulator(self.store.clone()), 
+            |dev: &Dev, _: u32, value: u8| {
+            }
+        );
+
         self.io.register_write(
             0x510, 
             Dev::Emulator(self.store.clone()), 
