@@ -2,12 +2,14 @@ use std::fmt::Display;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::sync::Once;
+use std::time::Instant;
 
 static LOG_FNAME: &str = "debug.log";
+static mut LOG_FILE: Option<File> = None;
+static mut LAST_FLUSH: Option<Instant> = None;
 
-#[inline]
+#[inline(always)]
 pub fn log(record: &[u8]) {
-    static mut LOG_FILE: Option<File> = None;
     static mut LOG_FILE_ONCE: Once = Once::new();
     unsafe {
         LOG_FILE_ONCE.call_once(|| {
@@ -17,6 +19,7 @@ pub fn log(record: &[u8]) {
                 .create(true)
                 .open(LOG_FNAME)
                 .ok();
+            LAST_FLUSH.replace(Instant::now());
         });
         LOG_FILE.as_mut().map(|f| {
             let _ = f.write_all(record);

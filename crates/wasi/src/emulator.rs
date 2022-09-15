@@ -5,7 +5,7 @@ use wasmtime::Instance;
 
 use crate::{
     bus::BUS, dma::DMA, floppy::FloppyController, io::IO, pci::PCI, pic::PIC, pit::PIT, ps2::PS2,
-    rtc::RTC, uart::UART, vga::VGAScreen, Setting, StoreT, CPU,
+    rtc::RTC, uart::UART, vga::VGAScreen, Setting, StoreT, CPU, log,
 };
 
 pub(crate) struct InnerEmulator {
@@ -48,6 +48,7 @@ impl InnerEmulator {
                 t = c.next_tick(t as u64);
                 if t > 0 {
                     std::thread::sleep(time::Duration::from_millis(t as u64));
+                    panic!("1111");
                 }
             }
         });
