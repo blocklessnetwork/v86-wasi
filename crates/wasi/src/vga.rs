@@ -63,8 +63,8 @@ pub(crate) struct VGAScreen {
     cursor_address: u32,
     cursor_scanline_start: u8,
     cursor_scanline_end: u8,
-    max_cols: u8,
-    max_rows: u8,
+    max_cols: u16,
+    max_rows: u16,
     screen_width: u32,
     screen_height: u32,
     virtual_width: u32,
@@ -1077,14 +1077,44 @@ impl VGAScreen {
         }
 
         if self.graphical_mode {
-            //TODO self.vga_memory_write_graphical(addr, value);
+            self.vga_memory_write_graphical(addr, value);
         } else {
             if !(self.plane_write_bm & 0x3 > 0) {
                 // Ignore writes to font planes.
                 return;
             }
-            //TODO self.vga_memory_write_text_mode(addr, value);
+            self.vga_memory_write_text_mode(addr, value);
         }
+    }
+
+    fn vga_memory_write_text_mode(&mut self, addr: u32, value: u8) {
+        let memory_start = (addr >> 1) - self.start_address;
+        let row = memory_start / self.max_cols as u32 | 0;
+        let col = memory_start % self.max_cols as u32;
+        let chr;
+        let color;
+
+        // XXX: Should handle 16 bit write if possible
+        if addr & 1 > 0 {
+            color = value;
+            chr = self.vga_memory[addr as usize & !1];
+        } else {
+            chr = value;
+            color = self.vga_memory[addr as usize | 1];
+        }
+        self.store.bus_mut().map(|bus| {
+            bus.send(
+                "screen-put-char", 
+                BusData::ScreenPutChar(
+                    row as u16, 
+                    col as u16, 
+                    chr, 
+                    self.vga256_palette[(color as usize) >> 4 & 0xF], 
+                    self.vga256_palette[(color as usize) & 0xF]
+                )
+            );
+        });
+        self.vga_memory[addr as usize] = value;
     }
 
     #[inline]
@@ -1568,8 +1598,8 @@ impl VGAScreen {
     }
 
     fn set_size_text(&mut self, cols_count: u8, rows_count: u8) {
-        self.max_cols = cols_count;
-        self.max_rows = rows_count;
+        self.max_cols = cols_count as u16;
+        self.max_rows = rows_count as u16;
         self.store.bus_mut().map(|bus| {
             bus.send(
                 "screen-set-size-text",
@@ -1793,12 +1823,12 @@ impl VGAScreen {
     }
 
     fn update_cursor(&mut self) {
-        let mut row = ((self.cursor_address - self.start_address) / self.max_cols as u32 | 0) as u8;
-        let col = ((self.cursor_address - self.start_address) % self.max_cols as u32) as u8;
+        let mut row = ((self.cursor_address - self.start_address) / self.max_cols as u32 | 0) as u16;
+        let col = ((self.cursor_address - self.start_address) % self.max_cols as u32) as u16;
 
         row = (self.max_rows - 1).min(row);
         self.store.bus_mut().map(|bus| {
-            bus.send("screen-update-cursor", BusData::U8Tuple(row, col));
+            bus.send("screen-update-cursor", BusData::U16Tuple(row, col));
         });
     }
 
