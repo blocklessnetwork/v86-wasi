@@ -16,7 +16,8 @@ pub unsafe fn getcf() -> bool {
         // sub: last_op1 < last_result  (or last_op1 < last_op2) (or (result ^ ((result ^ b) & (b ^ a))))
         // add: last_result < last_op1  (or last_result < last_op2) (or a ^ ((a ^ b) & (b ^ result)))
         return ((*last_result as i32 ^ sub_mask) as u32) < (*last_op1 ^ sub_mask) as u32;
-    } else {
+    }
+    else {
         return 0 != *flags & 1;
     };
 }
@@ -25,7 +26,8 @@ pub unsafe fn getpf() -> bool {
     if 0 != *flags_changed & FLAG_PARITY {
         // inverted lookup table
         return 0 != 0x9669 << 2 >> ((*last_result ^ *last_result >> 4) & 15) & FLAG_PARITY;
-    } else {
+    }
+    else {
         return 0 != *flags & FLAG_PARITY;
     };
 }
@@ -34,21 +36,24 @@ pub unsafe fn getaf() -> bool {
         let is_sub = *flags_changed & FLAG_SUB != 0;
         let last_op2 = (*last_result - *last_op1) * if is_sub { -1 } else { 1 };
         return 0 != (*last_op1 ^ last_op2 ^ *last_result) & FLAG_ADJUST;
-    } else {
+    }
+    else {
         return 0 != *flags & FLAG_ADJUST;
     };
 }
 pub unsafe fn getzf() -> bool {
     if 0 != *flags_changed & FLAG_ZERO {
         return 0 != (!*last_result & *last_result - 1) >> *last_op_size & 1;
-    } else {
+    }
+    else {
         return 0 != *flags & FLAG_ZERO;
     };
 }
 pub unsafe fn getsf() -> bool {
     if 0 != *flags_changed & FLAG_SIGN {
         return 0 != *last_result >> *last_op_size & 1;
-    } else {
+    }
+    else {
         return 0 != *flags & FLAG_SIGN;
     };
 }
@@ -61,61 +66,30 @@ pub unsafe fn getof() -> bool {
         let b_xor_1_if_sub = (*last_result - *last_op1) - is_sub as i32;
         return 0
             != ((*last_op1 ^ *last_result) & (b_xor_1_if_sub ^ *last_result)) >> *last_op_size & 1;
-    } else {
+    }
+    else {
         return 0 != *flags & FLAG_OVERFLOW;
     };
 }
 
-pub unsafe fn test_o() -> bool {
-    return getof();
-}
-pub unsafe fn test_b() -> bool {
-    return getcf();
-}
-pub unsafe fn test_z() -> bool {
-    return getzf();
-}
-pub unsafe fn test_s() -> bool {
-    return getsf();
-}
+pub unsafe fn test_o() -> bool { return getof(); }
+pub unsafe fn test_b() -> bool { return getcf(); }
+pub unsafe fn test_z() -> bool { return getzf(); }
+pub unsafe fn test_s() -> bool { return getsf(); }
 #[no_mangle]
-pub unsafe fn test_p() -> bool {
-    return getpf();
-}
-pub unsafe fn test_be() -> bool {
-    return getcf() || getzf();
-}
-pub unsafe fn test_l() -> bool {
-    return getsf() != getof();
-}
-pub unsafe fn test_le() -> bool {
-    return getzf() || getsf() != getof();
-}
-pub unsafe fn test_no() -> bool {
-    return !test_o();
-}
-pub unsafe fn test_nb() -> bool {
-    return !test_b();
-}
-pub unsafe fn test_nz() -> bool {
-    return !test_z();
-}
-pub unsafe fn test_ns() -> bool {
-    return !test_s();
-}
+pub unsafe fn test_p() -> bool { return getpf(); }
+pub unsafe fn test_be() -> bool { return getcf() || getzf(); }
+pub unsafe fn test_l() -> bool { return getsf() != getof(); }
+pub unsafe fn test_le() -> bool { return getzf() || getsf() != getof(); }
+pub unsafe fn test_no() -> bool { return !test_o(); }
+pub unsafe fn test_nb() -> bool { return !test_b(); }
+pub unsafe fn test_nz() -> bool { return !test_z(); }
+pub unsafe fn test_ns() -> bool { return !test_s(); }
 #[no_mangle]
-pub unsafe fn test_np() -> bool {
-    return !test_p();
-}
-pub unsafe fn test_nbe() -> bool {
-    return !test_be();
-}
-pub unsafe fn test_nl() -> bool {
-    return !test_l();
-}
-pub unsafe fn test_nle() -> bool {
-    return !test_le();
-}
+pub unsafe fn test_np() -> bool { return !test_p(); }
+pub unsafe fn test_nbe() -> bool { return !test_be(); }
+pub unsafe fn test_nl() -> bool { return !test_l(); }
+pub unsafe fn test_nle() -> bool { return !test_le(); }
 
 pub unsafe fn jmp_rel16(rel16: i32) {
     let cs_offset = get_seg_cs();
@@ -132,30 +106,18 @@ pub unsafe fn jmpcc32(condition: bool, imm32: i32) {
         *instruction_pointer += imm32
     };
 }
-pub unsafe fn loope16(imm8s: i32) {
-    jmpcc16(0 != decr_ecx_asize(is_asize_32()) && getzf(), imm8s);
-}
+pub unsafe fn loope16(imm8s: i32) { jmpcc16(0 != decr_ecx_asize(is_asize_32()) && getzf(), imm8s); }
 pub unsafe fn loopne16(imm8s: i32) {
     jmpcc16(0 != decr_ecx_asize(is_asize_32()) && !getzf(), imm8s);
 }
-pub unsafe fn loop16(imm8s: i32) {
-    jmpcc16(0 != decr_ecx_asize(is_asize_32()), imm8s);
-}
-pub unsafe fn jcxz16(imm8s: i32) {
-    jmpcc16(get_reg_asize(ECX) == 0, imm8s);
-}
-pub unsafe fn loope32(imm8s: i32) {
-    jmpcc32(0 != decr_ecx_asize(is_asize_32()) && getzf(), imm8s);
-}
+pub unsafe fn loop16(imm8s: i32) { jmpcc16(0 != decr_ecx_asize(is_asize_32()), imm8s); }
+pub unsafe fn jcxz16(imm8s: i32) { jmpcc16(get_reg_asize(ECX) == 0, imm8s); }
+pub unsafe fn loope32(imm8s: i32) { jmpcc32(0 != decr_ecx_asize(is_asize_32()) && getzf(), imm8s); }
 pub unsafe fn loopne32(imm8s: i32) {
     jmpcc32(0 != decr_ecx_asize(is_asize_32()) && !getzf(), imm8s);
 }
-pub unsafe fn loop32(imm8s: i32) {
-    jmpcc32(0 != decr_ecx_asize(is_asize_32()), imm8s);
-}
-pub unsafe fn jcxz32(imm8s: i32) {
-    jmpcc32(get_reg_asize(ECX) == 0, imm8s);
-}
+pub unsafe fn loop32(imm8s: i32) { jmpcc32(0 != decr_ecx_asize(is_asize_32()), imm8s); }
+pub unsafe fn jcxz32(imm8s: i32) { jmpcc32(get_reg_asize(ECX) == 0, imm8s); }
 
 pub unsafe fn cmovcc16(condition: bool, value: i32, r: i32) {
     if condition {
@@ -171,14 +133,16 @@ pub unsafe fn cmovcc32(condition: bool, value: i32, r: i32) {
 pub unsafe fn get_stack_pointer(offset: i32) -> i32 {
     if *stack_size_32 {
         return get_seg_ss() + read_reg32(ESP) + offset;
-    } else {
+    }
+    else {
         return get_seg_ss() + (read_reg16(SP) + offset & 0xFFFF);
     };
 }
 pub unsafe fn adjust_stack_reg(adjustment: i32) {
     if *stack_size_32 {
         write_reg32(ESP, read_reg32(ESP) + adjustment);
-    } else {
+    }
+    else {
         write_reg16(SP, read_reg16(SP) + adjustment);
     };
 }
@@ -196,19 +160,11 @@ pub unsafe fn push16_ss32(imm16: i32) -> OrPageFault<()> {
     Ok(())
 }
 
-pub unsafe fn push16_ss16_mem(addr: i32) -> OrPageFault<()> {
-    push16_ss16(safe_read16(addr)?)
-}
-pub unsafe fn push16_ss32_mem(addr: i32) -> OrPageFault<()> {
-    push16_ss32(safe_read16(addr)?)
-}
+pub unsafe fn push16_ss16_mem(addr: i32) -> OrPageFault<()> { push16_ss16(safe_read16(addr)?) }
+pub unsafe fn push16_ss32_mem(addr: i32) -> OrPageFault<()> { push16_ss32(safe_read16(addr)?) }
 
 pub unsafe fn push16(imm16: i32) -> OrPageFault<()> {
-    if *stack_size_32 {
-        push16_ss32(imm16)
-    } else {
-        push16_ss16(imm16)
-    }
+    if *stack_size_32 { push16_ss32(imm16) } else { push16_ss16(imm16) }
 }
 
 pub unsafe fn push32_ss16(imm32: i32) -> OrPageFault<()> {
@@ -224,26 +180,14 @@ pub unsafe fn push32_ss32(imm32: i32) -> OrPageFault<()> {
     Ok(())
 }
 
-pub unsafe fn push32_ss16_mem(addr: i32) -> OrPageFault<()> {
-    push32_ss16(safe_read32s(addr)?)
-}
-pub unsafe fn push32_ss32_mem(addr: i32) -> OrPageFault<()> {
-    push32_ss32(safe_read32s(addr)?)
-}
+pub unsafe fn push32_ss16_mem(addr: i32) -> OrPageFault<()> { push32_ss16(safe_read32s(addr)?) }
+pub unsafe fn push32_ss32_mem(addr: i32) -> OrPageFault<()> { push32_ss32(safe_read32s(addr)?) }
 
 pub unsafe fn push32(imm32: i32) -> OrPageFault<()> {
-    if *stack_size_32 {
-        push32_ss32(imm32)
-    } else {
-        push32_ss16(imm32)
-    }
+    if *stack_size_32 { push32_ss32(imm32) } else { push32_ss16(imm32) }
 }
 pub unsafe fn pop16() -> OrPageFault<i32> {
-    if *stack_size_32 {
-        pop16_ss32()
-    } else {
-        pop16_ss16()
-    }
+    if *stack_size_32 { pop16_ss32() } else { pop16_ss16() }
 }
 pub unsafe fn pop16_ss16() -> OrPageFault<i32> {
     let sp = get_seg_ss() + read_reg16(SP);
@@ -258,11 +202,7 @@ pub unsafe fn pop16_ss32() -> OrPageFault<i32> {
     Ok(result)
 }
 pub unsafe fn pop32s() -> OrPageFault<i32> {
-    if *stack_size_32 {
-        pop32s_ss32()
-    } else {
-        pop32s_ss16()
-    }
+    if *stack_size_32 { pop32s_ss32() } else { pop32s_ss16() }
 }
 pub unsafe fn pop32s_ss16() -> OrPageFault<i32> {
     let sp = read_reg16(SP);
@@ -385,9 +325,7 @@ pub unsafe fn enter32(size: i32, mut nesting_level: i32) {
     adjust_stack_reg(-size - 4);
 }
 
-pub unsafe fn setcc_reg(condition: bool, r: i32) {
-    write_reg8(r, condition as i32);
-}
+pub unsafe fn setcc_reg(condition: bool, r: i32) { write_reg8(r, condition as i32); }
 pub unsafe fn setcc_mem(condition: bool, addr: i32) {
     return_on_pagefault!(safe_write8(addr, condition as i32));
 }
@@ -434,7 +372,7 @@ pub unsafe fn fxrstor(addr: i32) {
 
     set_control_word(safe_read16(addr + 0).unwrap() as u16);
     fpu_set_status_word(safe_read16(addr + 2).unwrap() as u16);
-    *fpu_stack_empty = !safe_read8(addr.wrapping_add(4) as i32).unwrap() as u8;
+    *fpu_stack_empty = !safe_read8(addr + 4).unwrap() as u8;
     *fpu_opcode = safe_read16(addr + 6).unwrap();
     *fpu_ip = safe_read32s(addr + 8).unwrap();
     *fpu_ip_selector = safe_read16(addr + 12).unwrap();
@@ -479,9 +417,7 @@ pub unsafe fn xchg32r(r32: i32) {
     write_reg32(r32, tmp);
 }
 
-pub unsafe fn bswap(r: i32) {
-    write_reg32(r, read_reg32(r).swap_bytes())
-}
+pub unsafe fn bswap(r: i32) { write_reg32(r, read_reg32(r).swap_bytes()) }
 
 pub unsafe fn lar(selector: i32, original: i32) -> i32 {
     if false {
@@ -496,20 +432,21 @@ pub unsafe fn lar(selector: i32, original: i32) -> i32 {
         Err(()) => {
             // pagefault
             return original;
-        }
+        },
         Ok(Err(_)) => {
             *flags_changed &= !FLAG_ZERO;
             *flags &= !FLAG_ZERO;
             dbg_log!("lar: invalid selector={:x}: null or invalid", selector);
             return original;
-        }
+        },
         Ok(Ok((desc, _))) => {
             *flags_changed &= !FLAG_ZERO;
             let dpl_bad = desc.dpl() < *cpl || desc.dpl() < sel.rpl();
 
             if if desc.is_system() {
                 (LAR_INVALID_TYPE >> desc.system_type() & 1 == 1) || dpl_bad
-            } else {
+            }
+            else {
                 !desc.is_conforming_executable() && dpl_bad
             } {
                 dbg_log!(
@@ -520,11 +457,12 @@ pub unsafe fn lar(selector: i32, original: i32) -> i32 {
                 );
                 *flags &= !FLAG_ZERO;
                 return original;
-            } else {
+            }
+            else {
                 *flags |= FLAG_ZERO;
                 return (desc.raw >> 32) as i32 & 0x00FFFF00;
             }
-        }
+        },
     }
 }
 
@@ -550,20 +488,21 @@ pub unsafe fn lsl(selector: i32, original: i32) -> i32 {
         Err(()) => {
             // pagefault
             return original;
-        }
+        },
         Ok(Err(_)) => {
             *flags_changed &= !FLAG_ZERO;
             *flags &= !FLAG_ZERO;
             dbg_log!("lsl: invalid selector={:x}: null or invalid", selector);
             return original;
-        }
+        },
         Ok(Ok((desc, _))) => {
             *flags_changed &= !FLAG_ZERO;
             let dpl_bad = desc.dpl() < *cpl || desc.dpl() < sel.rpl();
 
             if if desc.is_system() {
                 (LSL_INVALID_TYPE >> desc.system_type() & 1 == 1) || dpl_bad
-            } else {
+            }
+            else {
                 !desc.is_conforming_executable() && dpl_bad
             } {
                 dbg_log!(
@@ -574,11 +513,12 @@ pub unsafe fn lsl(selector: i32, original: i32) -> i32 {
                 );
                 *flags &= !FLAG_ZERO;
                 return original;
-            } else {
+            }
+            else {
                 *flags |= FLAG_ZERO;
                 return desc.effective_limit() as i32;
             }
-        }
+        },
     }
 }
 
@@ -589,7 +529,7 @@ pub unsafe fn verr(selector: i32) {
         Err(_) => {
             *flags &= !FLAG_ZERO;
             dbg_log!("verr -> invalid. selector={:x}", selector);
-        }
+        },
         Ok((desc, _)) => {
             if desc.is_system()
                 || !desc.is_readable()
@@ -598,11 +538,12 @@ pub unsafe fn verr(selector: i32) {
             {
                 dbg_log!("verr -> invalid. selector={:x}", selector);
                 *flags &= !FLAG_ZERO;
-            } else {
+            }
+            else {
                 dbg_log!("verr -> valid. selector={:x}", selector);
                 *flags |= FLAG_ZERO;
             }
-        }
+        },
     }
 }
 
@@ -613,7 +554,7 @@ pub unsafe fn verw(selector: i32) {
         Err(_) => {
             *flags &= !FLAG_ZERO;
             dbg_log!("verw -> invalid. selector={:x}", selector);
-        }
+        },
         Ok((desc, _)) => {
             if desc.is_system()
                 || !desc.is_writable()
@@ -627,9 +568,10 @@ pub unsafe fn verw(selector: i32) {
                     desc.is_writable(),
                 );
                 *flags &= !FLAG_ZERO;
-            } else {
+            }
+            else {
                 *flags |= FLAG_ZERO;
             }
-        }
+        },
     }
 }

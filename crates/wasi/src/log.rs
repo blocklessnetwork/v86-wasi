@@ -29,9 +29,7 @@ pub fn log(record: &[u8]) {
 
 pub enum Module {
     E,
-    BIOS,
-    SERIAL,
-    FLOPPY,
+    IO,
     CPU,
     PIC,
     PCI,
@@ -40,25 +38,29 @@ pub enum Module {
     PIT,
     RTC,
     PS2,
-    IO,
+    NET,
+    BIOS,
+    SERIAL,
+    FLOPPY,
 }
 
 impl Module {
     pub(crate) fn display(&self) -> bool {
         match *self {
             Self::E => true,
-            Self::FLOPPY => true,
+            Self::IO => true,
             Self::CPU => true,
             Self::PIC => false,
             Self::PCI => true,
-            Self::IO => true,
+            Self::PS2 => false,
+            Self::NET => true,
             Self::VGA => false,
             Self::RTC => true,
             Self::DMA => true,
             Self::PIT => false,
             Self::BIOS => true,
+            Self::FLOPPY => true,
             Self::SERIAL => true,
-            Self::PS2 => false,
         }
     }
 }
@@ -71,6 +73,7 @@ impl Display for Module {
             Self::CPU => f.write_str("CPU"),
             Self::PIC => f.write_str("PIC"),
             Self::PIT => f.write_str("PIT"),
+            Self::NET => f.write_str("NET"),
             Self::PCI => f.write_str("PCI"),
             Self::VGA => f.write_str("VGA"),
             Self::RTC => f.write_str("RTC"),

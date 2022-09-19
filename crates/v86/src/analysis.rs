@@ -96,6 +96,4 @@ pub fn instr_F3_analyze(cpu: &mut CpuContext, analysis: &mut Analysis) {
     analyze_step_handle_prefix(cpu, analysis)
 }
 
-pub fn modrm_analyze(ctx: &mut CpuContext, modrm_byte: u8) {
-    ::modrm::skip(ctx, modrm_byte);
-}
+pub fn modrm_analyze(ctx: &mut CpuContext, modrm_byte: u8) { ::modrm::skip(ctx, modrm_byte); }

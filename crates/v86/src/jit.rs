@@ -24,9 +24,7 @@ use wasmgen::wasm_builder::{Label, WasmBuilder, WasmLocal};
 #[repr(transparent)]
 pub struct WasmTableIndex(u16);
 impl WasmTableIndex {
-    pub fn to_u16(self) -> u16 {
-        self.0
-    }
+    pub fn to_u16(self) -> u16 { self.0 }
 }
 
 mod unsafe_jit {
@@ -79,14 +77,14 @@ const MAX_INSTRUCTION_LENGTH: u32 = 16;
 static mut jit_state: NonNull<JitState> =
     unsafe { NonNull::new_unchecked(mem::align_of::<JitState>() as *mut _) };
 
-pub fn get_jit_state() -> &'static mut JitState {
-    unsafe { jit_state.as_mut() }
-}
+pub fn get_jit_state() -> &'static mut JitState { unsafe { jit_state.as_mut() } }
 
 #[no_mangle]
 pub fn rust_init() {
     let x = Box::new(JitState::create_and_initialise());
-    unsafe { jit_state = NonNull::new(Box::into_raw(x)).unwrap() }
+    unsafe {
+        jit_state = NonNull::new(Box::into_raw(x)).unwrap()
+    }
 
     use std::panic;
 
@@ -238,16 +236,12 @@ pub struct JitContext<'a> {
     pub instruction_counter: WasmLocal,
 }
 impl<'a> JitContext<'a> {
-    pub fn reg(&self, i: u32) -> WasmLocal {
-        self.register_locals[i as usize].unsafe_clone()
-    }
+    pub fn reg(&self, i: u32) -> WasmLocal { self.register_locals[i as usize].unsafe_clone() }
 }
 
 pub const JIT_INSTR_BLOCK_BOUNDARY_FLAG: u32 = 1 << 0;
 
-fn jit_hot_hash_page(page: Page) -> u32 {
-    page.to_u32() % HASH_PRIME
-}
+fn jit_hot_hash_page(page: Page) -> u32 { page.to_u32() % HASH_PRIME }
 
 pub fn is_near_end_of_page(address: u32) -> bool {
     address & 0xFFF >= 0x1000 - MAX_INSTRUCTION_LENGTH
@@ -267,11 +261,12 @@ pub fn jit_find_cache_entry(phys_address: u32, state_flags: CachedStateFlags) ->
                     wasm_table_index: entry.wasm_table_index,
                     initial_state: entry.initial_state,
                 };
-            } else {
+            }
+            else {
                 profiler::stat_increment(stat::RUN_INTERPRETED_DIFFERENT_STATE);
             }
-        }
-        None => {}
+        },
+        None => {},
     }
 
     return CachedCode::NONE;
@@ -293,8 +288,8 @@ pub fn jit_find_cache_entry_in_page(
             if entry.state_flags == state_flags && entry.wasm_table_index == wasm_table_index {
                 return entry.initial_state as i32;
             }
-        }
-        None => {}
+        },
+        None => {},
     }
 
     profiler::stat_increment(stat::INDIRECT_JUMP_NO_ENTRY);
@@ -349,11 +344,11 @@ fn jit_find_basic_blocks(
             return None;
         }
         let phys_target = match cpu::translate_address_read_no_side_effects(virt_target) {
-            None => {
+            Err(()) => {
                 dbg_log!("Not analysing {:x} (page not mapped)", virt_target);
                 return None;
-            }
-            Some(t) => t,
+            },
+            Ok(t) => t,
         };
 
         let phys_page = Page::page_of(phys_target);
@@ -384,7 +379,8 @@ fn jit_find_basic_blocks(
                     to_visit_stack.push(addr);
                     marked_as_entry.insert(addr);
                 }
-            } else {
+            }
+            else {
                 // no entry points: ignore this page?
             }
 
@@ -403,11 +399,7 @@ fn jit_find_basic_blocks(
     let mut page_blacklist = HashSet::new();
 
     // 16-bit doesn't not work correctly, most likely due to instruction pointer wrap-around
-    let max_pages = if cpu.state_flags.is_32() {
-        MAX_PAGES
-    } else {
-        1
-    };
+    let max_pages = if cpu.state_flags.is_32() { MAX_PAGES } else { 1 };
 
     for virt_addr in entry_points {
         let ok = follow_jump(
@@ -425,11 +417,11 @@ fn jit_find_basic_blocks(
 
     while let Some(to_visit) = to_visit_stack.pop() {
         let phys_addr = match cpu::translate_address_read_no_side_effects(to_visit) {
-            None => {
+            Err(()) => {
                 dbg_log!("Not analysing {:x} (page not mapped)", to_visit);
                 continue;
-            }
-            Some(phys_addr) => phys_addr,
+            },
+            Ok(phys_addr) => phys_addr,
         };
 
         if basic_blocks.contains_key(&phys_addr) {
@@ -490,7 +482,8 @@ fn jit_find_basic_blocks(
                             !is_near_end_of_page(current_address),
                             "TODO: Handle STI instruction near end of page"
                         );
-                    } else {
+                    }
+                    else {
                         // Only split non-STI blocks (one instruction needs to run after STI before
                         // handle_irqs may be called)
 
@@ -506,7 +499,7 @@ fn jit_find_basic_blocks(
                             break;
                         }
                     }
-                }
+                },
                 AnalysisType::Jump {
                     offset,
                     is_32,
@@ -517,7 +510,8 @@ fn jit_find_basic_blocks(
 
                     let jump_target = if is_32 {
                         current_virt_addr + offset
-                    } else {
+                    }
+                    else {
                         cpu.cs_offset as i32
                             + (current_virt_addr - cpu.cs_offset as i32 + offset & 0xFFFF)
                     };
@@ -527,7 +521,8 @@ fn jit_find_basic_blocks(
 
                     let next_block_addr = if is_near_end_of_page(current_address) {
                         None
-                    } else {
+                    }
+                    else {
                         Some(current_address)
                     };
 
@@ -551,7 +546,7 @@ fn jit_find_basic_blocks(
                     current_block.end_addr = current_address;
 
                     break;
-                }
+                },
                 AnalysisType::Jump {
                     offset,
                     is_32,
@@ -562,7 +557,8 @@ fn jit_find_basic_blocks(
 
                     let jump_target = if is_32 {
                         current_virt_addr + offset
-                    } else {
+                    }
+                    else {
                         cpu.cs_offset as i32
                             + (current_virt_addr - cpu.cs_offset as i32 + offset & 0xFFFF)
                     };
@@ -590,7 +586,7 @@ fn jit_find_basic_blocks(
                     current_block.end_addr = current_address;
 
                     break;
-                }
+                },
                 AnalysisType::BlockBoundary => {
                     // a block boundary but not a jump, get out
 
@@ -610,7 +606,7 @@ fn jit_find_basic_blocks(
                     current_block.last_instruction_addr = addr_before_instruction;
                     current_block.end_addr = current_address;
                     break;
-                }
+                },
             }
 
             if is_near_end_of_page(current_address) {
@@ -917,18 +913,18 @@ pub fn codegen_finalize_finished(
         None => {
             dbg_assert!(false);
             return;
-        }
+        },
         Some((in_progress_wasm_table_index, PageState::CompilingWritten)) => {
             dbg_assert!(wasm_table_index == in_progress_wasm_table_index);
 
             profiler::stat_increment(stat::INVALIDATE_MODULE_WRITTEN_WHILE_COMPILED);
             free_wasm_table_index(ctx, wasm_table_index);
             return;
-        }
+        },
         Some((in_progress_wasm_table_index, PageState::Compiling { entries })) => {
             dbg_assert!(wasm_table_index == in_progress_wasm_table_index);
             entries
-        }
+        },
     };
 
     let mut check_for_unused_wasm_table_index = HashSet::new();
@@ -971,7 +967,8 @@ pub fn codegen_finalize_finished(
             for (_, entry) in &ctx.cache {
                 dbg_assert!(entry.wasm_table_index != index);
             }
-        } else {
+        }
+        else {
             let mut ok = false;
             for (_, entry) in &ctx.cache {
                 if entry.wasm_table_index == index {
@@ -1018,7 +1015,8 @@ fn jit_generate_module(
             codegen::gen_debug_track_jit_exit(builder, 0);
             builder.br(exit_label);
             builder.block_end();
-        } else {
+        }
+        else {
             builder.br_if(exit_label);
         }
     }
@@ -1043,13 +1041,13 @@ fn jit_generate_module(
                 WasmStructure::Dispatcher(e) => {
                     result = e.clone();
                     break;
-                }
+                },
                 WasmStructure::Loop { .. } => {
                     dbg_assert!(false);
-                }
+                },
                 WasmStructure::BasicBlock(_) => {
                     dbg_assert!(false);
-                }
+                },
                 // Note: We could use these blocks as entry points, which will yield
                 // more entries for free, but it requires adding those to the dispatcher
                 // It's to be investigated if this yields a performance improvement
@@ -1057,7 +1055,7 @@ fn jit_generate_module(
                 // points
                 WasmStructure::Block(children) => {
                     nodes = children;
-                }
+                },
             }
         }
         result
@@ -1122,11 +1120,12 @@ fn jit_generate_module(
                             ctx.builder.if_void();
                             if jump_offset_is_32 {
                                 codegen::gen_relative_jump(ctx.builder, jump_offset);
-                            } else {
+                            }
+                            else {
                                 codegen::gen_jmp_rel16(ctx.builder, jump_offset as u16);
                             }
                             ctx.builder.block_end();
-                        }
+                        },
                         BasicBlockType::Normal {
                             jump_offset,
                             jump_offset_is_32,
@@ -1138,16 +1137,17 @@ fn jit_generate_module(
                                     block.end_addr as i32 & 0xFFF,
                                     jump_offset,
                                 );
-                            } else {
+                            }
+                            else {
                                 codegen::gen_set_eip_low_bits(
                                     ctx.builder,
                                     block.end_addr as i32 & 0xFFF,
                                 );
                                 codegen::gen_jmp_rel16(ctx.builder, jump_offset as u16);
                             }
-                        }
-                        BasicBlockType::Exit => {}
-                        BasicBlockType::AbsoluteEip => {}
+                        },
+                        BasicBlockType::Exit => {},
+                        BasicBlockType::AbsoluteEip => {},
                     };
                     codegen::gen_debug_track_jit_exit(ctx.builder, block.last_instruction_addr);
                     codegen::gen_move_registers_from_locals_to_memory(ctx);
@@ -1163,7 +1163,7 @@ fn jit_generate_module(
                         codegen::gen_debug_track_jit_exit(ctx.builder, block.last_instruction_addr);
                         codegen::gen_profiler_stat_increment(ctx.builder, stat::DIRECT_EXIT);
                         ctx.builder.br(ctx.exit_label);
-                    }
+                    },
                     BasicBlockType::AbsoluteEip => {
                         // Check if we can stay in this module, if not exit
                         codegen::gen_get_eip(ctx.builder);
@@ -1184,7 +1184,7 @@ fn jit_generate_module(
 
                         codegen::gen_debug_track_jit_exit(ctx.builder, block.last_instruction_addr);
                         ctx.builder.br(ctx.exit_label);
-                    }
+                    },
                     &BasicBlockType::Normal {
                         next_block_addr: None,
                         jump_offset,
@@ -1196,7 +1196,8 @@ fn jit_generate_module(
                                 block.end_addr as i32 & 0xFFF,
                                 jump_offset,
                             );
-                        } else {
+                        }
+                        else {
                             codegen::gen_set_eip_low_bits(
                                 ctx.builder,
                                 block.end_addr as i32 & 0xFFF,
@@ -1207,7 +1208,7 @@ fn jit_generate_module(
                         codegen::gen_debug_track_jit_exit(ctx.builder, block.last_instruction_addr);
                         codegen::gen_profiler_stat_increment(ctx.builder, stat::DIRECT_EXIT);
                         ctx.builder.br(ctx.exit_label);
-                    }
+                    },
                     &BasicBlockType::Normal {
                         next_block_addr: Some(next_block_addr),
                         jump_offset,
@@ -1224,7 +1225,8 @@ fn jit_generate_module(
                                     block.end_addr as i32 & 0xFFF,
                                     jump_offset,
                                 );
-                            } else {
+                            }
+                            else {
                                 codegen::gen_set_eip_low_bits(
                                     ctx.builder,
                                     block.end_addr as i32 & 0xFFF,
@@ -1269,13 +1271,15 @@ fn jit_generate_module(
                                     ctx.builder,
                                     stat::NORMAL_FALLTHRU_WITH_TARGET_BLOCK,
                                 );
-                            } else {
+                            }
+                            else {
                                 codegen::gen_profiler_stat_increment(
                                     ctx.builder,
                                     stat::NORMAL_FALLTHRU,
                                 );
                             }
-                        } else {
+                        }
+                        else {
                             let &(br, target_index) = label_for_addr.get(&next_block_addr).unwrap();
                             if let Some(target_index) = target_index {
                                 if cfg!(feature = "profiler") {
@@ -1288,7 +1292,8 @@ fn jit_generate_module(
                                     ctx.builder,
                                     stat::NORMAL_BRANCH_WITH_TARGET_BLOCK,
                                 );
-                            } else {
+                            }
+                            else {
                                 codegen::gen_profiler_stat_increment(
                                     ctx.builder,
                                     stat::NORMAL_BRANCH,
@@ -1296,7 +1301,7 @@ fn jit_generate_module(
                             }
                             ctx.builder.br(br);
                         }
-                    }
+                    },
                     &BasicBlockType::ConditionalJump {
                         next_block_addr,
                         next_block_branch_taken_addr,
@@ -1332,14 +1337,16 @@ fn jit_generate_module(
                             if is_first {
                                 if case == Case::BranchNotTaken {
                                     codegen::gen_condition_fn_negated(ctx, condition);
-                                } else {
+                                }
+                                else {
                                     codegen::gen_condition_fn(ctx, condition);
                                 }
                             }
 
                             let next_block_addr = if case == Case::BranchTaken {
                                 next_block_branch_taken_addr
-                            } else {
+                            }
+                            else {
                                 next_block_addr
                             };
 
@@ -1355,7 +1362,8 @@ fn jit_generate_module(
                                             block.end_addr as i32 & 0xFFF,
                                             jump_offset,
                                         );
-                                    } else {
+                                    }
+                                    else {
                                         codegen::gen_set_eip_low_bits(
                                             ctx.builder,
                                             block.end_addr as i32 & 0xFFF,
@@ -1411,13 +1419,15 @@ fn jit_generate_module(
                                             ctx.builder,
                                             stat::CONDITIONAL_JUMP_FALLTHRU_WITH_TARGET_BLOCK,
                                         );
-                                    } else {
+                                    }
+                                    else {
                                         codegen::gen_profiler_stat_increment(
                                             ctx.builder,
                                             stat::CONDITIONAL_JUMP_FALLTHRU,
                                         );
                                     }
-                                } else {
+                                }
+                                else {
                                     let &(br, target_index) =
                                         label_for_addr.get(&next_block_addr).unwrap();
                                     if let Some(target_index) = target_index {
@@ -1438,28 +1448,33 @@ fn jit_generate_module(
                                                 ctx.builder,
                                                 if target_index.is_some() {
                                                     stat::CONDITIONAL_JUMP_BRANCH_WITH_TARGET_BLOCK
-                                                } else {
+                                                }
+                                                else {
                                                     stat::CONDITIONAL_JUMP_BRANCH
                                                 },
                                             );
                                             ctx.builder.br(br);
                                             ctx.builder.block_end();
-                                        } else {
+                                        }
+                                        else {
                                             ctx.builder.br_if(br);
                                         }
-                                    } else {
+                                    }
+                                    else {
                                         codegen::gen_profiler_stat_increment(
                                             ctx.builder,
                                             if target_index.is_some() {
                                                 stat::CONDITIONAL_JUMP_BRANCH_WITH_TARGET_BLOCK
-                                            } else {
+                                            }
+                                            else {
                                                 stat::CONDITIONAL_JUMP_BRANCH
                                             },
                                         );
                                         ctx.builder.br(br);
                                     }
                                 }
-                            } else {
+                            }
+                            else {
                                 // target is outside of this module, update eip and exit
                                 if is_first {
                                     ctx.builder.if_void();
@@ -1472,14 +1487,16 @@ fn jit_generate_module(
                                             block.end_addr as i32 & 0xFFF,
                                             jump_offset,
                                         );
-                                    } else {
+                                    }
+                                    else {
                                         codegen::gen_set_eip_low_bits(
                                             ctx.builder,
                                             block.end_addr as i32 & 0xFFF,
                                         );
                                         codegen::gen_jmp_rel16(ctx.builder, jump_offset as u16);
                                     }
-                                } else {
+                                }
+                                else {
                                     codegen::gen_set_eip_low_bits(
                                         ctx.builder,
                                         block.end_addr as i32 & 0xFFF,
@@ -1529,7 +1546,8 @@ fn jit_generate_module(
                                         block.end_addr as i32 & 0xFFF,
                                         jump_offset,
                                     );
-                                } else {
+                                }
+                                else {
                                     codegen::gen_set_eip_low_bits(
                                         ctx.builder,
                                         block.end_addr as i32 & 0xFFF,
@@ -1570,16 +1588,18 @@ fn jit_generate_module(
                                 ctx.builder.block_end();
                                 ctx.builder.set_local(target_block);
                             }
-                        } else if branch_taken_is_fallthrough {
+                        }
+                        else if branch_taken_is_fallthrough {
                             handle_case(Case::BranchNotTaken, true);
                             handle_case(Case::BranchTaken, false);
-                        } else {
+                        }
+                        else {
                             handle_case(Case::BranchTaken, true);
                             handle_case(Case::BranchNotTaken, false);
                         }
-                    }
+                    },
                 }
-            }
+            },
             Work::WasmStructure(WasmStructure::Dispatcher(entries)) => {
                 profiler::stat_increment(stat::COMPILE_DISPATCHER);
 
@@ -1604,7 +1624,8 @@ fn jit_generate_module(
                     }
                     ctx.builder.get_local(target_block);
                     ctx.builder.brtable(brtable_default, &mut cases.iter());
-                } else {
+                }
+                else {
                     // generate a if target == block.addr then br block.label ...
                     codegen::gen_profiler_stat_increment(ctx.builder, stat::DISPATCHER_SMALL);
                     let nexts: HashSet<u32> = next_addr
@@ -1622,7 +1643,7 @@ fn jit_generate_module(
                         ctx.builder.br_if(label);
                     }
                 }
-            }
+            },
             Work::WasmStructure(WasmStructure::Loop(children)) => {
                 profiler::stat_increment(stat::COMPILE_WASM_LOOP);
 
@@ -1644,7 +1665,8 @@ fn jit_generate_module(
                             codegen::gen_debug_track_jit_exit(ctx.builder, addr);
                             ctx.builder.br(exit_label);
                             ctx.builder.block_end();
-                        } else {
+                        }
+                        else {
                             ctx.builder.br_if(exit_label);
                         }
                     }
@@ -1654,7 +1676,8 @@ fn jit_generate_module(
                 for &target in entries.iter() {
                     let index = if entries.len() == 1 {
                         None
-                    } else {
+                    }
+                    else {
                         Some(*index_for_addr.get(&target).unwrap())
                     };
                     let old = label_for_addr.insert(target, (label, index));
@@ -1671,7 +1694,7 @@ fn jit_generate_module(
                 for c in children.into_iter().rev() {
                     work.push_front(Work::WasmStructure(c));
                 }
-            }
+            },
             Work::LoopEnd {
                 label,
                 entries,
@@ -1687,7 +1710,7 @@ fn jit_generate_module(
                 }
 
                 ctx.builder.block_end();
-            }
+            },
             Work::WasmStructure(WasmStructure::Block(children)) => {
                 profiler::stat_increment(stat::COMPILE_WASM_BLOCK);
 
@@ -1697,7 +1720,8 @@ fn jit_generate_module(
                 for &target in targets.iter() {
                     let index = if targets.len() == 1 {
                         None
-                    } else {
+                    }
+                    else {
                         Some(*index_for_addr.get(&target).unwrap())
                     };
                     let old = label_for_addr.insert(target, (label, index));
@@ -1714,7 +1738,7 @@ fn jit_generate_module(
                 for c in children.into_iter().rev() {
                     work.push_front(Work::WasmStructure(c));
                 }
-            }
+            },
             Work::BlockEnd {
                 label,
                 targets,
@@ -1730,7 +1754,7 @@ fn jit_generate_module(
                 }
 
                 ctx.builder.block_end();
-            }
+            },
         }
     }
 
@@ -1850,7 +1874,8 @@ fn jit_generate_basic_block(ctx: &mut JitContext, block: &BasicBlock) {
                 );
                 codegen::gen_set_eip_low_bits(ctx.builder, stop_addr as i32 & 0xFFF);
             }
-        } else {
+        }
+        else {
             ctx.last_instruction = Instruction::Other;
         }
 
@@ -1910,10 +1935,11 @@ pub fn jit_increase_hotness_and_maybe_compile(
             return;
         }
         // only try generating if we're in the correct address space
-        if cpu::translate_address_read_no_side_effects(virt_address) == Some(phys_address) {
+        if cpu::translate_address_read_no_side_effects(virt_address) == Ok(phys_address) {
             ctx.hot_pages[address_hash] = 0;
             jit_analyze_and_generate(ctx, virt_address, phys_address, cs_offset, state_flags)
-        } else {
+        }
+        else {
             profiler::stat_increment(stat::COMPILE_WRONG_ADDRESS_SPACE);
         }
     };
@@ -1929,18 +1955,18 @@ fn free_wasm_table_index(ctx: &mut JitState, wasm_table_index: WasmTableIndex) {
                     *wasm_table_index_compiling != wasm_table_index,
                     "Attempt to free wasm table index that is currently being compiled"
                 );
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 
     match ctx.used_wasm_table_indices.remove(&wasm_table_index) {
         None => {
             dbg_assert!(false);
-        }
+        },
         Some(_pages) => {
             //dbg_assert!(!pages.is_empty()); // only if CompilingWritten
-        }
+        },
     }
     ctx.wasm_table_index_free_list.push(wasm_table_index);
 
@@ -1970,6 +1996,7 @@ pub fn rebuild_all_pages(ctx: &mut JitState) {
 /// Register a write in this page: Delete all present code
 pub fn jit_dirty_page(ctx: &mut JitState, page: Page) {
     let mut did_have_code = false;
+
     if ctx.all_pages.contains(&page) {
         profiler::stat_increment(stat::INVALIDATE_PAGE_HAD_CODE);
         did_have_code = true;
@@ -1979,6 +2006,7 @@ pub fn jit_dirty_page(ctx: &mut JitState, page: Page) {
             Some((wasm_table_index, _)) => Some(*wasm_table_index),
             None => None,
         };
+
         for (&wasm_table_index, pages) in &ctx.used_wasm_table_indices {
             if Some(wasm_table_index) != compiling && pages.contains(&page) {
                 index_to_free.insert(wasm_table_index);
@@ -1986,8 +2014,8 @@ pub fn jit_dirty_page(ctx: &mut JitState, page: Page) {
         }
 
         match &ctx.compiling {
-            None => {}
-            Some((_, PageState::CompilingWritten)) => {}
+            None => {},
+            Some((_, PageState::CompilingWritten)) => {},
             Some((wasm_table_index, PageState::Compiling { .. })) => {
                 let pages = ctx
                     .used_wasm_table_indices
@@ -1998,14 +2026,14 @@ pub fn jit_dirty_page(ctx: &mut JitState, page: Page) {
                     ctx.compiling = Some((*wasm_table_index, PageState::CompilingWritten));
                     rebuild_all_pages(ctx);
                 }
-            }
+            },
         }
 
         for index in &index_to_free {
             match ctx.used_wasm_table_indices.get(&index) {
                 None => {
                     dbg_assert!(false);
-                }
+                },
                 Some(pages) => {
                     for &p in pages {
                         for addr in p.address_range() {
@@ -2016,7 +2044,7 @@ pub fn jit_dirty_page(ctx: &mut JitState, page: Page) {
                             }
                         }
                     }
-                }
+                },
             }
         }
 
@@ -2025,23 +2053,24 @@ pub fn jit_dirty_page(ctx: &mut JitState, page: Page) {
             free_wasm_table_index(ctx, index)
         }
     }
-    if ctx.entry_points.contains_key(&page) {
-        match ctx.entry_points.remove(&page) {
-            None => {}
-            Some(_entry_points) => {
-                profiler::stat_increment(stat::INVALIDATE_PAGE_HAD_ENTRY_POINTS);
-                did_have_code = true;
 
-                // don't try to compile code in this page anymore until it's hot again
-                ctx.hot_pages[jit_hot_hash_page(page) as usize] = 0;
-            }
-        }
+    match ctx.entry_points.remove(&page) {
+        None => {},
+        Some(_entry_points) => {
+            profiler::stat_increment(stat::INVALIDATE_PAGE_HAD_ENTRY_POINTS);
+            did_have_code = true;
+
+            // don't try to compile code in this page anymore until it's hot again
+            ctx.hot_pages[jit_hot_hash_page(page) as usize] = 0;
+        },
     }
 
     for pages in ctx.used_wasm_table_indices.values() {
         dbg_assert!(!pages.contains(&page));
     }
+
     check_jit_state_invariants(ctx);
+
     dbg_assert!(!ctx.all_pages.contains(&page));
     dbg_assert!(!jit_page_has_code_ctx(ctx, page));
 
@@ -2085,9 +2114,7 @@ pub fn jit_dirty_cache_small(start_addr: u32, end_addr: u32) {
 }
 
 #[no_mangle]
-pub fn jit_clear_cache_js() {
-    jit_clear_cache(get_jit_state())
-}
+pub fn jit_clear_cache_js() { jit_clear_cache(get_jit_state()) }
 
 pub fn jit_clear_cache(ctx: &mut JitState) {
     let mut pages_with_code = HashSet::new();
@@ -2110,9 +2137,7 @@ pub fn jit_clear_cache(ctx: &mut JitState) {
     }
 }
 
-pub fn jit_page_has_code(page: Page) -> bool {
-    jit_page_has_code_ctx(get_jit_state(), page)
-}
+pub fn jit_page_has_code(page: Page) -> bool { jit_page_has_code_ctx(get_jit_state(), page) }
 
 pub fn jit_page_has_code_ctx(ctx: &mut JitState, page: Page) -> bool {
     ctx.all_pages.contains(&page) || ctx.entry_points.contains_key(&page)
@@ -2122,17 +2147,14 @@ pub fn jit_page_has_code_ctx(ctx: &mut JitState, page: Page) -> bool {
 pub fn jit_get_wasm_table_index_free_list_count() -> u32 {
     if cfg!(feature = "profiler") {
         get_jit_state().wasm_table_index_free_list.len() as u32
-    } else {
+    }
+    else {
         0
     }
 }
 #[no_mangle]
 pub fn jit_get_cache_size() -> u32 {
-    if cfg!(feature = "profiler") {
-        get_jit_state().cache.len() as u32
-    } else {
-        0
-    }
+    if cfg!(feature = "profiler") { get_jit_state().cache.len() as u32 } else { 0 }
 }
 
 #[cfg(feature = "profiler")]
@@ -2154,11 +2176,8 @@ pub fn check_missed_entry_points(phys_address: u32, state_flags: CachedStateFlag
 
             let last_jump_type = unsafe { cpu::debug_last_jump.name() };
             let last_jump_addr = unsafe { cpu::debug_last_jump.phys_address() }.unwrap_or(0);
-            let last_jump_opcode = if last_jump_addr != 0 {
-                memory::read32s(last_jump_addr)
-            } else {
-                0
-            };
+            let last_jump_opcode =
+                if last_jump_addr != 0 { memory::read32s(last_jump_addr) } else { 0 };
 
             let opcode = memory::read32s(phys_address);
             dbg_log!(

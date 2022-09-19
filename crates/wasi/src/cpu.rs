@@ -29,7 +29,7 @@ use crate::{
     timewheel::TimeWheel,
     uart::UART,
     vga::VGAScreen,
-    ContextTrait, Dev, Emulator, StoreT, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME,
+    ContextTrait, Dev, Emulator, StoreT, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, ne2k::Ne2k, ide,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -102,37 +102,37 @@ impl IOMap {
     }
 
     fn new(memory: Memory) -> Self {
-        let memory_size_io = MemAccess::new(812, 1, memory);
-        let segment_is_null_io = MemAccess::new(724, 8, memory);
-        let segment_offsets_io = MemAccess::new(736, 8, memory);
-        let segment_limits_io = MemAccess::new(768, 8, memory);
-        let protected_mode_io = MemAccess::new(800, 1, memory);
-        let idtr_size_io = MemAccess::new(564, 1, memory);
-        let idtr_offset_io = MemAccess::new(568, 1, memory);
-        let gdtr_size_io = MemAccess::new(572, 1, memory);
-        let gdtr_offset_io = MemAccess::new(576, 1, memory);
-        let tss_size_32_io = MemAccess::new(1128, 1, memory);
-        let page_fault_io = MemAccess::new(540, 8, memory);
         let cr_io = MemAccess::new(580, 8, memory);
         let cpl_io = MemAccess::new(612, 1, memory);
         let is_32_io = MemAccess::new(804, 1, memory);
-        let stack_size_32_io = MemAccess::new(808, 1, memory);
-        let in_hlt_io = MemAccess::new(616, 1, memory);
-        let last_virt_eip_io = MemAccess::new(620, 1, memory);
-        let eip_phys_io = MemAccess::new(624, 1, memory);
-        let sysenter_cs_io = MemAccess::new(640, 1, memory);
-        let sysenter_eip_io = MemAccess::new(644, 1, memory);
-        let prefixes_io = MemAccess::new(648, 1, memory);
         let flags_io = MemAccess::new(120, 1, memory);
-        let flags_changed_io = MemAccess::new(116, 1, memory);
+        let in_hlt_io = MemAccess::new(616, 1, memory);
         let last_op1_io = MemAccess::new(96, 1, memory);
-        let last_op_size_io = MemAccess::new(104, 1, memory);
+        let prefixes_io = MemAccess::new(648, 1, memory);
+        let eip_phys_io = MemAccess::new(624, 1, memory);
+        let gdtr_size_io = MemAccess::new(572, 1, memory);
+        let idtr_size_io = MemAccess::new(564, 1, memory);
+        let page_fault_io = MemAccess::new(540, 8, memory);
+        let gdtr_offset_io = MemAccess::new(576, 1, memory);
+        let memory_size_io = MemAccess::new(812, 1, memory);
+        let idtr_offset_io = MemAccess::new(568, 1, memory);
         let last_result_io = MemAccess::new(112, 1, memory);
         let current_tsc_io = MemAccess::new(960, 2, memory);
-        let instruction_pointer_io = MemAccess::new(556, 1, memory);
         let previous_ip_io = MemAccess::new(560, 1, memory);
         let apic_enabled_io = MemAccess::new(548, 1, memory);
         let acpi_enabled_io = MemAccess::new(552, 1, memory);
+        let sysenter_cs_io = MemAccess::new(640, 1, memory);
+        let sysenter_eip_io = MemAccess::new(644, 1, memory);
+        let tss_size_32_io = MemAccess::new(1128, 1, memory);
+        let last_op_size_io = MemAccess::new(104, 1, memory);
+        let stack_size_32_io = MemAccess::new(808, 1, memory);
+        let last_virt_eip_io = MemAccess::new(620, 1, memory);
+        let flags_changed_io = MemAccess::new(116, 1, memory);
+        let segment_limits_io = MemAccess::new(768, 8, memory);
+        let protected_mode_io = MemAccess::new(800, 1, memory);
+        let segment_is_null_io = MemAccess::new(724, 8, memory);
+        let segment_offsets_io = MemAccess::new(736, 8, memory);
+        let instruction_pointer_io = MemAccess::new(556, 1, memory);
         Self {
             memory_size_io,
             segment_is_null_io,
@@ -183,6 +183,8 @@ struct VMOpers {
     typed_do_many_cycles_native: TypedFunc<(), ()>,
     typed_set_tsc: TypedFunc<(u32, u32), ()>,
     typed_pic_call_irq: TypedFunc<i32, ()>,
+    typed_rust_init: TypedFunc<(), ()>,
+    typed_codegen_finalize_finished: TypedFunc<(i32, i32, i32), ()>,
 }
 
 impl VMOpers {
@@ -220,6 +222,12 @@ impl VMOpers {
         let typed_pic_call_irq = inst
             .get_typed_func(store.as_context_mut(), "pic_call_irq")
             .unwrap();
+        let typed_rust_init = inst
+            .get_typed_func(store.as_context_mut(), "rust_init")
+            .unwrap();
+        let typed_codegen_finalize_finished = inst
+            .get_typed_func(store.as_context_mut(), "codegen_finalize_finished")
+            .unwrap();
         Self {
             typed_read8,
             typed_read16,
@@ -228,55 +236,73 @@ impl VMOpers {
             typed_write16,
             typed_write32,
             typed_reset_cpu,
+            typed_rust_init,
             typed_pic_call_irq,
             typed_allocate_memory,
             typed_get_eflags_no_arith,
             typed_do_many_cycles_native,
+            typed_codegen_finalize_finished,
         }
     }
 
+    #[inline]
     fn read8(&self, store: impl AsContextMut, addr: u32) -> i32 {
         self.typed_read8.call(store, addr).unwrap()
     }
 
+    #[inline]
     fn read16(&self, store: impl AsContextMut, addr: u32) -> i32 {
         self.typed_read16.call(store, addr).unwrap()
     }
 
+    #[inline]
     fn read32s(&self, store: impl AsContextMut, addr: u32) -> i32 {
         self.typed_read32s.call(store, addr).unwrap()
     }
 
+    #[inline]
     fn write16(&self, store: impl AsContextMut, addr: u32, val: i32) {
         self.typed_write16.call(store, (addr, val)).unwrap()
     }
 
+    #[inline]
     fn write32(&self, store: impl AsContextMut, addr: u32, val: i32) {
         self.typed_write32.call(store, (addr, val)).unwrap()
     }
 
+    #[inline]
     fn allocate_memory(&self, store: impl AsContextMut, size: u32) -> u32 {
         self.typed_allocate_memory.call(store, size).unwrap()
     }
 
+    #[inline]
     fn get_eflags_no_arith(&self, store: impl AsContextMut) -> i32 {
         self.typed_get_eflags_no_arith.call(store, ()).unwrap()
     }
 
+    #[inline]
     fn do_many_cycles_native(&self, store: impl AsContextMut) {
         self.typed_do_many_cycles_native.call(store, ()).unwrap();
     }
 
+    #[inline]
     fn reset_cpu(&self, store: impl AsContextMut) {
         self.typed_reset_cpu.call(store, ()).unwrap()
     }
 
+    #[inline]
     fn pic_call_irq(&self, store: impl AsContextMut, interrupt_nr: i32) {
         self.typed_pic_call_irq.call(store, interrupt_nr).unwrap();
     }
 
+    #[inline]
     fn set_tsc(&self, store: impl AsContextMut, low: u32, hig: u32) {
         self.typed_set_tsc.call(store, (low, hig)).unwrap()
+    }
+
+    #[inline]
+    fn rust_init(&self, store: impl AsContextMut) {
+        self.typed_rust_init.call(store, ()).unwrap()
     }
 }
 
@@ -301,6 +327,7 @@ pub struct CPU {
     pub(crate) pci: PCI,
     pub(crate) ps2: PS2,
     pub(crate) rtc: RTC,
+    pub(crate) ne2k: Ne2k,
     pub(crate) uart0: UART,
     pub(crate) debug: Debug,
     pub(crate) mmap_fn: MMapFn,
@@ -318,7 +345,7 @@ impl CPU {
         }
     }
 
-    pub fn new(inst: Instance, store: StoreT) -> Self {
+    pub fn new(inst: &mut Instance, store: StoreT) -> Self {
         let s = unsafe { &mut *(store.as_ptr() as *mut Store<Emulator>) };
         let memory = inst.get_memory(s.as_context_mut(), "memory").unwrap();
         let rtc = RTC::new(store.clone());
@@ -329,12 +356,14 @@ impl CPU {
         let vga_mem_size = store.setting().vga_memory_size;
         let vga = VGAScreen::new(store.clone(), vga_mem_size);
         let uart0 = UART::new(store.clone(), 0x3F8);
+        let ne2k = Ne2k::new(store.clone());
         Self {
             ps2,
             rtc,
             pit,
             fdc,
             vga,
+            ne2k,
             uart0,
             memory,
             idle: true,
@@ -450,6 +479,12 @@ impl CPU {
     fn allocate_memory(&mut self, addr: u32) -> u32 {
         self.store_mut()
             .map_or(0, |store| self.vm_opers.allocate_memory(store, addr))
+    }
+
+    #[inline]
+    fn rust_init(&mut self) {
+        self.store_mut()
+            .map(|store| self.vm_opers.rust_init(store));
     }
 
     #[inline]
@@ -622,6 +657,7 @@ impl CPU {
     }
 
     pub fn init(&mut self) {
+        self.rust_init();
         self.set_tsc(0, 0);
         let memory_size = self
             .emulator_mut()
@@ -638,6 +674,7 @@ impl CPU {
         self.dma.init();
         self.fdc.init();
         self.vga.init();
+        self.ne2k.init();
         self.reset_cpu();
         self.load_bios();
         self.load_kernel();
@@ -953,4 +990,12 @@ impl CPU {
         // }
         self.load_bios();
     }
+
+    #[inline]
+    pub fn codegen_finalize_finished(&mut self, index: i32, phys_addr: i32, state_flags: i32) {
+        self.store_mut().map(|store| {
+            self.vm_opers.typed_codegen_finalize_finished.call(store, (index, phys_addr, state_flags));
+        });
+    }
+
 }

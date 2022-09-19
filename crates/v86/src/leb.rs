@@ -1,6 +1,4 @@
-pub fn write_leb_i32(buf: &mut Vec<u8>, v: i32) {
-    write_leb_i64(buf, v as i64);
-}
+pub fn write_leb_i32(buf: &mut Vec<u8>, v: i32) { write_leb_i64(buf, v as i64); }
 
 pub fn write_leb_i64(buf: &mut Vec<u8>, mut v: i64) {
     // https://en.wikipedia.org/wiki/LEB128#Encode_signed_integer

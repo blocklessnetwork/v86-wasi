@@ -115,9 +115,7 @@ pub enum stat {
 #[allow(non_upper_case_globals)]
 pub static mut stat_array: [u64; 500] = [0; 500];
 
-pub fn stat_increment(stat: stat) {
-    stat_increment_by(stat, 1);
-}
+pub fn stat_increment(stat: stat) { stat_increment_by(stat, 1); }
 
 pub fn stat_increment_by(stat: stat, by: u64) {
     if cfg!(feature = "profiler") {
@@ -138,17 +136,14 @@ pub fn profiler_init() {
 pub fn profiler_stat_get(stat: stat) -> f64 {
     if cfg!(feature = "profiler") {
         unsafe { stat_array[stat as usize] as f64 }
-    } else {
+    }
+    else {
         0.0
     }
 }
 
 #[no_mangle]
-pub fn profiler_is_enabled() -> bool {
-    cfg!(feature = "profiler")
-}
+pub fn profiler_is_enabled() -> bool { cfg!(feature = "profiler") }
 
 #[no_mangle]
-pub fn profiler_stat_increment_do_run() {
-    stat_increment(stat::DO_RUN);
-}
+pub fn profiler_stat_increment_do_run() { stat_increment(stat::DO_RUN); }

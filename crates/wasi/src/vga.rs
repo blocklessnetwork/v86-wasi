@@ -239,70 +239,11 @@ impl VGAScreen {
             entries: Vec::new(),
         })];
         let pci_space: &[u8] = &[
-            0x34,
-            0x12,
-            0x11,
-            0x11,
-            0x03,
-            0x01,
-            0x00,
-            0x00,
-            0x02,
-            0x00,
-            0x00,
-            0x03,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x08,
-            (VGA_LFB_ADDRESS >> 8) as u8,
-            (VGA_LFB_ADDRESS >> 16) as u8,
-            (VGA_LFB_ADDRESS >> 24) as u8,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0xbf,
-            0xfe,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0xf4,
-            0x1a,
-            0x00,
-            0x11,
-            0x00,
-            0x00,
-            0xbe,
-            0xfe,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
+            0x34,0x12,0x11,0x11,0x03,0x01,0x00,0x00,0x02,0x00,0x00,0x03,0x00,0x00,0x00,0x00,0x08,
+            (VGA_LFB_ADDRESS >> 8) as u8,(VGA_LFB_ADDRESS >> 16) as u8,(VGA_LFB_ADDRESS >> 24) as u8,
+            0x00,0x00,0x00,0x00,0x00,0x00,0xbf,0xfe,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0xf4,0x1a,0x00,0x11,0x00,0x00,0xbe,0xfe,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
         ];
         let dac_map = vec![0u8; 0x10];
         let mut svga_memory = vec![0u8; vga_memory_size as usize];
@@ -1104,14 +1045,14 @@ impl VGAScreen {
         }
         self.store.bus_mut().map(|bus| {
             bus.send(
-                "screen-put-char", 
+                "screen-put-char",
                 BusData::ScreenPutChar(
-                    row as u16, 
-                    col as u16, 
-                    chr, 
-                    self.vga256_palette[(color as usize) >> 4 & 0xF], 
-                    self.vga256_palette[(color as usize) & 0xF]
-                )
+                    row as u16,
+                    col as u16,
+                    chr,
+                    self.vga256_palette[(color as usize) >> 4 & 0xF],
+                    self.vga256_palette[(color as usize) & 0xF],
+                ),
             );
         });
         self.vga_memory[addr as usize] = value;
@@ -1589,21 +1530,21 @@ impl VGAScreen {
                 vertical_scans >>= 1;
             }
 
-            let height = (vertical_scans / (1 + ((self.max_scan_line as u32) & 0x1F)) | 0) as u8;
+            let height = (vertical_scans / (1 + ((self.max_scan_line as u32) & 0x1F)) | 0) as u16;
 
             if horizontal_characters > 0 && height > 0 {
-                self.set_size_text(horizontal_characters, height);
+                self.set_size_text(horizontal_characters as u16, height);
             }
         }
     }
 
-    fn set_size_text(&mut self, cols_count: u8, rows_count: u8) {
-        self.max_cols = cols_count as u16;
-        self.max_rows = rows_count as u16;
+    fn set_size_text(&mut self, cols_count: u16, rows_count: u16) {
+        self.max_cols = cols_count;
+        self.max_rows = rows_count;
         self.store.bus_mut().map(|bus| {
             bus.send(
                 "screen-set-size-text",
-                BusData::U8Tuple(cols_count, rows_count),
+                BusData::U16Tuple(cols_count, rows_count),
             );
         });
     }
@@ -1823,7 +1764,8 @@ impl VGAScreen {
     }
 
     fn update_cursor(&mut self) {
-        let mut row = ((self.cursor_address - self.start_address) / self.max_cols as u32 | 0) as u16;
+        let mut row =
+            ((self.cursor_address - self.start_address) / self.max_cols as u32 | 0) as u16;
         let col = ((self.cursor_address - self.start_address) % self.max_cols as u32) as u16;
 
         row = (self.max_rows - 1).min(row);

@@ -2,49 +2,53 @@
 mod log;
 
 use std::rc::Weak;
-use std::slice;
+use std::{slice, vec};
 
 const ALL_DEBUG: bool = true;
 
 type StoreT = Weak<Store<Emulator>>;
 
-use wasmtime::*;
 use bus::BUS;
 use dma::DMA;
 use io::IO;
+use ne2k::Ne2k;
 use pci::PCI;
 use pic::PIC;
 use pit::PIT;
 use ps2::PS2;
 use rtc::RTC;
 use uart::UART;
+use wasmtime::*;
+use screen::Screen;
 use vga::VGAScreen;
-pub(crate) mod consts;
 mod bus;
 mod cpu;
 mod dev;
 mod dma;
 mod io;
 mod mem;
-mod pci;
 mod pic;
+mod pci;
+mod ide;
 mod pit;
 mod ps2;
 mod rtc;
+mod ne2k;
 mod vga;
 mod uart;
 mod debug;
 mod floppy;
 mod kernel;
+mod screen;
 mod setting;
 mod emulator;
-mod terminal;
 mod timewheel;
+pub(crate) mod consts;
 pub use consts::*;
 pub use cpu::CPU;
 pub use emulator::Emulator;
-pub(crate) use log::Module;
 use floppy::FloppyController;
+pub(crate) use log::Module;
 pub use setting::*;
 
 pub use dev::Dev;
@@ -134,6 +138,12 @@ trait ContextTrait {
 
     fn pit_mut(&self) -> Option<&mut PIT>;
     fn pit(&self) -> Option<&PIT>;
+
+    fn screen_mut(&self) -> Option<&mut Screen>;
+    fn screen(&self) -> Option<&Screen>;
+
+    fn ne2k_mut(&self) -> Option<&mut Ne2k>;
+    fn ne2k(&self) -> Option<&Ne2k>;
 
     fn microtick(&self) -> f64;
 }
@@ -271,6 +281,24 @@ impl ContextTrait for StoreT {
     #[inline]
     fn pit(&self) -> Option<&PIT> {
         self.emulator().pit()
+    }
+
+    #[inline]
+    fn screen_mut(&self) -> Option<&mut Screen> {
+        self.emulator().screen_mut()
+    }
+
+    #[inline]
+    fn screen(&self) -> Option<&Screen> {
+        self.emulator().screen()
+    }
+
+    fn ne2k_mut(&self) -> Option<&mut Ne2k> {
+        self.emulator().ne2k_mut()
+    }
+
+    fn ne2k(&self) -> Option<&Ne2k> {
+        self.emulator().ne2k()
     }
 }
 
@@ -569,13 +597,43 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
         .func_wrap(
             "env",
             "codegen_finalize",
-            move |mut _caller: Caller<'_, Emulator>,
-                  _i: i32,
-                  _addr: u32,
-                  _f: i32,
-                  _ptr: i32,
-                  _l: i32| {
-                panic!("env codegen_finalize call.");
+            move |mut caller: Caller<'_, Emulator>,
+                  index: i32,
+                  start: i32,
+                  state_flags: i32,
+                  ptr: i32,
+                  len: i32| {
+                let ptr = ptr as u32;
+                let len = len as u32;
+                let mem = match caller.get_export("memory") {
+                    Some(Extern::Memory(m)) => m,
+                    _ => {
+                        return Err(Trap::new("missing required memory export"));
+                    }
+                };
+                let store = caller.as_context();
+                let data_ptr = mem.data_ptr(&store);
+                let code = unsafe {
+                    slice::from_raw_parts_mut(data_ptr.offset(ptr as isize), len as usize)
+                };
+                let module = {
+                    let eng = store.engine();
+                    wasmtime::Module::new(eng, code).unwrap()
+                };
+                let emu: &'static Emulator = unsafe {
+                    std::mem::transmute(caller.data())
+                };
+                let names: Vec<String> = module.imports().map(|i| i.name().into()).collect();
+                let externs = emu.wasm_externs(names);
+                let inst = Instance::new(caller.as_context_mut(), &module, &externs).unwrap();
+                let func = inst.get_func(caller.as_context_mut(), "f");
+                assert!(func.is_some());
+                let func = Val::FuncRef(func);
+                emu.cpu_mut().map(|cpu| {
+                    cpu.codegen_finalize_finished(index, start, state_flags);
+                });
+                emu.wasm_table().set(caller.as_context_mut(), WASM_TABLE_SIZE + index as u32, func).unwrap();
+                Ok(())
             },
         )
         .unwrap();
@@ -584,11 +642,16 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
         .func_wrap(
             "env",
             "jit_clear_func",
-            move |mut _caller: Caller<'_, Emulator>, _i: i32| {
-                panic!("env jit_clear_func call.");
+            move |mut caller: Caller<'_, Emulator>, index: u32| {
+                let func = Val::FuncRef(None);
+                let emu: &'static Emulator = unsafe {
+                    std::mem::transmute(caller.data())
+                };
+                let table = emu.wasm_table();
+                table.set(caller.as_context_mut(), index, func).unwrap();
             },
         )
         .unwrap();
-
     mem::add_mem_to_linker(linker);
 }
+

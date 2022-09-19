@@ -646,7 +646,7 @@ impl PCI {
         space.map_or(0, |s| s.read_u8(idx))
     }
 
-    fn raise_irq(&self, pci_id: u8) {
+    pub fn raise_irq(&self, pci_id: u16) {
         let space = self.device_spaces[pci_id as usize].as_ref();
         assert!(space.is_some());
         let space = space.unwrap();
@@ -660,6 +660,20 @@ impl PCI {
         //        " (" + this.devices[pci_id].name + ")", LOG_PCI);
         self.store.cpu_mut().map(|cpu| {
             cpu.device_raise_irq(irq);
+        });
+    }
+
+    pub fn lower_irq(&mut self, pci_id: u16) {
+        let space = self.device_spaces[pci_id as usize].as_ref().unwrap();
+        let pin = (space.read_i32(0x3C >> 2) >> 8 & 0xFF) as u8;
+        let device = (pci_id >> 3 & 0xFF) as u8;
+        let parent_pin = pin + device - 2 & 3;
+        let irq = self.isa_bridge_space_read8(0x60 + parent_pin as usize);
+
+        //dbg_log("PCI lower irq " + h(irq) + " dev=" + h(device, 2) +
+        //        " (" + this.devices[pci_id].name + ")", LOG_PCI);
+        self.store.cpu_mut().map(|cpu| {
+            cpu.device_lower_irq(irq);
         });
     }
 }

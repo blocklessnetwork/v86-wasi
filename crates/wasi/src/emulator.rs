@@ -1,11 +1,11 @@
 #![allow(unused)]
-use std::{cell::Cell, rc::Rc, time};
+use std::{cell::Cell, rc::Rc, time, collections::HashMap};
 
-use wasmtime::Instance;
+use wasmtime::{Instance, Extern, Linker, Table};
 
 use crate::{
-    bus::BUS, dma::DMA, floppy::FloppyController, io::IO, pci::PCI, pic::PIC, pit::PIT, ps2::PS2,
-    rtc::RTC, uart::UART, vga::VGAScreen, Setting, StoreT, CPU, log,
+    bus::BUS, dma::DMA, floppy::FloppyController, io::IO, log, pci::PCI, pic::PIC, pit::PIT,
+    ps2::PS2, rtc::RTC, screen::Screen, uart::UART, vga::VGAScreen, Setting, StoreT, CPU, ne2k::Ne2k,
 };
 
 pub(crate) struct InnerEmulator {
@@ -13,8 +13,11 @@ pub(crate) struct InnerEmulator {
     setting: Setting,
     cpu: Option<CPU>,
     bus: Option<BUS>,
+    table: Option<Table>,
     bios: Option<Vec<u8>>,
+    screen: Option<Screen>,
     vga_bios: Option<Vec<u8>>,
+    externs: Option<HashMap<String, Extern>>,
 }
 
 impl InnerEmulator {
@@ -25,14 +28,27 @@ impl InnerEmulator {
             cpu: None,
             bus: None,
             bios: None,
+            table: None,
+            screen: None,
+            externs: None,
             vga_bios: None,
         }
     }
 
     #[inline]
-    fn init(&mut self, inst: Instance, store: StoreT) {
+    fn init(
+        &mut self, 
+        externs: HashMap<String, Extern>, 
+        table: Table,
+        mut inst: Instance, 
+        store: StoreT
+    ) {
+        self.table = Some(table);
+        self.externs = Some(externs);
         self.bus = Some(BUS::new(store.clone()));
-        self.cpu = Some(CPU::new(inst, store));
+        self.cpu = Some(CPU::new(&mut inst, store.clone()));
+        self.screen = Some(Screen::new(store.clone()));
+        self.screen.as_mut().map(|sc| sc.init());
     }
 
     #[inline]
@@ -48,7 +64,6 @@ impl InnerEmulator {
                 t = c.next_tick(t as u64);
                 if t > 0 {
                     std::thread::sleep(time::Duration::from_millis(t as u64));
-                    panic!("1111");
                 }
             }
         });
@@ -71,9 +86,25 @@ impl Emulator {
         self.inner().microtick()
     }
 
-    pub fn start(&mut self, inst: Instance, store: StoreT) {
-        self.inner_mut().init(inst, store);
+    pub fn start(
+        &mut self, 
+        externs: HashMap<String, Extern>, 
+        table: Table,
+        inst: Instance, 
+        store: StoreT
+    ) {
+        self.inner_mut().init(externs, table, inst, store);
         self.inner_mut().start();
+    }
+
+    #[inline]
+    pub(crate) fn screen_mut(&self) -> Option<&mut Screen> {
+        self.inner_mut().screen.as_mut()
+    }
+
+    #[inline]
+    pub(crate) fn screen(&self) -> Option<&Screen> {
+        self.inner().screen.as_ref()
     }
 
     #[inline]
@@ -226,4 +257,34 @@ impl Emulator {
     pub(crate) fn fdc(&self) -> Option<&FloppyController> {
         self.inner_mut().cpu.as_ref().map(|cpu| &cpu.fdc)
     }
+
+    #[inline]
+    pub(crate) fn ne2k_mut(&self) -> Option<&mut Ne2k> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.ne2k)
+    }
+
+    #[inline]
+    pub(crate) fn ne2k(&self) -> Option<&Ne2k> {
+        self.inner_mut().cpu.as_ref().map(|cpu| &cpu.ne2k)
+    }
+
+    #[inline]
+    pub(crate) fn wasm_table(&self) -> &mut Table {
+        self.inner_mut().table.as_mut().unwrap()
+    }
+
+    #[inline]
+    pub(crate) fn wasm_externs(&self, names: Vec<String>) -> Vec<Extern> {
+        let mut rs = Vec::new();
+        self.inner_mut().externs.as_ref().map(|e| {
+            for n in names {
+                let val = e.get(&n);
+                if val.is_some() {
+                    rs.push(val.unwrap().clone());
+                }
+            }
+        });
+        rs
+    }
+
 }

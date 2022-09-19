@@ -3,7 +3,8 @@ use std::rc::Rc;
 
 use crate::{
     bus::BUS, debug::Debug, dma::DMA, floppy::FloppyController, io::IO, pci::PCI, pic::PIC,
-    pit::PIT, ps2::PS2, rtc::RTC, uart::UART, vga::VGAScreen, ContextTrait, Emulator, StoreT, CPU,
+    pit::PIT, ps2::PS2, rtc::RTC, screen::Screen, uart::UART, vga::VGAScreen, ContextTrait,
+    Emulator, StoreT, CPU, ne2k::Ne2k,
 };
 
 #[derive(Clone)]
@@ -206,6 +207,38 @@ impl Dev {
     pub(crate) fn pit(&self) -> Option<&PIT> {
         match *self {
             Dev::Emulator(ref e) => e.pit(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn screen_mut(&self) -> Option<&mut Screen> {
+        match *self {
+            Dev::Emulator(ref e) => e.screen_mut(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn screen(&self) -> Option<&Screen> {
+        match *self {
+            Dev::Emulator(ref e) => e.screen(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn ne2k_mut(&self) -> Option<&mut Ne2k> {
+        match *self {
+            Dev::Emulator(ref e) => e.ne2k_mut(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn ne2k(&self) -> Option<&Ne2k> {
+        match *self {
+            Dev::Emulator(ref e) => e.ne2k(),
             _ => None,
         }
     }

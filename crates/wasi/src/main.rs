@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{rc::Rc, collections::HashMap};
 
 use v86_wasi::{add_x86_to_linker, Emulator, Setting, WASM_TABLE_OFFSET, WASM_TABLE_SIZE};
 use wasmtime::*;
@@ -19,7 +19,21 @@ fn main() {
     let ty = TableType::new(ValType::FuncRef, WASM_TABLE_SIZE + WASM_TABLE_OFFSET, None);
     let table = Table::new(&mut store, ty, Val::FuncRef(None)).unwrap();
     add_x86_to_linker(&mut linker, table);
-    linker.module(&mut store, "", &module).unwrap();
     let inst = linker.instantiate(&mut store, &module).unwrap();
-    emulator.start(inst, Rc::downgrade(&Rc::new(store)));
+    linker.instance(&mut store, "e", inst).unwrap();
+    let mem = inst.get_export(&mut store, "memory").unwrap();
+    let mut ex = exports(&mut store, &inst);
+    ex.insert("m".into(), mem);
+    emulator.start(ex, table, inst, Rc::downgrade(&Rc::new(store)));
 }
+
+#[inline]
+fn exports(store: &mut Store<Emulator>, inst: &Instance) -> HashMap<String, Extern> {
+    inst.exports(store.as_context_mut())
+        .map(|m| {
+            let n = m.name();
+            (n.into(), m.into_extern())
+        })
+        .collect::<HashMap<String, Extern>>()
+}
+

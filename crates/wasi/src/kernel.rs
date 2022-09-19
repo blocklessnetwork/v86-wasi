@@ -1,6 +1,6 @@
 use crate::{dev::OptionRom, log::Module, CPU};
 
-use std::{rc::Rc, slice};
+use std::{rc::Rc, slice, ops::Add};
 
 const LINUX_BOOT_HDR_SETUP_SECTS: u16 = 0x1F1;
 const LINUX_BOOT_HDR_SYSSIZE: u16 = 0x1F4;
@@ -230,7 +230,7 @@ fn make_linux_boot_rom(real_mode_segment: u16, heap_end: u16) -> Vec<u8> {
     let checksum_index = i;
     data8[checksum_index] = 0;
 
-    let mut checksum = 0;
+    let mut checksum: u8 = 0;
 
     for i in 0..data8.len() {
         checksum += data8[i];
