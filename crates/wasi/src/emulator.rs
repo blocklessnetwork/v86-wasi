@@ -1,11 +1,12 @@
 #![allow(unused)]
-use std::{cell::Cell, rc::Rc, time, collections::HashMap};
+use std::{cell::Cell, rc::{Rc, Weak}, time, collections::HashMap, thread::{Thread, JoinHandle}, sync::mpsc::{self, Sender, Receiver}};
 
-use wasmtime::{Instance, Extern, Linker, Table};
+use wasmtime::{Instance, Extern, Linker, Table, Store};
 
 use crate::{
+    ContextTrait,
     bus::BUS, dma::DMA, floppy::FloppyController, io::IO, log, pci::PCI, pic::PIC, pit::PIT,
-    ps2::PS2, rtc::RTC, screen::Screen, uart::UART, vga::VGAScreen, Setting, StoreT, CPU, ne2k::Ne2k,
+    ps2::PS2, rtc::RTC, screen::Screen, uart::UART, vga::VGAScreen, Setting, StoreT, CPU, ne2k::Ne2k, jit::{JitMsg, JitWorker}, WASM_TABLE_OFFSET,
 };
 
 pub(crate) struct InnerEmulator {
@@ -17,6 +18,8 @@ pub(crate) struct InnerEmulator {
     bios: Option<Vec<u8>>,
     screen: Option<Screen>,
     vga_bios: Option<Vec<u8>>,
+    jit_tx: Option<Sender<JitMsg>>,
+    jit_result_rx: Option<Receiver<JitMsg>>,
     externs: Option<HashMap<String, Extern>>,
 }
 
@@ -30,8 +33,10 @@ impl InnerEmulator {
             bios: None,
             table: None,
             screen: None,
+            jit_tx: None,
             externs: None,
             vga_bios: None,
+            jit_result_rx: None,
         }
     }
 
@@ -43,8 +48,30 @@ impl InnerEmulator {
         mut inst: Instance, 
         store: StoreT
     ) {
+        let store_cl = store.clone().into_raw() as usize;
+        let (tx, rx) = mpsc::channel();
+        let (rs_tx, rs_rx) = mpsc::channel();
+        let mem = store.store_mut().map(|store| {
+            inst.get_memory(store, "memory")
+        }).flatten().unwrap();
+        let jit_thread: JoinHandle<()> = std::thread::spawn(move || {
+            let table  = table;
+            let store: StoreT = unsafe {
+                Weak::from_raw(store_cl as *const Store<Emulator>)
+            };
+            let mut jit_worker = JitWorker {
+                sender: rs_tx,
+                recv: rx,
+                externs,
+                store,
+                mem,
+            };
+            jit_worker.compile();
+        });
+        self.jit_tx = Some(tx);
         self.table = Some(table);
-        self.externs = Some(externs);
+        self.jit_result_rx = Some(rs_rx);
+        //self.externs = Some(externs);
         self.bus = Some(BUS::new(store.clone()));
         self.cpu = Some(CPU::new(&mut inst, store.clone()));
         self.screen = Some(Screen::new(store.clone()));
@@ -61,6 +88,7 @@ impl InnerEmulator {
             c.init();
             let mut t = c.main_run();
             loop {
+                c.jit_done();
                 t = c.next_tick(t as u64);
                 if t > 0 {
                     std::thread::sleep(time::Duration::from_millis(t as u64));
@@ -84,6 +112,13 @@ impl Emulator {
     #[inline]
     pub fn microtick(&self) -> f64 {
         self.inner().microtick()
+    }
+
+    #[inline]
+    pub(crate) fn jit(&mut self, msg: JitMsg) {
+        self.inner_mut().jit_tx.as_mut().map(|tx| {
+            let _ = tx.send(msg);
+        });
     }
 
     pub fn start(
@@ -160,6 +195,27 @@ impl Emulator {
     #[inline]
     pub fn set_vga_bios(&self, b: Vec<u8>) {
         self.inner_mut().vga_bios = Some(b);
+    }
+
+    #[inline]
+    pub fn jit_done(&mut self) {
+        self.inner_mut().jit_result_rx.as_mut().map(|rx| {
+            loop {
+                let (index, start, state_flags, func) = match rx.try_recv() {
+                    Ok(JitMsg::JitResult(index, start, state_flags, func)) => (index, start, state_flags, func),
+                    Ok(_) => return,
+                    Err(_) => return,
+                };
+                self.cpu_mut().map(|cpu| {
+                    cpu.codegen_finalize_finished(index, start, state_flags);
+                    cpu.store_mut().map(|store| {
+                        self.inner_mut().table.map(|table| {
+                            table.set(store, WASM_TABLE_OFFSET + index as u32, func).unwrap();
+                        })
+                    });
+                });
+            }
+        });
     }
 
     #[inline]
@@ -271,6 +327,13 @@ impl Emulator {
     #[inline]
     pub(crate) fn wasm_table(&self) -> &mut Table {
         self.inner_mut().table.as_mut().unwrap()
+    }
+
+    #[inline]
+    pub fn shutdown(&self) {
+        self.inner_mut().jit_tx.as_mut().map(|tx| {
+            let _ = tx.send(JitMsg::Quit);
+        });
     }
 
     #[inline]

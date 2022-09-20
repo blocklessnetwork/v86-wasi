@@ -24,6 +24,7 @@ fn main() {
     let mut ex = exports(&mut store, &inst);
     ex.insert("m".into(), mem);
     emulator.start(ex, table, inst, Rc::downgrade(&Rc::new(store)));
+    emulator.shutdown();
 }
 
 #[inline]

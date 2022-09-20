@@ -91,6 +91,6 @@ impl Screen {
         ct.background_color = Some(bg_c);
         ct.foreground_color = Some(fg_c);
         let chr = StyledContent::new(ct, chr);
-        let _ = queue!(self.stdout, cursor::Hide, cursor::MoveTo(col, row), style::PrintStyledContent(chr));
+        //let _ = queue!(self.stdout, cursor::Hide, cursor::MoveTo(col, row), style::PrintStyledContent(chr));
     }
 }

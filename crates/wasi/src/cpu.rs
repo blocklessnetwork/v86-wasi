@@ -337,7 +337,7 @@ pub struct CPU {
 
 impl CPU {
     #[inline]
-    fn store_mut(&self) -> Option<&'static mut Store<Emulator>> {
+    pub(crate) fn store_mut(&self) -> Option<&'static mut Store<Emulator>> {
         if self.store.weak_count() == 0 {
             None
         } else {
@@ -989,6 +989,11 @@ impl CPU {
         //     this.devices.virtio.reset();
         // }
         self.load_bios();
+    }
+
+    #[inline]
+    pub fn jit_done(&self) {
+        self.store.emulator_mut().jit_done();
     }
 
     #[inline]

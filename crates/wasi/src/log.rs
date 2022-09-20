@@ -90,7 +90,9 @@ macro_rules! dbg_log {
     ($m: expr, $fmt:expr, $($arg:tt)*) => {
         if $m.display() {
             let values = format!($fmt, $($arg)*);
-            let record = format!("[{:>5}] {}\n", $m, &values);
+            let now = chrono::offset::Utc::now();
+            let now = now.format("%H:%M:%S");
+            let record = format!("{} [{:>5}] {}\n", now, $m, &values);
             crate::log::log(record.as_bytes());
         }
 
@@ -99,7 +101,9 @@ macro_rules! dbg_log {
     ($m: expr, $fmt:expr) => {
         if $m.display() {
             let values = format!($fmt);
-            let record = format!("[{:>5}] {}\n", $m, &values);
+            let now = chrono::offset::Utc::now();
+            let now = now.format("%H:%M:%S");
+            let record = format!("{} [{:>5}] {}\n", now, $m, &values);
             crate::log::log(record.as_bytes());
         }
     };

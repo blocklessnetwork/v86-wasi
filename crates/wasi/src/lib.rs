@@ -2,7 +2,7 @@
 mod log;
 
 use std::rc::Weak;
-use std::{slice, vec};
+use std::{slice};
 
 const ALL_DEBUG: bool = true;
 
@@ -26,6 +26,7 @@ mod cpu;
 mod dev;
 mod dma;
 mod io;
+mod jit;
 mod mem;
 mod pic;
 mod pci;
@@ -105,6 +106,9 @@ trait ContextTrait {
     fn cpu_mut(&self) -> Option<&mut CPU>;
     fn cpu(&self) -> Option<&CPU>;
 
+    fn store(&self) -> Option<&Store<Emulator>>;
+    fn store_mut(&self) -> Option<&mut Store<Emulator>>;
+
     fn rtc_mut(&self) -> Option<&mut RTC>;
     fn io_mut(&self) -> Option<&mut IO>;
     fn dma_mut(&self) -> Option<&mut DMA>;
@@ -149,6 +153,21 @@ trait ContextTrait {
 }
 
 impl ContextTrait for StoreT {
+
+    #[inline]
+    fn store(&self) -> Option<&Store<Emulator>> {
+        unsafe {
+            Some(&(*(self.as_ptr())))
+        }    
+    }
+
+    #[inline]
+    fn store_mut(&self) -> Option<&mut Store<Emulator>>  {
+        unsafe {
+            Some(&mut (*(self.as_ptr() as *mut Store<_>)))
+        }
+    }
+
     #[inline]
     fn cpu_mut(&self) -> Option<&mut CPU> {
         let emu = self.emulator_mut();
@@ -317,7 +336,6 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
                         return Err(Trap::new("missing required memory export"));
                     }
                 };
-
                 let (mem, _ctx) = mem.data_and_store_mut(&mut caller);
                 unsafe {
                     let ptr = mem.as_ptr().offset(off as _);
@@ -603,37 +621,38 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
                   state_flags: i32,
                   ptr: i32,
                   len: i32| {
-                let ptr = ptr as u32;
-                let len = len as u32;
-                let mem = match caller.get_export("memory") {
-                    Some(Extern::Memory(m)) => m,
-                    _ => {
-                        return Err(Trap::new("missing required memory export"));
-                    }
-                };
-                let store = caller.as_context();
-                let data_ptr = mem.data_ptr(&store);
-                let code = unsafe {
-                    slice::from_raw_parts_mut(data_ptr.offset(ptr as isize), len as usize)
-                };
-                let module = {
-                    let eng = store.engine();
-                    wasmtime::Module::new(eng, code).unwrap()
-                };
-                let emu: &'static Emulator = unsafe {
-                    std::mem::transmute(caller.data())
-                };
-                let names: Vec<String> = module.imports().map(|i| i.name().into()).collect();
-                let externs = emu.wasm_externs(names);
-                let inst = Instance::new(caller.as_context_mut(), &module, &externs).unwrap();
-                let func = inst.get_func(caller.as_context_mut(), "f");
-                assert!(func.is_some());
-                let func = Val::FuncRef(func);
-                emu.cpu_mut().map(|cpu| {
-                    cpu.codegen_finalize_finished(index, start, state_flags);
-                });
-                emu.wasm_table().set(caller.as_context_mut(), WASM_TABLE_OFFSET + index as u32, func).unwrap();
-                Ok(())
+                let emu = caller.data_mut();
+                emu.jit(jit::JitMsg::JitParams(index, start, state_flags, ptr, len));
+                // let ptr = ptr as u32;
+                // let len = len as u32;
+                // let mem = match caller.get_export("memory") {
+                //     Some(Extern::Memory(m)) => m,
+                //     _ => {
+                //         return Err(Trap::new("missing required memory export"));
+                //     }
+                // };
+                // let store = caller.as_context();
+                // let data_ptr = mem.data_ptr(&store);
+                // let code = unsafe {
+                //     slice::from_raw_parts_mut(data_ptr.offset(ptr as isize), len as usize)
+                // };
+                // let module = {
+                //     let eng = store.engine();
+                //     wasmtime::Module::new(eng, code).unwrap()
+                // };
+                // let emu: &'static Emulator = unsafe {
+                //     std::mem::transmute(caller.data())
+                // };
+                // let names: Vec<String> = module.imports().map(|i| i.name().into()).collect();
+                // let externs = emu.wasm_externs(names);
+                // let inst = Instance::new(caller.as_context_mut(), &module, &externs).unwrap();
+                // let func = inst.get_func(caller.as_context_mut(), "f");
+                // assert!(func.is_some());
+                // let func = Val::FuncRef(func);
+                // emu.cpu_mut().map(|cpu| {
+                //     cpu.codegen_finalize_finished(index, start, state_flags);
+                // });
+                // emu.wasm_table().set(caller.as_context_mut(), WASM_TABLE_OFFSET + index as u32, func).unwrap();
             },
         )
         .unwrap();
