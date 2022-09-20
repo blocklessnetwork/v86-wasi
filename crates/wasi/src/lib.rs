@@ -671,6 +671,24 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
             },
         )
         .unwrap();
+
+    linker
+        .func_wrap(
+            "env",
+            "jit_clear_all_funcs",
+            move |mut caller: Caller<'_, Emulator>| {
+                let func = Val::FuncRef(None);
+                let emu: &'static Emulator = unsafe {
+                    std::mem::transmute(caller.data())
+                };
+                let table = emu.wasm_table();
+                for i in 0..WASM_TABLE_SIZE {
+                    table.set(caller.as_context_mut(), i + WASM_TABLE_OFFSET, func.clone()).unwrap();
+                }
+                
+            },
+        )
+        .unwrap();
     mem::add_mem_to_linker(linker);
 }
 
