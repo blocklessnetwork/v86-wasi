@@ -632,7 +632,7 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
                 emu.cpu_mut().map(|cpu| {
                     cpu.codegen_finalize_finished(index, start, state_flags);
                 });
-                emu.wasm_table().set(caller.as_context_mut(), WASM_TABLE_SIZE + index as u32, func).unwrap();
+                emu.wasm_table().set(caller.as_context_mut(), WASM_TABLE_OFFSET + index as u32, func).unwrap();
                 Ok(())
             },
         )

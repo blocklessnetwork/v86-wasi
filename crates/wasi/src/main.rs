@@ -16,8 +16,7 @@ fn main() {
     let mut store = Store::new(&engine, emulator.clone());
     let module = Module::from_file(&engine, "target/v86-debug.wasm").unwrap();
     let mut linker: Linker<Emulator> = Linker::new(&engine);
-    let ty = TableType::new(ValType::FuncRef, WASM_TABLE_SIZE + WASM_TABLE_OFFSET, None);
-    let table = Table::new(&mut store, ty, Val::FuncRef(None)).unwrap();
+    let table = create_table(&mut store);
     add_x86_to_linker(&mut linker, table);
     let inst = linker.instantiate(&mut store, &module).unwrap();
     linker.instance(&mut store, "e", inst).unwrap();
@@ -25,6 +24,13 @@ fn main() {
     let mut ex = exports(&mut store, &inst);
     ex.insert("m".into(), mem);
     emulator.start(ex, table, inst, Rc::downgrade(&Rc::new(store)));
+}
+
+#[inline]
+fn create_table(store: &mut Store<Emulator>) -> Table {
+    let ty = TableType::new(ValType::FuncRef, WASM_TABLE_SIZE + WASM_TABLE_OFFSET, None);
+    let table = Table::new(store.as_context_mut(), ty, Val::FuncRef(None)).unwrap();
+    table
 }
 
 #[inline]
