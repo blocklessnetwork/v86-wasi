@@ -71,7 +71,6 @@ impl InnerEmulator {
         self.jit_tx = Some(tx);
         self.table = Some(table);
         self.jit_result_rx = Some(rs_rx);
-        //self.externs = Some(externs);
         self.bus = Some(BUS::new(store.clone()));
         self.cpu = Some(CPU::new(&mut inst, store.clone()));
         self.screen = Some(Screen::new(store.clone()));
