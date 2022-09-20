@@ -1,4 +1,4 @@
-use crate::{bus::BusData, log::Module, ContextTrait, Dev, StoreT};
+use crate::{bus::BusData, log::LOG, ContextTrait, Dev, StoreT};
 
 const OSCILLATOR_FREQ: f64 = 1193.1816666;
 
@@ -133,7 +133,7 @@ impl PIT {
                 self.counter_start_time[0] = now;
 
                 dbg_log!(
-                    Module::PIT,
+                    LOG::PIT,
                     "pit interrupt. new value: {}",
                     self.counter_start_value[0]
                 );
@@ -174,7 +174,7 @@ impl PIT {
         if diff < 0.0 {
             // should only happen after restore_state
             dbg_log!(
-                Module::PIT,
+                LOG::PIT,
                 "Warning: PIT timer difference is negative, resetting (timer {})",
                 i
             );
@@ -241,7 +241,7 @@ impl PIT {
             } as f64
                 / OSCILLATOR_FREQ;
             dbg_log!(
-                Module::PIT,
+                LOG::PIT,
                 "counter{} reload={:#X} tick={}ms",
                 i,
                 self.counter_reload[i],
@@ -271,7 +271,7 @@ impl PIT {
         let mut value = self.counter_start_value[i] - diff_in_ticks as u16;
 
         dbg_log!(
-            Module::PIT,
+            LOG::PIT,
             "diff={} dticks={} value={} reload={}",
             diff,
             diff_in_ticks,
@@ -283,7 +283,7 @@ impl PIT {
 
         if value >= reload {
             dbg_log!(
-                Module::PIT,
+                LOG::PIT,
                 "Warning: Counter{} value {} is larger than reload {}",
                 i,
                 value,
@@ -303,11 +303,11 @@ impl PIT {
         let read_mode = reg_byte >> 4 & 3;
 
         if i == 1 {
-            dbg_log!(Module::PIT, "Unimplemented timer1");
+            dbg_log!(LOG::PIT, "Unimplemented timer1");
         }
 
         if i == 3 {
-            dbg_log!(Module::PIT, "Unimplemented read back");
+            dbg_log!(LOG::PIT, "Unimplemented read back");
             return;
         }
 
@@ -315,7 +315,7 @@ impl PIT {
             // latch
             self.counter_latch[i] = 2;
             let value = self.get_counter_value(i as u8, self.store.microtick());
-            dbg_log!(Module::PIT, "latch: {}", value);
+            dbg_log!(LOG::PIT, "latch: {}", value);
             self.counter_latch_value[i] = if value > 0 { value - 1 } else { 0 };
             return;
         }
@@ -326,7 +326,7 @@ impl PIT {
         }
 
         dbg_log!(
-            Module::PIT,
+            LOG::PIT,
             "Control: mode={} ctr={} read_mode={} bcd={}",
             mode,
             i,
@@ -355,7 +355,7 @@ impl PIT {
         } else if mode == 3 || mode == 2 {
             // what is the difference
         } else {
-            dbg_log!(Module::PIT, "Unimplemented counter mode: {:#X}", mode);
+            dbg_log!(LOG::PIT, "Unimplemented counter mode: {:#X}", mode);
         }
 
         self.counter_mode[i] = mode;

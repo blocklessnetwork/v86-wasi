@@ -27,7 +27,7 @@ pub fn log(record: &[u8]) {
     }
 }
 
-pub enum Module {
+pub enum LOG {
     E,
     IO,
     CPU,
@@ -44,7 +44,7 @@ pub enum Module {
     FLOPPY,
 }
 
-impl Module {
+impl LOG {
     pub(crate) fn display(&self) -> bool {
         match *self {
             Self::E => true,
@@ -65,7 +65,7 @@ impl Module {
     }
 }
 
-impl Display for Module {
+impl Display for LOG {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
             Self::IO => f.write_str("IO"),
@@ -90,7 +90,7 @@ macro_rules! dbg_log {
     ($m: expr, $fmt:expr, $($arg:tt)*) => {
         if $m.display() {
             let values = format!($fmt, $($arg)*);
-            let now = chrono::offset::Utc::now();
+            let now = chrono::offset::Local::now();
             let now = now.format("%H:%M:%S");
             let record = format!("{} [{:>5}] {}\n", now, $m, &values);
             crate::log::log(record.as_bytes());

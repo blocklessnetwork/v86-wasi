@@ -1,4 +1,4 @@
-use crate::{bus::BusData, log::Module, ContextTrait, Dev, StoreT, IO};
+use crate::{bus::BusData, log::LOG, ContextTrait, Dev, StoreT, IO};
 
 const UART_IER_MSI: u8 = 0x08; /* Modem Status Changed int. */
 const UART_IIR_THRI: u8 = 0x02; /* Transmitter holding register empty */
@@ -103,10 +103,10 @@ impl UART {
                     dev.uart0_mut().map(|uart| {
                         if uart.line_control & DLAB > 0 {
                             uart.baud_rate = uart.baud_rate & 0xFF | (out_byte as u16) << 8;
-                            dbg_log!(Module::SERIAL, "baud rate: {:#X}", uart.baud_rate);
+                            dbg_log!(LOG::SERIAL, "baud rate: {:#X}", uart.baud_rate);
                         } else {
                             uart.ier = out_byte & 0xF;
-                            dbg_log!(Module::SERIAL, "interrupt enable: {:#X}", out_byte);
+                            dbg_log!(LOG::SERIAL, "interrupt enable: {:#X}", out_byte);
                             uart.check_interrupt();
                         }
                     });
@@ -123,14 +123,14 @@ impl UART {
                         } else {
                             let data = match uart.input.pop() {
                                 None => {
-                                    dbg_log!(Module::SERIAL, "Read input empty");
+                                    dbg_log!(LOG::SERIAL, "Read input empty");
                                     0xFF
                                 }
                                 Some(d) => {
                                     if d == 0xFF {
-                                        dbg_log!(Module::SERIAL, "Read input empty");
+                                        dbg_log!(LOG::SERIAL, "Read input empty");
                                     } else {
-                                        dbg_log!(Module::SERIAL, "Read input: {:#X}", d);
+                                        dbg_log!(LOG::SERIAL, "Read input: {:#X}", d);
                                     }
                                     d
                                 }
@@ -168,7 +168,7 @@ impl UART {
                     dev.uart0_mut().map_or(0, |uart| {
                         let ret = uart.iir & 0xF | 0xC0;
                         dbg_log!(
-                            Module::SERIAL,
+                            LOG::SERIAL,
                             "read interrupt identification: {:#X}",
                             uart.iir
                         );
@@ -187,7 +187,7 @@ impl UART {
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, out_byte: u8| {
                     dev.uart0_mut().map(|uart| {
-                        dbg_log!(Module::SERIAL, "fifo control: {:#X}", out_byte);
+                        dbg_log!(LOG::SERIAL, "fifo control: {:#X}", out_byte);
                         uart.fifo_control = out_byte;
                     });
                 },
@@ -200,7 +200,7 @@ impl UART {
                 |dev: &Dev, _addr: u32| {
                     dev.uart0_mut().map_or(0, |uart| {
                         dbg_log!(
-                            Module::SERIAL,
+                            LOG::SERIAL,
                             "read line control: {:#X}",
                             uart.line_control
                         );
@@ -215,7 +215,7 @@ impl UART {
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, out_byte: u8| {
                     dev.uart0_mut().map(|uart| {
-                        dbg_log!(Module::SERIAL, "line control: {:#X}", out_byte);
+                        dbg_log!(LOG::SERIAL, "line control: {:#X}", out_byte);
                         uart.fifo_control = out_byte;
                     });
                 },
@@ -238,7 +238,7 @@ impl UART {
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, out_byte: u8| {
                     dev.uart0_mut().map(|uart| {
-                        dbg_log!(Module::SERIAL, "modem control: {:#X}", out_byte);
+                        dbg_log!(LOG::SERIAL, "modem control: {:#X}", out_byte);
                         uart.modem_control = out_byte;
                     });
                 },
@@ -250,7 +250,7 @@ impl UART {
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32| {
                     dev.uart0_mut().map_or(0, |uart| {
-                        dbg_log!(Module::SERIAL, "read line status: {:#X}", uart.line_control);
+                        dbg_log!(LOG::SERIAL, "read line status: {:#X}", uart.line_control);
                         return uart.lsr;
                     })
                 },
@@ -262,7 +262,7 @@ impl UART {
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, _out_byte: u8| {
                     dev.uart0_mut().map(|uart| {
-                        dbg_log!(Module::SERIAL, "Factory test write");
+                        dbg_log!(LOG::SERIAL, "Factory test write");
                     });
                 },
             );
@@ -274,7 +274,7 @@ impl UART {
                 |dev: &Dev, _addr: u32| {
                     dev.uart0_mut().map_or(0, |uart| {
                         dbg_log!(
-                            Module::SERIAL,
+                            LOG::SERIAL,
                             "read modem status: {:#X}",
                             uart.modem_status
                         );
@@ -289,7 +289,7 @@ impl UART {
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, _out_byte: u8| {
                     dev.uart0_mut().map(|uart| {
-                        dbg_log!(Module::SERIAL, "Unkown register write (base+6)");
+                        dbg_log!(LOG::SERIAL, "Unkown register write (base+6)");
                     });
                 },
             );
@@ -349,7 +349,7 @@ impl UART {
 
     #[inline]
     fn data_received(&mut self, data: u8) {
-        dbg_log!(Module::SERIAL, "input: {:#X}", data);
+        dbg_log!(LOG::SERIAL, "input: {:#X}", data);
         self.input.push(data);
 
         self.lsr |= UART_LSR_DATA_READY;
@@ -368,7 +368,7 @@ impl UART {
             return;
         }
 
-        dbg_log!(Module::SERIAL, "data: {:#X}", out_byte);
+        dbg_log!(LOG::SERIAL, "data: {:#X}", out_byte);
 
         self.throw_interrupt(UART_IIR_THRI);
 
@@ -387,7 +387,7 @@ impl UART {
         if out_byte == b'\n' {
             //TODO const line = String.fromCharCode.apply("", this.current_line).trimRight().replace(/[\x00-\x08\x0b-\x1f\x7f\x80-\xff]/g, "");
             let line = unsafe { std::str::from_utf8_unchecked(&self.current_line) };
-            dbg_log!(Module::E, "SERIAL: {}", line);
+            dbg_log!(LOG::E, "SERIAL: {}", line);
             self.store.bus_mut().map(|bus| {
                 bus.send(
                     &format!("serial{}-output-line", self.com),

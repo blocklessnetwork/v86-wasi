@@ -1,4 +1,4 @@
-use crate::{dev::OptionRom, log::Module, CPU};
+use crate::{dev::OptionRom, log::LOG, CPU};
 
 use std::{rc::Rc, slice, ops::Add};
 
@@ -60,14 +60,14 @@ pub(crate) fn load_kernel(
     };
     let checksum1 = bzimage16[LINUX_BOOT_HDR_BOOT_FLAG as usize >> 1];
     if checksum1 != LINUX_BOOT_HDR_CHECKSUM1 {
-        dbg_log!(Module::E, "Bad checksum1: {:#X}", checksum1);
+        dbg_log!(LOG::E, "Bad checksum1: {:#X}", checksum1);
         return None;
     }
 
     let checksum2 = bzimage16[LINUX_BOOT_HDR_HEADER as usize >> 1] as u32
         | (bzimage16[LINUX_BOOT_HDR_HEADER as usize + 2 >> 1] as u32) << 16;
     if checksum2 != LINUX_BOOT_HDR_CHECKSUM2 as u32 {
-        dbg_log!(Module::E, "Bad checksum2: {:#X}", checksum2);
+        dbg_log!(LOG::E, "Bad checksum2: {:#X}", checksum2);
         return None;
     }
     let protocol = bzimage16[LINUX_BOOT_HDR_VERSION as usize >> 1];
@@ -85,31 +85,31 @@ pub(crate) fn load_kernel(
     let pref_address = bzimage32[(LINUX_BOOT_HDR_PREF_ADDRESS as usize) >> 2];
     let pref_address_high = bzimage32[(LINUX_BOOT_HDR_PREF_ADDRESS as usize) + 4 >> 2];
     let init_size = bzimage32[(LINUX_BOOT_HDR_INIT_SIZE as usize) >> 2];
-    dbg_log!(Module::E, "kernel boot protocol version: {:#X}", protocol);
-    dbg_log!(Module::E, "flags= {:#X}  xflags={:#X}", flags, flags2);
+    dbg_log!(LOG::E, "kernel boot protocol version: {:#X}", protocol);
+    dbg_log!(LOG::E, "flags= {:#X}  xflags={:#X}", flags, flags2);
     dbg_log!(
-        Module::E,
+        LOG::E,
         "code32_start={:#X}",
         bzimage32[(LINUX_BOOT_HDR_CODE32_START as usize) >> 2]
     );
-    dbg_log!(Module::E, "initrd_addr_max={:#X}", initrd_addr_max);
-    dbg_log!(Module::E, "kernel_alignment={:#X}", kernel_alignment);
-    dbg_log!(Module::E, "relocatable={}", relocatable_kernel);
-    dbg_log!(Module::E, "min_alignment={:#X}", min_alignment);
-    dbg_log!(Module::E, "cmdline max={:#X}", cmdline_size);
+    dbg_log!(LOG::E, "initrd_addr_max={:#X}", initrd_addr_max);
+    dbg_log!(LOG::E, "kernel_alignment={:#X}", kernel_alignment);
+    dbg_log!(LOG::E, "relocatable={}", relocatable_kernel);
+    dbg_log!(LOG::E, "min_alignment={:#X}", min_alignment);
+    dbg_log!(LOG::E, "cmdline max={:#X}", cmdline_size);
     dbg_log!(
-        Module::E,
+        LOG::E,
         "payload offset={:#X} size={:#X}",
         payload_offset,
         payload_length
     );
     dbg_log!(
-        Module::E,
+        LOG::E,
         "pref_address={:#X}:{:#X}",
         pref_address_high,
         pref_address
     );
-    dbg_log!(Module::E, "init_size={:#X}", init_size);
+    dbg_log!(LOG::E, "init_size={:#X}", init_size);
     let real_mode_segment: u16 = 0x8000;
     let base_ptr = (real_mode_segment as u32) << 4;
 
@@ -126,16 +126,16 @@ pub(crate) fn load_kernel(
     bzimage16[(LINUX_BOOT_HDR_HEAP_END_PTR as usize) >> 1] = heap_end_ptr;
     // should parse the vga=... paramter from cmdline here, but we don't really care
     bzimage16[(LINUX_BOOT_HDR_VIDMODE as usize) >> 1] = 0xFFFF; // normal
-    dbg_log!(Module::E, "heap_end_ptr={:#X}", heap_end_ptr);
+    dbg_log!(LOG::E, "heap_end_ptr={:#X}", heap_end_ptr);
     cmdline += "\x00";
     assert!(cmdline.len() < cmdline_size as usize);
     let cmd_line_ptr = base_ptr + heap_end as u32;
-    dbg_log!(Module::E, "cmd_line_ptr={:#X}", cmd_line_ptr);
+    dbg_log!(LOG::E, "cmd_line_ptr={:#X}", cmd_line_ptr);
     bzimage32[(LINUX_BOOT_HDR_CMD_LINE_PTR as usize) >> 2] = cmd_line_ptr as u32;
     cpu.mem8_write_slice(cmd_line_ptr as usize, cmdline.as_bytes());
     let prot_mode_kernel_start = (setup_sects as usize + 1) * 512;
     dbg_log!(
-        Module::E,
+        LOG::E,
         "prot_mode_kernel_start={:#X}",
         prot_mode_kernel_start
     );

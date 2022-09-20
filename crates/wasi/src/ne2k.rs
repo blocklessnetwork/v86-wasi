@@ -1,4 +1,4 @@
-use crate::{StoreT, pci::{PCIDevice, GenericPCIDevice}, log::Module, ContextTrait, Dev, bus::BusData};
+use crate::{StoreT, pci::{PCIDevice, GenericPCIDevice}, log::LOG, ContextTrait, Dev, bus::BusData};
 
 const NE2K_LOG_VERBOSE: bool = false;
 
@@ -108,7 +108,7 @@ impl Ne2k {
         memory[15 << 1] = 0x57;
         memory[15 << 1 | 1] = 0x57;
         dbg_log!(
-            Module::NET, 
+            LOG::NET, 
             "Mac: {:#X}:{:#X}:{:#X}:{:#X}:{:#X}:{:#X}",
             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
         );
@@ -160,7 +160,7 @@ impl Ne2k {
                 Dev::Emulator(self.store.clone()), 
                 |dev: &Dev, _addr: u32| {
                     dev.ne2k().map_or(0, |ne2k| {
-                        dbg_log!(Module::NET, "Read cmd");
+                        dbg_log!(LOG::NET, "Read cmd");
                         ne2k.cr
                     })
                 }
@@ -181,7 +181,7 @@ impl Ne2k {
                 Dev::Emulator(self.store.clone()), 
                 |dev: &Dev, _addr: u32| {
                     dev.ne2k().map_or(0, |_ne2k| {
-                        dbg_log!(Module::NET, "Read counter0");
+                        dbg_log!(LOG::NET, "Read counter0");
                         0
                     })
                 }
@@ -192,7 +192,7 @@ impl Ne2k {
                 Dev::Emulator(self.store.clone()), 
                 |dev: &Dev, _addr: u32| {
                     dev.ne2k().map_or(0, |_ne2k| {
-                        dbg_log!(Module::NET, "Read counter1");
+                        dbg_log!(LOG::NET, "Read counter1");
                         0
                     })
                 }
@@ -203,7 +203,7 @@ impl Ne2k {
                 Dev::Emulator(self.store.clone()), 
                 |dev: &Dev, _addr: u32| {
                     dev.ne2k().map_or(0, |_ne2k| {
-                        dbg_log!(Module::NET, "Read counter2");
+                        dbg_log!(LOG::NET, "Read counter2");
                         0
                     })
                 }
@@ -216,10 +216,10 @@ impl Ne2k {
                     dev.ne2k_mut().map_or(0, |ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0{
-                            dbg_log!(Module::NET, "Read reset");
+                            dbg_log!(LOG::NET, "Read reset");
                             ne2k.do_interrupt(ENISR_RESET);
                         } else {
-                            dbg_log!(Module::NET, "Read pg{}/1f", pg);
+                            dbg_log!(LOG::NET, "Read pg{}/1f", pg);
                             assert!(false);
                         }
                         return 0;
@@ -234,10 +234,10 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Write reset: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "Write reset: {:#X}", data_byte);
                             //this.isr &= ~ENISR_RESET;
                         } else {
-                            dbg_log!(Module::NET, "Write pg{}/1f: {:#X}", pg, data_byte);
+                            dbg_log!(LOG::NET, "Write pg{}/1f: {:#X}", pg, data_byte);
                             assert!(false);
                         }
                     });
@@ -253,12 +253,12 @@ impl Ne2k {
                         if pg == 0 {
                             return ne2k.pstart;
                         } else if pg == 1 {
-                            dbg_log!(Module::NET, "Read pg1/01 (mac[0])");
+                            dbg_log!(LOG::NET, "Read pg1/01 (mac[0])");
                             return ne2k.mac[0];
                         } else if pg == 2 {
                             return ne2k.pstart;
                         } else {
-                            dbg_log!(Module::NET, "Read pg{}/01", pg);
+                            dbg_log!(LOG::NET, "Read pg{}/01", pg);
                             assert!(false);
                             return 0;
                         }
@@ -273,15 +273,15 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "start page: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "start page: {:#X}", data_byte);
                             ne2k.pstart = data_byte;
                         } else if pg == 1 {
-                            dbg_log!(Module::NET, "mac[0] = {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "mac[0] = {:#X}", data_byte);
                             ne2k.mac[0] = data_byte;
                         } else if pg == 3 {
-                            dbg_log!(Module::NET, "Unimplemented: Write pg3/01 (9346CR): {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "Unimplemented: Write pg3/01 (9346CR): {:#X}", data_byte);
                         } else {
-                            dbg_log!(Module::NET, "Write pg{}/01: {:#X}", pg, data_byte);
+                            dbg_log!(LOG::NET, "Write pg{}/01: {:#X}", pg, data_byte);
                             assert!(false);
                         }
                     });
@@ -297,12 +297,12 @@ impl Ne2k {
                         if pg == 0 {
                             return ne2k.pstop;
                         } else if pg == 1{
-                            dbg_log!(Module::NET, "Read pg1/02 (mac[1])");
+                            dbg_log!(LOG::NET, "Read pg1/02 (mac[1])");
                             return ne2k.mac[1];
                         } else if pg == 2 {
                             return ne2k.pstop;
                         } else {
-                            dbg_log!(Module::NET, "Read pg{}/02", pg);
+                            dbg_log!(LOG::NET, "Read pg{}/02", pg);
                             assert!(false);
                             return 0;
                         }
@@ -318,17 +318,17 @@ impl Ne2k {
                         let mut data_byte = data_byte;
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "stop page: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "stop page: {:#X}", data_byte);
                             if data_byte > (ne2k.memory.len() >> 8) as u8 {
                                 data_byte = (ne2k.memory.len() >> 8) as u8;
-                                dbg_log!(Module::NET, "XXX: Adjusting stop page to {:#X}", data_byte);
+                                dbg_log!(LOG::NET, "XXX: Adjusting stop page to {:#X}", data_byte);
                             }
                             ne2k.pstop = data_byte;
                         } else if pg == 1 {
-                            dbg_log!(Module::NET, "mac[1] = {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "mac[1] = {:#X}", data_byte);
                             ne2k.mac[1] = data_byte;
                         } else {
-                            dbg_log!(Module::NET, "Write pg{}/02: {:#X}", pg, data_byte);
+                            dbg_log!(LOG::NET, "Write pg{}/02: {:#X}", pg, data_byte);
                             assert!(false);
                         }
                     });
@@ -342,10 +342,10 @@ impl Ne2k {
                     dev.ne2k().map_or(0, |ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Read isr: {:#X}", ne2k.isr);
+                            dbg_log!(LOG::NET, "Read isr: {:#X}", ne2k.isr);
                             ne2k.isr
                         } else if pg == 1 {
-                            dbg_log!(Module::NET, "Read curpg: {:#X}", ne2k.curpg);
+                            dbg_log!(LOG::NET, "Read curpg: {:#X}", ne2k.curpg);
                             ne2k.curpg
                         } else {
                             assert!(false);
@@ -363,11 +363,11 @@ impl Ne2k {
                         let pg = ne2k.get_page();
                         if pg == 0 {
                             // acknowledge interrupts where bit is set
-                            dbg_log!(Module::NET, "Write isr: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "Write isr: {:#X}", data_byte);
                             ne2k.isr &= !data_byte;
                             ne2k.update_irq();
                         } else if pg == 1 {
-                            dbg_log!(Module::NET, "Write curpg: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "Write curpg: {:#X}", data_byte);
                             ne2k.curpg = data_byte;
                         } else {
                             assert!(false);
@@ -384,9 +384,9 @@ impl Ne2k {
                         let pg = ne2k.get_page();
                         if pg == 0 {
                             ne2k.txcr = data_byte;
-                            dbg_log!(Module::NET, "Write tx config: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "Write tx config: {:#X}", data_byte);
                         } else {
-                            dbg_log!(Module::NET, "Unimplemented: Write pg{}/0d {:#X}", pg ,data_byte);
+                            dbg_log!(LOG::NET, "Unimplemented: Write pg{}/0d {:#X}", pg ,data_byte);
                         }
                     });
                 }
@@ -399,10 +399,10 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Write data configuration: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "Write data configuration: {:#X}", data_byte);
                             ne2k.dcfg = data_byte;
                         } else {
-                            dbg_log!(Module::NET, "Unimplemented: Write pg{}/0e {:#X}", pg, data_byte);
+                            dbg_log!(LOG::NET, "Unimplemented: Write pg{}/0e {:#X}", pg, data_byte);
                         }
                     });
                 }
@@ -415,7 +415,7 @@ impl Ne2k {
                     dev.ne2k().map_or(0, |ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Read pg0/0a");
+                            dbg_log!(LOG::NET, "Read pg0/0a");
                             0x50
                         } else {
                             assert!(false, "TODO");
@@ -432,10 +432,10 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Write remote byte count low: {:#2X}", data_byte);
+                            dbg_log!(LOG::NET, "Write remote byte count low: {:#2X}", data_byte);
                             ne2k.rcnt = ne2k.rcnt & 0xFF00 | data_byte as u16 & 0xFF;
                         } else {
-                            dbg_log!(Module::NET, "Unimplemented: Write pg{}/0a {:#X}", pg, data_byte);
+                            dbg_log!(LOG::NET, "Unimplemented: Write pg{}/0a {:#X}", pg, data_byte);
                         }
                     });
                 }
@@ -448,7 +448,7 @@ impl Ne2k {
                     dev.ne2k().map_or(0, |ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Read pg0/0b");
+                            dbg_log!(LOG::NET, "Read pg0/0b");
                             return 0x43;
                         } else {
                             assert!(false, "TODO");
@@ -465,10 +465,10 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Write remote byte count high: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "Write remote byte count high: {:#X}", data_byte);
                             ne2k.rcnt = ne2k.rcnt & 0xFF | (data_byte as u16) << 8 & 0xFF00;
                         } else {
-                            dbg_log!(Module::NET, "Unimplemented: Write pg{}/0b {:#X}", pg, data_byte);
+                            dbg_log!(LOG::NET, "Unimplemented: Write pg{}/0b {:#X}", pg, data_byte);
                         }
                     });
                 }
@@ -481,10 +481,10 @@ impl Ne2k {
                     dev.ne2k().map_or(0, |ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Read remote start address low");
+                            dbg_log!(LOG::NET, "Read remote start address low");
                             return (ne2k.rsar & 0xFF) as u8;
                         } else {
-                            dbg_log!(Module::NET, "Unimplemented: Read pg{}/08", pg);
+                            dbg_log!(LOG::NET, "Unimplemented: Read pg{}/08", pg);
                             assert!(false);
                             0
                         }
@@ -499,10 +499,10 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Write remote start address low: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "Write remote start address low: {:#X}", data_byte);
                             ne2k.rsar = ne2k.rsar & 0xFF00 | (data_byte as u16) & 0xFF;
                         } else {
-                            dbg_log!(Module::NET, "Unimplemented: Write pg{}/08 {:#X}", pg , data_byte);
+                            dbg_log!(LOG::NET, "Unimplemented: Write pg{}/08 {:#X}", pg , data_byte);
                         }
                     });
                 }
@@ -515,10 +515,10 @@ impl Ne2k {
                     dev.ne2k().map_or(0, |ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Read remote start address high");
+                            dbg_log!(LOG::NET, "Read remote start address high");
                             return (ne2k.rsar >> 8 & 0xFF) as u8;
                         } else {
-                            dbg_log!(Module::NET, "Unimplemented: Read pg{}/09", pg);
+                            dbg_log!(LOG::NET, "Unimplemented: Read pg{}/09", pg);
                             assert!(false);
                             0
                         }
@@ -533,10 +533,10 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Write remote start address low");
+                            dbg_log!(LOG::NET, "Write remote start address low");
                             ne2k.rsar = ne2k.rsar & 0xFF | (data_byte as u16) << 8 & 0xFF00;
                         } else {
-                            dbg_log!(Module::NET, "Unimplemented: Write pg{}/09", pg);
+                            dbg_log!(LOG::NET, "Unimplemented: Write pg{}/09", pg);
                             assert!(false);
                         }
                     });
@@ -550,11 +550,11 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Write interrupt mask register: {:#X} isr={:#X}", data_byte, ne2k.isr);
+                            dbg_log!(LOG::NET, "Write interrupt mask register: {:#X} isr={:#X}", data_byte, ne2k.isr);
                             ne2k.imr = data_byte;
                             ne2k.update_irq();
                         } else {
-                            dbg_log!(Module::NET, "Unimplemented: Write pg{}/0f {:#X}", pg,  data_byte);
+                            dbg_log!(LOG::NET, "Unimplemented: Write pg{}/0f {:#X}", pg,  data_byte);
                         }
                     });
                 }
@@ -567,16 +567,16 @@ impl Ne2k {
                     dev.ne2k().map_or(0, |ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Read boundary: {:#X}", ne2k.boundary);
+                            dbg_log!(LOG::NET, "Read boundary: {:#X}", ne2k.boundary);
                             return ne2k.boundary;
                         } else if pg == 1 {
-                            dbg_log!(Module::NET, "Read pg1/03 (mac[2])");
+                            dbg_log!(LOG::NET, "Read pg1/03 (mac[2])");
                             return ne2k.mac[2];
                         } else if pg == 3 {
-                            dbg_log!(Module::NET, "Unimplemented: Read pg3/03 (CONFIG0)");
+                            dbg_log!(LOG::NET, "Unimplemented: Read pg3/03 (CONFIG0)");
                             return 0;
                         } else {
-                            dbg_log!(Module::NET, "Read pg{}/03", pg);
+                            dbg_log!(LOG::NET, "Read pg{}/03", pg);
                             assert!(false);
                             return 0;
                         }
@@ -591,13 +591,13 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Write boundary: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "Write boundary: {:#X}", data_byte);
                             ne2k.boundary = data_byte;
                         } else if pg == 1 {
-                            dbg_log!(Module::NET, "mac[2] = {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "mac[2] = {:#X}", data_byte);
                             ne2k.mac[2] = data_byte;
                         } else {
-                            dbg_log!(Module::NET, "Write pg{}/03: {:#X}", pg, data_byte);
+                            dbg_log!(LOG::NET, "Write pg{}/03: {:#X}", pg, data_byte);
                             assert!(false);
                         }
                     });
@@ -613,10 +613,10 @@ impl Ne2k {
                         if pg == 0 {
                             return ne2k.tsr;
                         } else if pg == 1 {
-                            dbg_log!(Module::NET, "Read pg1/04 (mac[3])");
+                            dbg_log!(LOG::NET, "Read pg1/04 (mac[3])");
                             return ne2k.mac[3];
                         } else {
-                            dbg_log!(Module::NET, "Read pg{}/04", pg);
+                            dbg_log!(LOG::NET, "Read pg{}/04", pg);
                             assert!(false);
                             return 0;
                         }
@@ -631,13 +631,13 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Write tpsr: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "Write tpsr: {:#X}", data_byte);
                             ne2k.tpsr = data_byte;
                         } else if pg == 1 {
-                            dbg_log!(Module::NET, "mac[3] = {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "mac[3] = {:#X}", data_byte);
                             ne2k.mac[3] = data_byte;
                         } else {
-                            dbg_log!(Module::NET, "Write pg{}/04: {:#X}", pg, data_byte);
+                            dbg_log!(LOG::NET, "Write pg{}/04: {:#X}", pg, data_byte);
                             assert!(false);
                         }
                     });
@@ -651,16 +651,16 @@ impl Ne2k {
                     dev.ne2k().map_or(0, |ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Unimplemented: Read pg0/05 (NCR: Number of Collisions Register)");
+                            dbg_log!(LOG::NET, "Unimplemented: Read pg0/05 (NCR: Number of Collisions Register)");
                             return 0;
                         } else if pg == 1 {
-                            dbg_log!(Module::NET, "Read pg1/05 (mac[4])");
+                            dbg_log!(LOG::NET, "Read pg1/05 (mac[4])");
                             return ne2k.mac[4];
                         } else if pg == 3 {
-                            dbg_log!(Module::NET, "Unimplemented: Read pg3/05 (CONFIG2)");
+                            dbg_log!(LOG::NET, "Unimplemented: Read pg3/05 (CONFIG2)");
                             return 0;
                         } else {
-                            dbg_log!(Module::NET, "Read pg{}/05", pg);
+                            dbg_log!(LOG::NET, "Read pg{}/05", pg);
                             assert!(false);
                             return 0;
                         }
@@ -675,15 +675,15 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Write tcnt low: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "Write tcnt low: {:#X}", data_byte);
                             ne2k.tcnt = ne2k.tcnt & !0xFF | data_byte as u16;
                         } else if pg == 1 {
-                            dbg_log!(Module::NET, "mac[4] = {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "mac[4] = {:#X}", data_byte);
                             ne2k.mac[4] = data_byte;
                         } else if pg == 3 {
-                            dbg_log!(Module::NET, "Unimplemented: Write pg3/05 (CONFIG2): {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "Unimplemented: Write pg3/05 (CONFIG2): {:#X}", data_byte);
                         } else {
-                            dbg_log!(Module::NET, "Write pg{}/05: {:#X}", pg, data_byte);
+                            dbg_log!(LOG::NET, "Write pg{}/05: {:#X}", pg, data_byte);
                             assert!(false);
                         }
                     });
@@ -700,13 +700,13 @@ impl Ne2k {
                             assert!(false, "TODO");
                             return 0;
                         } else if pg == 1 {
-                            dbg_log!(Module::NET, "Read pg1/06 (mac[5])");
+                            dbg_log!(LOG::NET, "Read pg1/06 (mac[5])");
                             return ne2k.mac[5];
                         } else if pg == 3 {
-                            dbg_log!(Module::NET, "Unimplemented: Read pg3/06 (CONFIG3)");
+                            dbg_log!(LOG::NET, "Unimplemented: Read pg3/06 (CONFIG3)");
                             return 0;
                         } else {
-                            dbg_log!(Module::NET, "Read pg{}/06", pg);
+                            dbg_log!(LOG::NET, "Read pg{}/06", pg);
                             assert!(false);
                             return 0;
                         }
@@ -721,15 +721,15 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "Write tcnt high: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "Write tcnt high: {:#X}", data_byte);
                             ne2k.tcnt = ne2k.tcnt & 0xFF | (data_byte as u16) << 8;
                         } else if pg == 1 {
-                            dbg_log!(Module::NET, "mac[5] = {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "mac[5] = {:#X}", data_byte);
                             ne2k.mac[5] = data_byte;
                         } else if pg == 3 {
-                            dbg_log!(Module::NET, "Unimplemented: Write pg3/06 (CONFIG3): {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "Unimplemented: Write pg3/06 (CONFIG3): {:#X}", data_byte);
                         } else {
-                            dbg_log!(Module::NET, "Write pg{}/06: {:#X}", pg, data_byte);
+                            dbg_log!(LOG::NET, "Write pg{}/06: {:#X}", pg, data_byte);
                             assert!(false);
                         }
                     });
@@ -745,7 +745,7 @@ impl Ne2k {
                         if pg == 0 {
                             return 1 | 1 << 3; // receive status ok
                         } else {
-                            dbg_log!(Module::NET, "Unimplemented: Read pg{}/0c", pg);
+                            dbg_log!(LOG::NET, "Unimplemented: Read pg{}/0c", pg);
                             assert!(false);
                             return 0;
                         }
@@ -760,10 +760,10 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(Module::NET, "RX configuration reg write: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "RX configuration reg write: {:#X}", data_byte);
                             ne2k.rxcr = data_byte;
                         } else {
-                            dbg_log!(Module::NET, "Unimplemented: Write pg{}/0c: {:#X}", pg, data_byte);
+                            dbg_log!(LOG::NET, "Unimplemented: Write pg{}/0c: {:#X}", pg, data_byte);
                         }
                     });
                 }
@@ -842,7 +842,7 @@ impl Ne2k {
 
         if NE2K_LOG_VERBOSE {
             dbg_log!(
-                Module::NET,
+                LOG::NET,
                 "Read data port: data={:#X}  rsar={:#X}  rcnt={:#X}",
                 data,
                 self.rsar,
@@ -881,7 +881,7 @@ impl Ne2k {
 
     fn data_port_write(&mut self, data_byte: u16) {
         if NE2K_LOG_VERBOSE {
-            dbg_log!(Module::NET, 
+            dbg_log!(LOG::NET, 
                 "Write data port: data={:#X} rsar={:#X} rcnt={:#X}",
                 data_byte & 0xFF,
                 self.rsar,
@@ -913,7 +913,7 @@ impl Ne2k {
     #[inline]
     fn write_e8390_cmd(&mut self, data_byte: u8) {
         self.cr = data_byte;
-        dbg_log!(Module::NET, "Write command: {:#X} newpg={:#X} txcr={:#X}", data_byte, self.cr >> 6, self.txcr);
+        dbg_log!(LOG::NET, "Write command: {:#X} newpg={:#X} txcr={:#X}", data_byte, self.cr >> 6, self.txcr);
         if self.cr & 1 > 0 {
             return;
         }
@@ -934,13 +934,13 @@ impl Ne2k {
             });
             self.cr &= !4;
             self.do_interrupt(ENISR_TX);
-            dbg_log!(Module::NET, "Command: Transfer. length={:#X}", len);
+            dbg_log!(LOG::NET, "Command: Transfer. length={:#X}", len);
         }
     }
 
     #[inline]
     fn do_interrupt(&mut self, ir_mask: u8) {
-        dbg_log!(Module::NET, "Do interrupt {:#X}", ir_mask);
+        dbg_log!(LOG::NET, "Do interrupt {:#X}", ir_mask);
         self.isr |= ir_mask;
         self.update_irq();
     }

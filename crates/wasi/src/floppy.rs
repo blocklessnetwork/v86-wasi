@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
-use crate::{log::Module, ContextTrait, Dev, StoreT, CMOS_FLOPPY_DRIVE_TYPE};
+use crate::{log::LOG, ContextTrait, Dev, StoreT, CMOS_FLOPPY_DRIVE_TYPE};
 
 const DEBUG: bool = false;
 
@@ -108,25 +108,25 @@ impl FloppyController {
 
     #[inline]
     fn port3F0_read(&self) -> u8 {
-        dbg_log!(Module::FLOPPY, "3F0 read");
+        dbg_log!(LOG::FLOPPY, "3F0 read");
         return 0;
     }
 
     #[inline]
     fn port3F2_read(&self) -> u8 {
-        dbg_log!(Module::FLOPPY, "read 3F2: DOR");
+        dbg_log!(LOG::FLOPPY, "read 3F2: DOR");
         return 0;
     }
 
     #[inline]
     fn port3F7_read(&self) -> u8 {
-        dbg_log!(Module::FLOPPY, "read 3F7");
+        dbg_log!(LOG::FLOPPY, "read 3F7");
         return 0;
     }
 
     #[inline]
     fn port3F4_read(&self) -> u8 {
-        dbg_log!(Module::FLOPPY, "3F4 read");
+        dbg_log!(LOG::FLOPPY, "3F4 read");
 
         let mut return_byte = 0x80;
 
@@ -145,14 +145,14 @@ impl FloppyController {
     fn port3F5_read(&mut self) -> u8 {
         if self.response_index < self.response_length {
             let rs = self.response_data[self.response_index as usize];
-            dbg_log!(Module::FLOPPY, "3F5 read: {}", rs);
+            dbg_log!(LOG::FLOPPY, "3F5 read: {}", rs);
             self.store.cpu_mut().map(|cpu| {
                 cpu.device_lower_irq(6);
             });
             self.response_index += 1;
             return rs;
         } else {
-            dbg_log!(Module::FLOPPY, "3F5 read, empty");
+            dbg_log!(LOG::FLOPPY, "3F5 read, empty");
             return 0xFF;
         }
     }
@@ -166,11 +166,11 @@ impl FloppyController {
             });
         }
 
-        dbg_log!(Module::FLOPPY, "start motors: {:#X}", value >> 4);
-        dbg_log!(Module::FLOPPY, "enable dma: {}", !!(value & 8));
-        dbg_log!(Module::FLOPPY, "reset fdc: {}", !!(value & 4));
-        dbg_log!(Module::FLOPPY, "drive select: {}", (value & 3));
-        dbg_log!(Module::FLOPPY, "DOR = {:#X}", value);
+        dbg_log!(LOG::FLOPPY, "start motors: {:#X}", value >> 4);
+        dbg_log!(LOG::FLOPPY, "enable dma: {}", !!(value & 8));
+        dbg_log!(LOG::FLOPPY, "reset fdc: {}", !!(value & 4));
+        dbg_log!(LOG::FLOPPY, "drive select: {}", (value & 3));
+        dbg_log!(LOG::FLOPPY, "DOR = {:#X}", value);
 
         self.dor = value;
     }
@@ -180,7 +180,7 @@ impl FloppyController {
             return;
         }
 
-        dbg_log!(Module::FLOPPY, "3F5 write :{:#X}", reg_byte);
+        dbg_log!(LOG::FLOPPY, "3F5 write :{:#X}", reg_byte);
         if self.bytes_expecting > 0 {
             self.receiving_command[self.receiving_index as usize] = reg_byte;
             self.receiving_index += 1;
@@ -192,7 +192,7 @@ impl FloppyController {
                     for i in 0..self.receiving_index {
                         log += &format!("{:#X}", self.receiving_command[i as usize]);
                     }
-                    dbg_log!(Module::FLOPPY, "{}", log);
+                    dbg_log!(LOG::FLOPPY, "{}", log);
                 }
                 let args: &'static [u8] =
                     unsafe { std::mem::transmute::<_, &[u8]>(&self.receiving_command[..]) };
@@ -240,7 +240,7 @@ impl FloppyController {
                 }
                 0x0E => {
                     // dump regs
-                    dbg_log!(Module::FLOPPY, "dump registers");
+                    dbg_log!(LOG::FLOPPY, "dump registers");
                     self.response_data[0] = 0x80;
                     self.response_index = 0;
                     self.response_length = 1;
@@ -260,7 +260,7 @@ impl FloppyController {
     #[inline]
     fn read_sector_id(&mut self) {
         let args = &self.receiving_command[..];
-        dbg_log!(Module::FLOPPY, "floppy read sector id {:?}", args);
+        dbg_log!(LOG::FLOPPY, "floppy read sector id {:?}", args);
         self.response_index = 0;
         self.response_length = 7;
         self.response_data[0] = 0;
@@ -276,7 +276,7 @@ impl FloppyController {
     #[inline]
     fn check_interrupt_status(&mut self) {
         // do not trigger an interrupt here
-        dbg_log!(Module::FLOPPY, "floppy check interrupt status");
+        dbg_log!(LOG::FLOPPY, "floppy check interrupt status");
 
         self.response_index = 0;
         self.response_length = 2;
@@ -296,7 +296,7 @@ impl FloppyController {
 
     #[inline]
     fn calibrate(&mut self) {
-        dbg_log!(Module::FLOPPY, "floppy calibrate");
+        dbg_log!(LOG::FLOPPY, "floppy calibrate");
         self.raise_irq();
     }
 
@@ -312,18 +312,18 @@ impl FloppyController {
             ((head + self.number_of_heads * cylinder) * self.sectors_per_track + sector - 1)
                 * sector_size;
         let rw = if is_write { "Write" } else { "Read" };
-        dbg_log!(Module::FLOPPY, "Floppy {}", is_write);
+        dbg_log!(LOG::FLOPPY, "Floppy {}", is_write);
         dbg_log!(
-            Module::FLOPPY,
+            LOG::FLOPPY,
             "from {:#X} length {:#X}",
             read_offset,
             read_count * sector_size
         );
-        dbg_log!(Module::FLOPPY, "{} / {} / {}", cylinder, head, sector);
+        dbg_log!(LOG::FLOPPY, "{} / {} / {}", cylinder, head, sector);
 
         if args[4] == 0 {
             dbg_log!(
-                Module::FLOPPY,
+                LOG::FLOPPY,
                 "FDC: sector count is zero, use data length instead"
             );
         }
@@ -346,13 +346,13 @@ impl FloppyController {
     #[inline]
     fn fix_drive_data(&mut self) {
         let args = &self.receiving_command[..];
-        dbg_log!(Module::FLOPPY, "floppy fix drive data {:?}", args);
+        dbg_log!(LOG::FLOPPY, "floppy fix drive data {:?}", args);
     }
 
     #[inline]
     fn check_drive_status(&mut self) {
         let args = &self.receiving_command[..];
-        dbg_log!(Module::FLOPPY, "check drive status");
+        dbg_log!(LOG::FLOPPY, "check drive status");
 
         self.response_index = 0;
         self.response_length = 1;
@@ -362,7 +362,7 @@ impl FloppyController {
     #[inline]
     fn seek(&mut self) {
         let args = &self.receiving_command[..];
-        dbg_log!(Module::FLOPPY, "seek");
+        dbg_log!(LOG::FLOPPY, "seek");
         assert!((args[0] & 3) == 0, "Unhandled seek drive");
 
         self.last_cylinder = args[1];

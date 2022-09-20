@@ -19,7 +19,7 @@ use crate::{
     floppy::FloppyController,
     io::{MMapFn, MemAccess, MemAccessTrait, IO},
     kernel::load_kernel,
-    log::Module,
+    log::LOG,
     pci::PCI,
     pic::PIC,
     pit::PIT,
@@ -569,7 +569,7 @@ impl CPU {
             .flatten();
         let bios = bios.expect("Warning: No BIOS");
         let offset = 0x100000 - bios.len();
-        dbg_log!(Module::CPU, "load bois to: {}", offset);
+        dbg_log!(LOG::CPU, "load bois to: {}", offset);
         // load bios
         self.store_mut().map(|store| {
             self.iomap.mem8_write_slice(store, offset, &bios);
@@ -708,7 +708,7 @@ impl CPU {
             IO::empty_write8,
             |dev: &Dev, _: u32, value: u16| {
                 dev.cpu_mut().map(|cpu| {
-                    dbg_log!(Module::E, "bios config port, index={:#X}", value);
+                    dbg_log!(LOG::E, "bios config port, index={:#X}", value);
                     let vi32 = |i: i32| -> Rc<Vec<u8>> { Rc::new(Vec::from(i.to_le_bytes())) };
                     cpu.fw_pointer = 0;
                     if value == FW_CFG_SIGNATURE {
@@ -757,7 +757,7 @@ impl CPU {
                         let i = value - FW_CFG_FILE_START;
                         cpu.fw_value = cpu.option_roms[i as usize].data.clone();
                     } else {
-                        dbg_log!(Module::E, "Warning: Unimplemented fw index: {:#X}", value);
+                        dbg_log!(LOG::E, "Warning: Unimplemented fw index: {:#X}", value);
                         cpu.fw_value = vi32(0);
                     }
                 });
@@ -767,7 +767,7 @@ impl CPU {
 
         self.io
             .register_read8(0xB3, Dev::Empty, |_: &Dev, _: u32| -> u8 {
-                dbg_log!(Module::CPU, "port 0xB3 read");
+                dbg_log!(LOG::CPU, "port 0xB3 read");
                 0
             });
         self.io.register_read8(

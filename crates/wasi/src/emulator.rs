@@ -209,6 +209,7 @@ impl Emulator {
                     cpu.codegen_finalize_finished(index, start, state_flags);
                     cpu.store_mut().map(|store| {
                         self.inner_mut().table.map(|table| {
+                            println!("11111ss");
                             table.set(store, WASM_TABLE_OFFSET + index as u32, func).unwrap();
                         })
                     });

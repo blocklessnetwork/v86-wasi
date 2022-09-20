@@ -20,7 +20,6 @@ impl Screen {
     }
 
     pub fn init(&mut self) {
-        let _ = execute!(self.stdout, terminal::Clear(terminal::ClearType::All));
         self.store.bus_mut().map(|bus| {
             bus.register(
                 "screen-set-mode",

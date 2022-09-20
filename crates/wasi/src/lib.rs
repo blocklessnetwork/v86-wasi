@@ -49,7 +49,7 @@ pub use consts::*;
 pub use cpu::CPU;
 pub use emulator::Emulator;
 use floppy::FloppyController;
-pub(crate) use log::Module;
+pub(crate) use log::LOG;
 pub use setting::*;
 
 pub use dev::Dev;
@@ -340,7 +340,7 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
                 unsafe {
                     let ptr = mem.as_ptr().offset(off as _);
                     let sl = slice::from_raw_parts(ptr, len as _);
-                    dbg_log!(Module::CPU, "{}", std::str::from_utf8_unchecked(sl));
+                    dbg_log!(LOG::CPU, "{}", std::str::from_utf8_unchecked(sl));
                 }
                 Ok(())
             },

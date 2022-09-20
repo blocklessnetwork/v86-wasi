@@ -5,7 +5,7 @@ use std::slice;
 use crate::{
     bus::BusData,
     io::IO,
-    log::Module,
+    log::LOG,
     pci::{PCIBar, PCIDevice},
     ContextTrait, Dev, StoreT,
 };
@@ -543,7 +543,7 @@ impl VGAScreen {
                 |dev: &Dev, _addr: u32| dev.vga_mut().map_or(0, |vga| vga.port3D5_read()),
                 |dev: &Dev, _addr: u32| {
                     dev.vga_mut().map_or(0, |vga| {
-                        dbg_log!(Module::VGA, "Warning: 16-bit read from 3D5");
+                        dbg_log!(LOG::VGA, "Warning: 16-bit read from 3D5");
                         vga.port3D5_read() as u16
                     })
                 },
@@ -554,7 +554,7 @@ impl VGAScreen {
                 0x3CA,
                 Dev::Emulator(self.store.clone()),
                 |_dev: &Dev, _addr: u32| {
-                    dbg_log!(Module::VGA, "3CA read");
+                    dbg_log!(LOG::VGA, "3CA read");
                     return 0;
                 },
             );
@@ -639,13 +639,13 @@ impl VGAScreen {
 
     #[inline]
     fn port3CC_read(&self) -> u8 {
-        dbg_log!(Module::VGA, "3CC read");
+        dbg_log!(LOG::VGA, "3CC read");
         self.miscellaneous_output_register
     }
 
     #[inline]
     fn port3C9_read(&mut self) -> u8 {
-        dbg_log!(Module::VGA, "3C9 read");
+        dbg_log!(LOG::VGA, "3C9 read");
         let index = self.dac_color_index_read / 3 | 0;
         let offset = self.dac_color_index_read % 3;
         let color = self.vga256_palette[index as usize];
@@ -666,7 +666,7 @@ impl VGAScreen {
         } else {
             color = color & !0xFF | color_byte as i32;
             dbg_log!(
-                Module::VGA,
+                LOG::VGA,
                 "dac set color, index={:#X} value={:#X}",
                 index,
                 color
@@ -700,7 +700,7 @@ impl VGAScreen {
     #[inline]
     fn port3C7_write(&mut self, index: u8) {
         // index for reading the DAC
-        dbg_log!(Module::VGA, "3C7 write: {:#X}", index);
+        dbg_log!(LOG::VGA, "3C7 write: {:#X}", index);
         self.dac_color_index_read = index * 3;
         self.dac_state &= 0x0;
     }
@@ -719,35 +719,35 @@ impl VGAScreen {
         match self.graphics_index {
             0 => {
                 self.planar_setreset = value;
-                dbg_log!(Module::VGA, "plane set/reset: {:#X}", value);
+                dbg_log!(LOG::VGA, "plane set/reset: {:#X}", value);
             }
             1 => {
                 self.planar_setreset_enable = value;
-                dbg_log!(Module::VGA, "plane set/reset enable: {:#X}", value);
+                dbg_log!(LOG::VGA, "plane set/reset enable: {:#X}", value);
             }
             2 => {
                 self.color_compare = value;
-                dbg_log!(Module::VGA, "color compare: {:#X}", value);
+                dbg_log!(LOG::VGA, "color compare: {:#X}", value);
             }
             3 => {
                 self.planar_rotate_reg = value;
-                dbg_log!(Module::VGA, "plane rotate: {:#X}", value);
+                dbg_log!(LOG::VGA, "plane rotate: {:#X}", value);
             }
             4 => {
                 self.plane_read = value;
-                dbg_log!(Module::VGA, "plane read: {:#X}", value);
+                dbg_log!(LOG::VGA, "plane read: {:#X}", value);
             }
             5 => {
                 let previous_planar_mode = self.planar_mode;
                 self.planar_mode = value;
-                dbg_log!(Module::VGA, "planar mode: {:#X}", value);
+                dbg_log!(LOG::VGA, "planar mode: {:#X}", value);
                 if (previous_planar_mode ^ value) & 0x60 > 0 {
                     // Shift mode modified. Pixel buffer invalidated
                     self.complete_replot();
                 }
             }
             6 => {
-                dbg_log!(Module::VGA, "miscellaneous graphics register: {:#X}", value);
+                dbg_log!(LOG::VGA, "miscellaneous graphics register: {:#X}", value);
                 if self.miscellaneous_graphics_register != value {
                     self.miscellaneous_graphics_register = value;
                     self.update_vga_size();
@@ -755,15 +755,15 @@ impl VGAScreen {
             }
             7 => {
                 self.color_dont_care = value;
-                dbg_log!(Module::VGA, "color don't care: {:#X}", value);
+                dbg_log!(LOG::VGA, "color don't care: {:#X}", value);
             }
             8 => {
                 self.planar_bitmap = value;
-                dbg_log!(Module::VGA, "planar bitmap: {:#X}", value);
+                dbg_log!(LOG::VGA, "planar bitmap: {:#X}", value);
             }
             _ => {
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "3CF / graphics write {:#X}: {:#X}",
                     self.graphics_index,
                     value
@@ -775,7 +775,7 @@ impl VGAScreen {
     #[inline]
     fn port3C5_read(&self) -> u8 {
         dbg_log!(
-            Module::VGA,
+            LOG::VGA,
             "3C5 / sequencer read {:#X}",
             self.sequencer_index
         );
@@ -802,7 +802,7 @@ impl VGAScreen {
     #[inline]
     fn port3C2_write(&mut self, value: u8) {
         dbg_log!(
-            Module::VGA,
+            LOG::VGA,
             "3C2 / miscellaneous output register = {:#X}",
             value
         );
@@ -812,7 +812,7 @@ impl VGAScreen {
     fn port3C1_read(&self) -> u8 {
         if self.attribute_controller_index < 0x10 {
             dbg_log!(
-                Module::VGA,
+                LOG::VGA,
                 "3C1 / internal palette read: {:#X} -> {:#X}",
                 self.attribute_controller_index,
                 self.dac_map[self.attribute_controller_index as usize],
@@ -823,7 +823,7 @@ impl VGAScreen {
         match self.attribute_controller_index {
             0x10 => {
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "3C1 / attribute mode read: {:#X}",
                     self.attribute_mode
                 );
@@ -831,7 +831,7 @@ impl VGAScreen {
             }
             0x12 => {
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "3C1 / color plane enable read: {:#X}",
                     self.color_plane_enable
                 );
@@ -839,7 +839,7 @@ impl VGAScreen {
             }
             0x13 => {
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "3C1 / horizontal panning read: {:#X}",
                     self.horizontal_panning
                 );
@@ -847,7 +847,7 @@ impl VGAScreen {
             }
             0x14 => {
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "3C1 / color select read: {:#X}",
                     self.color_select
                 );
@@ -855,7 +855,7 @@ impl VGAScreen {
             }
             _ => {
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "3C1 / attribute controller read {:#X}",
                     self.attribute_controller_index
                 );
@@ -866,14 +866,14 @@ impl VGAScreen {
 
     #[inline]
     fn port3C0_read8(&self) -> u8 {
-        dbg_log!(Module::VGA, "3C0 read");
+        dbg_log!(LOG::VGA, "3C0 read");
         let result = self.attribute_controller_index as u8 | self.palette_source;
         return result;
     }
 
     #[inline]
     fn port3C0_read16(&self) -> u16 {
-        dbg_log!(Module::VGA, "3C0 read16");
+        dbg_log!(LOG::VGA, "3C0 read16");
         return (self.port3C0_read8() as u16) & 0xFF | ((self.port3C1_read() as u16) << 8 & 0xFF00);
     }
 
@@ -944,7 +944,7 @@ impl VGAScreen {
         // VGA chip only decodes addresses within the selected memory space.
         if addr >= VGA_HOST_MEMORY_SPACE_SIZE[memory_space_select as usize] as u32 {
             dbg_log!(
-                Module::VGA,
+                LOG::VGA,
                 "vga read outside memory space: addr:{:#X}",
                 addr
             );
@@ -1009,7 +1009,7 @@ impl VGAScreen {
 
         if addr >= VGA_HOST_MEMORY_SPACE_SIZE[memory_space_select as usize] as u32 {
             dbg_log!(
-                Module::VGA,
+                LOG::VGA,
                 "vga write outside memory space: addr:{:#X}, value:{:#X}",
                 addr,
                 value
@@ -1283,7 +1283,7 @@ impl VGAScreen {
     }
 
     fn complete_redraw(&mut self) {
-        dbg_log!(Module::VGA, "complete redraw");
+        dbg_log!(LOG::VGA, "complete redraw");
         if self.graphical_mode {
             self.diff_addr_min = 0;
 
@@ -1456,7 +1456,7 @@ impl VGAScreen {
     }
 
     fn complete_replot(&mut self) {
-        dbg_log!(Module::VGA, "complete replot");
+        dbg_log!(LOG::VGA, "complete replot");
 
         if !self.graphical_mode || self.svga_enabled {
             return;
@@ -1602,13 +1602,13 @@ impl VGAScreen {
     fn port3C0_write(&mut self, value: u8) {
         if self.attribute_controller_index == 0xFFFF_FFFF {
             dbg_log!(
-                Module::VGA,
+                LOG::VGA,
                 "attribute controller index register: {:#X}",
                 value
             );
             self.attribute_controller_index = (value & 0x1F) as u32;
             dbg_log!(
-                Module::VGA,
+                LOG::VGA,
                 "attribute actual index: {:#X}",
                 self.attribute_controller_index
             );
@@ -1622,7 +1622,7 @@ impl VGAScreen {
         } else {
             if self.attribute_controller_index < 0x10 {
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "internal palette: {:#X} -> {:#X}",
                     self.attribute_controller_index,
                     value
@@ -1634,7 +1634,7 @@ impl VGAScreen {
             } else {
                 match self.attribute_controller_index as u32 {
                     0x10 => {
-                        dbg_log!(Module::VGA, "3C0 / attribute mode control: {:#X}", value);
+                        dbg_log!(LOG::VGA, "3C0 / attribute mode control: {:#X}", value);
                         if self.attribute_mode != value {
                             let previous_mode = self.attribute_mode;
                             self.attribute_mode = value;
@@ -1658,7 +1658,7 @@ impl VGAScreen {
                         }
                     }
                     0x12 => {
-                        dbg_log!(Module::VGA, "3C0 / color plane enable: {:#X}", value);
+                        dbg_log!(LOG::VGA, "3C0 / color plane enable: {:#X}", value);
                         if self.color_plane_enable != value {
                             self.color_plane_enable = value;
 
@@ -1667,14 +1667,14 @@ impl VGAScreen {
                         }
                     }
                     0x13 => {
-                        dbg_log!(Module::VGA, "3C0 / horizontal panning: {:#X}", value);
+                        dbg_log!(LOG::VGA, "3C0 / horizontal panning: {:#X}", value);
                         if self.horizontal_panning != value {
                             self.horizontal_panning = value & 0xF;
                             self.update_layers();
                         }
                     }
                     0x14 => {
-                        dbg_log!(Module::VGA, "3C0 / color select: {:#X}", value);
+                        dbg_log!(LOG::VGA, "3C0 / color select: {:#X}", value);
                         if self.color_select != value {
                             self.color_select = value;
 
@@ -1684,7 +1684,7 @@ impl VGAScreen {
                     }
                     _ => {
                         dbg_log!(
-                            Module::VGA,
+                            LOG::VGA,
                             "3C0 / attribute controller write {:#X}: {:#X}",
                             self.attribute_controller_index,
                             value
@@ -1709,7 +1709,7 @@ impl VGAScreen {
     fn port3C5_write(&mut self, value: u8) {
         match self.sequencer_index {
             0x01 => {
-                dbg_log!(Module::VGA, "clocking mode: {:#X}", value);
+                dbg_log!(LOG::VGA, "clocking mode: {:#X}", value);
                 let previous_clocking_mode = self.clocking_mode;
                 self.clocking_mode = value;
                 if (previous_clocking_mode ^ value) & 0x20 > 0 {
@@ -1718,16 +1718,16 @@ impl VGAScreen {
                 }
             }
             0x02 => {
-                dbg_log!(Module::VGA, "plane write mask: {:#X}", value);
+                dbg_log!(LOG::VGA, "plane write mask: {:#X}", value);
                 self.plane_write_bm = value;
             }
             0x04 => {
-                dbg_log!(Module::VGA, "sequencer memory mode: {:#X}", value);
+                dbg_log!(LOG::VGA, "sequencer memory mode: {:#X}", value);
                 self.sequencer_memory_mode = value;
             }
             _ => {
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "3C5 / sequencer write {:#X}: {:#X}",
                     self.sequencer_index,
                     value
@@ -1738,7 +1738,7 @@ impl VGAScreen {
 
     #[inline]
     fn port3CF_read(&self) -> u8 {
-        dbg_log!(Module::VGA, "3CF / graphics read {:X}", self.graphics_index);
+        dbg_log!(LOG::VGA, "3CF / graphics read {:X}", self.graphics_index);
         match self.graphics_index {
             0 => self.planar_setreset,
             1 => self.planar_setreset_enable,
@@ -1754,12 +1754,12 @@ impl VGAScreen {
     }
 
     fn port3D4_write(&mut self, register: u8) {
-        dbg_log!(Module::VGA, "3D4 / crtc index: {:#X}", register);
+        dbg_log!(LOG::VGA, "3D4 / crtc index: {:#X}", register);
         self.index_crtc = register;
     }
 
     fn port3D4_read(&self) -> u8 {
-        dbg_log!(Module::VGA, "3D4 read / crtc index: {:#X}", self.index_crtc);
+        dbg_log!(LOG::VGA, "3D4 read / crtc index: {:#X}", self.index_crtc);
         self.index_crtc
     }
 
@@ -1777,7 +1777,7 @@ impl VGAScreen {
     fn port3D5_write(&mut self, value: u8) {
         match self.index_crtc {
             0x1 => {
-                dbg_log!(Module::VGA, "3D5 / hdisp enable end write: {:#X}", value);
+                dbg_log!(LOG::VGA, "3D5 / hdisp enable end write: {:#X}", value);
                 if self.horizontal_display_enable_end != value {
                     self.horizontal_display_enable_end = value;
                     self.update_vga_size();
@@ -1790,7 +1790,7 @@ impl VGAScreen {
                 }
             }
             0x7 => {
-                dbg_log!(Module::VGA, "3D5 / overflow register write: {:#X}", value);
+                dbg_log!(LOG::VGA, "3D5 / overflow register write: {:#X}", value);
                 let previous_vertical_display_enable_end = self.vertical_display_enable_end;
                 self.vertical_display_enable_end &= 0xFF;
                 let value: u32 = value as u32;
@@ -1809,12 +1809,12 @@ impl VGAScreen {
                 self.update_layers();
             }
             0x8 => {
-                dbg_log!(Module::VGA, "3D5 / preset row scan write: {:#X}", value);
+                dbg_log!(LOG::VGA, "3D5 / preset row scan write: {:#X}", value);
                 self.preset_row_scan = value;
                 self.update_layers();
             }
             0x9 => {
-                dbg_log!(Module::VGA, "3D5 / max scan line write: {:#X}", value);
+                dbg_log!(LOG::VGA, "3D5 / max scan line write: {:#X}", value);
                 self.max_scan_line = value;
                 let value: u32 = value as u32;
                 self.line_compare = (self.line_compare & 0x1FF) | (value << 3 & 0x200);
@@ -1830,7 +1830,7 @@ impl VGAScreen {
             }
             0xA => {
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "3D5 / cursor scanline start write: {:#X}",
                     value
                 );
@@ -1839,7 +1839,7 @@ impl VGAScreen {
             }
             0xB => {
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "3D5 / cursor scanline end write: #{:#X}",
                     value
                 );
@@ -1858,7 +1858,7 @@ impl VGAScreen {
                     }
                 }
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "3D5 / start addr hi write: {:#X} -> {:#04X}",
                     value,
                     self.start_address
@@ -1875,24 +1875,24 @@ impl VGAScreen {
                     }
                 }
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "3D5 / start addr lo write: {:#X} -> {:#04X}",
                     value,
                     self.start_address
                 );
             }
             0xE => {
-                dbg_log!(Module::VGA, "3D5 / cursor address hi write: {:#X}", value);
+                dbg_log!(LOG::VGA, "3D5 / cursor address hi write: {:#X}", value);
                 self.cursor_address = self.cursor_address & 0xFF | (value as u32) << 8;
                 self.update_cursor();
             }
             0xF => {
-                dbg_log!(Module::VGA, "3D5 / cursor address lo write: {:#X}", value);
+                dbg_log!(LOG::VGA, "3D5 / cursor address lo write: {:#X}", value);
                 self.cursor_address = self.cursor_address & 0xFF00 | (value as u32);
                 self.update_cursor();
             }
             0x12 => {
-                dbg_log!(Module::VGA, "3D5 / vdisp enable end write: {:#X}", value);
+                dbg_log!(LOG::VGA, "3D5 / vdisp enable end write: {:#X}", value);
                 if (self.vertical_display_enable_end & 0xFF) as u8 != value {
                     self.vertical_display_enable_end =
                         (self.vertical_display_enable_end & 0x300) | (value as u32);
@@ -1900,7 +1900,7 @@ impl VGAScreen {
                 }
             }
             0x13 => {
-                dbg_log!(Module::VGA, "3D5 / offset register write: {:#X}", value);
+                dbg_log!(LOG::VGA, "3D5 / offset register write: {:#X}", value);
                 if self.offset_register != value {
                     self.offset_register = value;
                     self.update_vga_size();
@@ -1913,7 +1913,7 @@ impl VGAScreen {
                 }
             }
             0x14 => {
-                dbg_log!(Module::VGA, "3D5 / underline location write: {:#X}", value);
+                dbg_log!(LOG::VGA, "3D5 / underline location write: {:#X}", value);
                 if self.underline_location_register != value {
                     let previous_underline = self.underline_location_register;
 
@@ -1928,7 +1928,7 @@ impl VGAScreen {
             }
             0x15 => {
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "3D5 / vertical blank start write: {:#X}",
                     value
                 );
@@ -1938,7 +1938,7 @@ impl VGAScreen {
                 }
             }
             0x17 => {
-                dbg_log!(Module::VGA, "3D5 / crtc mode write: {:#X}", value);
+                dbg_log!(LOG::VGA, "3D5 / crtc mode write: {:#X}", value);
                 if self.crtc_mode != value {
                     let previous_mode = self.crtc_mode;
 
@@ -1953,7 +1953,7 @@ impl VGAScreen {
                 }
             }
             0x18 => {
-                dbg_log!(Module::VGA, "3D5 / line compare write: {:#X}", value);
+                dbg_log!(LOG::VGA, "3D5 / line compare write: {:#X}", value);
                 self.line_compare = (self.line_compare & 0x300) | value as u32;
                 self.update_layers();
             }
@@ -1962,7 +1962,7 @@ impl VGAScreen {
                     self.crtc[self.index_crtc as usize] = value as u8;
                 }
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "3D5 / CRTC write {:#X}:  {:#X}",
                     self.index_crtc,
                     value
@@ -1972,7 +1972,7 @@ impl VGAScreen {
     }
 
     fn port3D5_read(&self) -> u8 {
-        dbg_log!(Module::VGA, "3D5 read {:#X}", self.index_crtc);
+        dbg_log!(LOG::VGA, "3D5 read {:#X}", self.index_crtc);
 
         match self.index_crtc {
             0x1 => self.horizontal_display_enable_end,
@@ -2017,7 +2017,7 @@ impl VGAScreen {
     }
 
     fn port3DA_read(&mut self) -> u8 {
-        dbg_log!(Module::VGA, "3DA read - status 1 and clear attr index");
+        dbg_log!(LOG::VGA, "3DA read - status 1 and clear attr index");
 
         let value = self.port_3DA_value;
 
@@ -2044,7 +2044,7 @@ impl VGAScreen {
 
     fn port1CF_write(&mut self, value: u16) {
         dbg_log!(
-            Module::VGA,
+            LOG::VGA,
             "1CF / dispi write {:#X}: {:#X}",
             self.dispi_index,
             value
@@ -2054,7 +2054,7 @@ impl VGAScreen {
                 self.svga_width = value;
                 if self.svga_width > MAX_XRES {
                     dbg_log!(
-                        Module::VGA,
+                        LOG::VGA,
                         "svga_width reduced from {} to {}",
                         self.svga_width,
                         MAX_XRES
@@ -2066,7 +2066,7 @@ impl VGAScreen {
                 self.svga_height = value;
                 if self.svga_height > MAX_YRES {
                     dbg_log!(
-                        Module::VGA,
+                        LOG::VGA,
                         "svga_height reduced from {} to {}",
                         self.svga_height,
                         MAX_YRES
@@ -2089,7 +2089,7 @@ impl VGAScreen {
                 // y offset
                 self.svga_offset = value as u32 * self.svga_bytes_per_line();
                 dbg_log!(
-                    Module::VGA,
+                    LOG::VGA,
                     "SVGA offset: {:#X} y={:#X}",
                     self.svga_offset,
                     value
@@ -2101,7 +2101,7 @@ impl VGAScreen {
 
         if self.svga_enabled && (self.svga_width == 0 || self.svga_height == 0) {
             dbg_log!(
-                Module::VGA,
+                LOG::VGA,
                 "SVGA: disabled because of invalid width/height: {} x{}",
                 self.svga_width,
                 self.svga_height
@@ -2123,7 +2123,7 @@ impl VGAScreen {
         );
 
         dbg_log!(
-            Module::VGA,
+            LOG::VGA,
             "SVGA: enabled={}, {}x{}x{}",
             self.svga_enabled,
             self.svga_width,
@@ -2154,7 +2154,7 @@ impl VGAScreen {
     }
 
     fn port1CF_read(&self) -> u16 {
-        dbg_log!(Module::VGA, "1CF / dispi read {:#X}", self.dispi_index);
+        dbg_log!(LOG::VGA, "1CF / dispi read {:#X}", self.dispi_index);
         return self.svga_register_read(self.dispi_index);
     }
 

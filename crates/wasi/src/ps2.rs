@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::{bus::BusData, log::Module, ContextTrait, Dev, StoreT};
+use crate::{bus::BusData, log::LOG, ContextTrait, Dev, StoreT};
 
 const PS2_LOG_VERBOSE: bool = false;
 
@@ -145,7 +145,7 @@ impl PS2 {
             status_byte |= 0x20;
         }
 
-        dbg_log!(Module::PS2, "port 64 read: {:#X}", status_byte);
+        dbg_log!(LOG::PS2, "port 64 read: {:#X}", status_byte);
         return status_byte;
     }
 
@@ -156,7 +156,7 @@ impl PS2 {
 
         if self.kbd_buffer.len() == 0 && self.mouse_buffer.len() == 0 {
             // should not happen
-            dbg_log!(Module::PS2, "Port 60 read: Empty");
+            dbg_log!(LOG::PS2, "Port 60 read: Empty");
             return self.last_port60_byte;
         }
 
@@ -166,7 +166,7 @@ impl PS2 {
             });
             self.last_port60_byte = self.mouse_buffer.pop_front().unwrap();
             dbg_log!(
-                Module::PS2,
+                LOG::PS2,
                 "Port 60 read (mouse): {:#X}",
                 self.last_port60_byte
             );
@@ -176,7 +176,7 @@ impl PS2 {
             });
             self.last_port60_byte = self.kbd_buffer.pop_front().unwrap();
             dbg_log!(
-                Module::PS2,
+                LOG::PS2,
                 "Port 60 read (kbd)  : {:#X}",
                 self.last_port60_byte
             );
@@ -190,7 +190,7 @@ impl PS2 {
     }
 
     fn port64_write(&mut self, write_byte: u8) {
-        dbg_log!(Module::PS2, "port 64 write: {:#X}", write_byte);
+        dbg_log!(LOG::PS2, "port 64 write: {:#X}", write_byte);
         match write_byte {
             0x20 => {
                 self.kbd_buffer.clear();
@@ -204,12 +204,12 @@ impl PS2 {
             0xD4 => self.next_is_mouse_command = true,
             0xA7 => {
                 // Disable second port
-                dbg_log!(Module::PS2, "Disable second port");
+                dbg_log!(LOG::PS2, "Disable second port");
                 self.command_register |= 0x20;
             }
             0xA8 => {
                 // Enable second port
-                dbg_log!(Module::PS2, "Enable second port");
+                dbg_log!(LOG::PS2, "Enable second port");
                 self.command_register &= !0x20;
             }
             0xA9 => {
@@ -234,23 +234,23 @@ impl PS2 {
             }
             0xAD => {
                 // Disable Keyboard
-                dbg_log!(Module::PS2, "Disable Keyboard");
+                dbg_log!(LOG::PS2, "Disable Keyboard");
                 self.command_register |= 0x10;
             }
             0xAE => {
                 // Enable Keyboard
-                dbg_log!(Module::PS2, "Enable Keyboard");
+                dbg_log!(LOG::PS2, "Enable Keyboard");
                 self.command_register &= !0x10;
             }
             0xFE => {
-                dbg_log!(Module::PS2, "CPU reboot via PS2");
+                dbg_log!(LOG::PS2, "CPU reboot via PS2");
                 self.store.cpu_mut().map(|cpu| {
                     cpu.reboot_internal();
                 });
             }
             _ => {
                 dbg_log!(
-                    Module::PS2,
+                    LOG::PS2,
                     "port 64: Unimplemented command byte: {:#X}",
                     write_byte
                 );
@@ -259,7 +259,7 @@ impl PS2 {
     }
 
     fn port60_write(&mut self, write_byte: u8) {
-        dbg_log!(Module::PS2, "port 60 write: {:#X}", write_byte);
+        dbg_log!(LOG::PS2, "port 60 write: {:#X}", write_byte);
         if self.read_command_register {
             self.command_register = write_byte;
             self.read_command_register = false;
@@ -269,7 +269,7 @@ impl PS2 {
             //this.kbd_irq();
 
             dbg_log!(
-                Module::PS2,
+                LOG::PS2,
                 "Keyboard command register = {:#X}",
                 self.command_register
             );
@@ -285,9 +285,9 @@ impl PS2 {
             self.mouse_buffer.push_back(0xFA);
 
             self.sample_rate = write_byte;
-            dbg_log!(Module::PS2, "mouse sample rate: {:#X}", write_byte);
+            dbg_log!(LOG::PS2, "mouse sample rate: {:#X}", write_byte);
             if self.sample_rate == 0 {
-                dbg_log!(Module::PS2, "invalid sample rate, reset to 100");
+                dbg_log!(LOG::PS2, "invalid sample rate, reset to 100");
                 self.sample_rate = 100;
             }
             self.mouse_irq();
@@ -298,10 +298,10 @@ impl PS2 {
 
             if write_byte > 3 {
                 self.resolution = 4;
-                dbg_log!(Module::PS2, "invalid resolution, resetting to 4");
+                dbg_log!(LOG::PS2, "invalid resolution, resetting to 4");
             } else {
                 self.resolution = 1 << write_byte;
-                dbg_log!(Module::PS2, "resolution: {}", self.resolution);
+                dbg_log!(LOG::PS2, "resolution: {}", self.resolution);
             }
             self.mouse_irq();
         } else if self.next_read_led {
@@ -328,7 +328,7 @@ impl PS2 {
         } else if self.next_is_mouse_command {
             self.next_is_mouse_command = false;
             dbg_log!(
-                Module::PS2,
+                LOG::PS2,
                 "Port 60 data register write: {:#X}",
                 write_byte
             );
@@ -345,12 +345,12 @@ impl PS2 {
             match write_byte {
                 0xE6 => {
                     // set scaling to 1:1
-                    dbg_log!(Module::PS2, "Scaling 1:1");
+                    dbg_log!(LOG::PS2, "Scaling 1:1");
                     self.scaling2 = false;
                 }
                 0xE7 => {
                     // set scaling to 2:1
-                    dbg_log!(Module::PS2, "Scaling 2:1");
+                    dbg_log!(LOG::PS2, "Scaling 2:1");
                     self.scaling2 = true;
                 }
                 0xE8 => {
@@ -363,7 +363,7 @@ impl PS2 {
                 }
                 0xEB => {
                     // request single packet
-                    dbg_log!(Module::PS2, "unimplemented request single packet");
+                    dbg_log!(LOG::PS2, "unimplemented request single packet");
                     self.send_mouse_packet(0, 0);
                 }
                 0xF2 => {
@@ -402,7 +402,7 @@ impl PS2 {
                 }
                 0xFF => {
                     // reset, send completion code
-                    dbg_log!(Module::PS2, "Mouse reset");
+                    dbg_log!(LOG::PS2, "Mouse reset");
                     self.mouse_buffer.push_back(0xAA);
                     self.mouse_buffer.push_back(0);
 
@@ -422,7 +422,7 @@ impl PS2 {
 
                 _ => {
                     dbg_log!(
-                        Module::PS2,
+                        LOG::PS2,
                         "Unimplemented mouse command: {:#X}",
                         write_byte
                     );
@@ -436,7 +436,7 @@ impl PS2 {
             // we should turn the masking off if the second bit is on
         } else {
             dbg_log!(
-                Module::PS2,
+                LOG::PS2,
                 "Port 60 data register write: {:#X}",
                 write_byte
             );
@@ -459,12 +459,12 @@ impl PS2 {
                 0xF3 => self.next_read_rate = true,
                 0xF4 => {
                     // enable scanning
-                    dbg_log!(Module::PS2, "kbd enable scanning");
+                    dbg_log!(LOG::PS2, "kbd enable scanning");
                     self.enable_keyboard_stream = true;
                 }
                 0xF5 => {
                     // disable scanning
-                    dbg_log!(Module::PS2, "kbd disable scanning");
+                    dbg_log!(LOG::PS2, "kbd disable scanning");
                     self.enable_keyboard_stream = false;
                 }
                 0xF6 => {}
@@ -476,7 +476,7 @@ impl PS2 {
                 }
                 _ => {
                     dbg_log!(
-                        Module::PS2,
+                        LOG::PS2,
                         "Unimplemented keyboard command: {:#X}",
                         write_byte
                     );
@@ -488,7 +488,7 @@ impl PS2 {
 
     fn kbd_send_code(&mut self, code: u8) {
         if self.enable_keyboard_stream {
-            dbg_log!(Module::PS2, "adding kbd code: {:#X}", code);
+            dbg_log!(LOG::PS2, "adding kbd code: {:#X}", code);
             self.kbd_buffer.push_back(code);
             self.raise_irq();
         }
@@ -514,7 +514,7 @@ impl PS2 {
         self.next_byte_is_aux = true;
 
         if self.command_register & 2 > 0 {
-            dbg_log!(Module::PS2, "Mouse irq");
+            dbg_log!(LOG::PS2, "Mouse irq");
 
             // Pulse the irq line
             // Note: can't lower immediately after rising, so lower before rising
@@ -531,7 +531,7 @@ impl PS2 {
         self.next_byte_is_aux = false;
 
         if self.command_register & 1 > 0 {
-            dbg_log!(Module::PS2, "Keyboard irq");
+            dbg_log!(LOG::PS2, "Keyboard irq");
 
             // Pulse the irq line
             // Note: can't lower immediately after rising, so lower before rising
@@ -610,7 +610,7 @@ impl PS2 {
 
         if PS2_LOG_VERBOSE {
             dbg_log!(
-                Module::PS2,
+                LOG::PS2,
                 "adding mouse packets: {} {} {}",
                 info_byte,
                 dx,
