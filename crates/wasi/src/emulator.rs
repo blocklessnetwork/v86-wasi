@@ -6,7 +6,7 @@ use wasmtime::{Instance, Extern, Linker, Table, Store};
 use crate::{
     ContextTrait,
     bus::BUS, dma::DMA, floppy::FloppyController, io::IO, log, pci::PCI, pic::PIC, pit::PIT,
-    ps2::PS2, rtc::RTC, screen::Screen, uart::UART, vga::VGAScreen, Setting, StoreT, CPU, ne2k::Ne2k, jit::{JitMsg, JitWorker}, WASM_TABLE_OFFSET,
+    ps2::PS2, rtc::RTC, screen::Screen, uart::UART, vga::VGAScreen, Setting, StoreT, CPU, ne2k::Ne2k, jit::{JitMsg, JitWorker}, WASM_TABLE_OFFSET, ide::IDEDevice,
 };
 
 pub(crate) struct InnerEmulator {
@@ -209,7 +209,6 @@ impl Emulator {
                     cpu.codegen_finalize_finished(index, start, state_flags);
                     cpu.store_mut().map(|store| {
                         self.inner_mut().table.map(|table| {
-                            println!("11111ss");
                             table.set(store, WASM_TABLE_OFFSET + index as u32, func).unwrap();
                         })
                     });
@@ -322,6 +321,16 @@ impl Emulator {
     #[inline]
     pub(crate) fn ne2k(&self) -> Option<&Ne2k> {
         self.inner_mut().cpu.as_ref().map(|cpu| &cpu.ne2k)
+    }
+
+    #[inline]
+    pub(crate) fn ide_mut(&self) -> Option<&mut IDEDevice> {
+        self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.ide)
+    }
+
+    #[inline]
+    pub(crate) fn ide(&self) -> Option<&IDEDevice> {
+        self.inner_mut().cpu.as_ref().map(|cpu| &cpu.ide)
     }
 
     #[inline]

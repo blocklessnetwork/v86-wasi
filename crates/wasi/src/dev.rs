@@ -4,7 +4,7 @@ use std::rc::Rc;
 use crate::{
     bus::BUS, debug::Debug, dma::DMA, floppy::FloppyController, io::IO, pci::PCI, pic::PIC,
     pit::PIT, ps2::PS2, rtc::RTC, screen::Screen, uart::UART, vga::VGAScreen, ContextTrait,
-    Emulator, StoreT, CPU, ne2k::Ne2k,
+    Emulator, StoreT, CPU, ne2k::Ne2k, ide::IDEDevice,
 };
 
 #[derive(Clone)]
@@ -242,9 +242,27 @@ impl Dev {
             _ => None,
         }
     }
+
+    #[inline]
+    pub(crate) fn ide_mut(&self) -> Option<&mut IDEDevice> {
+        match *self {
+            Dev::Emulator(ref e) => e.ide_mut(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn ide(&self) -> Option<&IDEDevice> {
+        match *self {
+            Dev::Emulator(ref e) => e.ide(),
+            _ => None,
+        }
+    }
 }
 
 pub(crate) struct OptionRom {
     pub name: String,
     pub data: Rc<Vec<u8>>,
 }
+
+

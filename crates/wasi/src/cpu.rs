@@ -29,7 +29,7 @@ use crate::{
     timewheel::TimeWheel,
     uart::UART,
     vga::VGAScreen,
-    ContextTrait, Dev, Emulator, StoreT, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, ne2k::Ne2k, ide,
+    ContextTrait, Dev, Emulator, StoreT, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, ne2k::Ne2k, ide::{self, IDEDevice},
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -89,6 +89,13 @@ impl IOMap {
         self.mem8
             .as_mut()
             .map(|mem8| mem8.write_slice(store, offset, bs));
+    }
+
+    #[inline]
+    fn mem8_read_slice(&mut self, store: impl AsContextMut, offset: usize, bs: &mut [u8]) {
+        self.mem8
+            .as_mut()
+            .map(|mem8| mem8.read_slice(store, offset, bs));
     }
 
     #[inline]
@@ -331,6 +338,7 @@ pub struct CPU {
     pub(crate) uart0: UART,
     pub(crate) debug: Debug,
     pub(crate) mmap_fn: MMapFn,
+    pub(crate) ide: IDEDevice,
     pub(crate) vga: VGAScreen,
     pub(crate) fdc: FloppyController,
 }
@@ -357,12 +365,14 @@ impl CPU {
         let vga = VGAScreen::new(store.clone(), vga_mem_size);
         let uart0 = UART::new(store.clone(), 0x3F8);
         let ne2k = Ne2k::new(store.clone());
+        let ide = IDEDevice::new(store.clone(), None, None, false, 0);
         Self {
             ps2,
             rtc,
             pit,
             fdc,
             vga,
+            ide,
             ne2k,
             uart0,
             memory,
@@ -454,18 +464,18 @@ impl CPU {
     }
 
     #[inline]
-    fn read8(&mut self, addr: u32) -> i32 {
+    pub(crate) fn read8(&mut self, addr: u32) -> i32 {
         self.store_mut()
             .map_or(0, |store| self.vm_opers.read8(store, addr))
     }
 
     #[inline]
-    fn read16(&mut self, addr: u32) -> i32 {
+    pub(crate) fn read16(&mut self, addr: u32) -> i32 {
         self.store_mut()
             .map_or(0, |store| self.vm_opers.read16(store, addr))
     }
 
-    fn read32s(&mut self, addr: u32) -> i32 {
+    pub(crate) fn read32s(&mut self, addr: u32) -> i32 {
         self.store_mut()
             .map_or(0, |store| self.vm_opers.read32s(store, addr))
     }
@@ -559,6 +569,13 @@ impl CPU {
     pub fn mem8_write(&mut self, idx: u32, s: u8) {
         self.store_mut().map(|store| {
             self.iomap.mem8_write(store, idx, s);
+        });
+    }
+
+    #[inline]
+    pub fn mem8_read_slice(&mut self, idx: usize, s: &mut [u8]) {
+        self.store_mut().map(|store| {
+            self.iomap.mem8_write_slice(store, idx, s);
         });
     }
 

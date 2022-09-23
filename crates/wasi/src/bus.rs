@@ -14,6 +14,8 @@ pub(crate) enum BusData {
     U16Tuple(u16, u16),
     MouseEvent(u8, u8, u8),
     PcspeakerUpdate(u8, u16),
+    IdeReadEnd(u8, usize, usize),
+    IdeWriteEnd(u8, usize, usize),
     ScreenPutChar(u16, u16, u8, i32, i32),
     ScreenSetSizeGraphical(u32, u32, u32, u32, u16),
 }

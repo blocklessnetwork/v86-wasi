@@ -10,6 +10,7 @@ type StoreT = Weak<Store<Emulator>>;
 
 use bus::BUS;
 use dma::DMA;
+use ide::IDEDevice;
 use io::IO;
 use ne2k::Ne2k;
 use pci::PCI;
@@ -47,9 +48,9 @@ mod timewheel;
 pub(crate) mod consts;
 pub use consts::*;
 pub use cpu::CPU;
+pub(crate) use log::LOG;
 pub use emulator::Emulator;
 use floppy::FloppyController;
-pub(crate) use log::LOG;
 pub use setting::*;
 
 pub use dev::Dev;
@@ -150,6 +151,9 @@ trait ContextTrait {
     fn ne2k(&self) -> Option<&Ne2k>;
 
     fn microtick(&self) -> f64;
+
+    fn ide(&self) -> Option<&IDEDevice>;
+    fn ide_mut(&self) -> Option<&mut IDEDevice>;
 }
 
 impl ContextTrait for StoreT {
@@ -218,7 +222,17 @@ impl ContextTrait for StoreT {
 
     #[inline]
     fn bus(&self) -> Option<&BUS> {
-        self.emulator_mut().bus()
+        self.emulator().bus()
+    }
+
+    #[inline]
+    fn ide(&self) -> Option<&IDEDevice> {
+        self.emulator().ide()
+    }
+
+    #[inline]
+    fn ide_mut(&self) -> Option<&mut IDEDevice> {
+        self.emulator_mut().ide_mut()
     }
 
     #[inline]
@@ -662,3 +676,12 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
     mem::add_mem_to_linker(linker);
 }
 
+
+pub(crate) trait FileBuffer {
+    
+    fn get(&mut self, start: usize, len: usize, cb: Box<dyn Fn(&StoreT, &[u8])>);
+    
+    fn set(&mut self, offset: usize, sl: &[u8], cb: Box<dyn Fn(&StoreT)>);
+
+    fn byte_length(&self) -> usize;
+}
