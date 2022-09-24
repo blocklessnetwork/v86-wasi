@@ -119,6 +119,13 @@ impl RTC {
         self.cmos_data[index as usize] = v;
     }
 
+    #[inline]
+    pub fn cmos_read(&self, index: u8) -> u8 {
+        assert!(index < 128);
+        return self.cmos_data[index  as usize];
+    }
+
+
     fn cmos_port_read8(dev: &Dev, _port: u32) -> u8 {
         dev.rtc_mut().map_or(0, |rtc| {
             let index = rtc.cmos_index;

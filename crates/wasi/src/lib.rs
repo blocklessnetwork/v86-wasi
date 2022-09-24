@@ -679,9 +679,9 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
 
 pub(crate) trait FileBuffer {
     
-    fn get(&mut self, start: usize, len: usize, cb: Box<dyn Fn(&StoreT, &[u8])>);
+    fn get(&mut self, start: usize, len: usize, cb: Box<dyn FnOnce(&StoreT, &[u8])>);
     
-    fn set(&mut self, offset: usize, sl: &[u8], cb: Box<dyn Fn(&StoreT)>);
+    fn set(&mut self, offset: usize, sl: &[u8], cb: Box<dyn FnOnce(&StoreT)>);
 
     fn byte_length(&self) -> usize;
 }

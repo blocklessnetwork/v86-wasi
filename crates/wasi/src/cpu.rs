@@ -690,6 +690,7 @@ impl CPU {
         self.uart0.init();
         self.dma.init();
         self.fdc.init();
+        self.ide.init();
         self.vga.init();
         self.ne2k.init();
         self.reset_cpu();

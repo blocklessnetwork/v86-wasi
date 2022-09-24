@@ -216,7 +216,7 @@ impl UART {
                 |dev: &Dev, _addr: u32, out_byte: u8| {
                     dev.uart0_mut().map(|uart| {
                         dbg_log!(LOG::SERIAL, "line control: {:#X}", out_byte);
-                        uart.fifo_control = out_byte;
+                        uart.line_control = out_byte;
                     });
                 },
             );
@@ -250,7 +250,7 @@ impl UART {
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32| {
                     dev.uart0_mut().map_or(0, |uart| {
-                        dbg_log!(LOG::SERIAL, "read line status: {:#X}", uart.line_control);
+                        dbg_log!(LOG::SERIAL, "read line status: {:#X}", uart.lsr);
                         return uart.lsr;
                     })
                 },
@@ -261,7 +261,7 @@ impl UART {
                 self.port | 5,
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, _out_byte: u8| {
-                    dev.uart0_mut().map(|uart| {
+                    dev.uart0_mut().map(|_uart| {
                         dbg_log!(LOG::SERIAL, "Factory test write");
                     });
                 },
@@ -288,7 +288,7 @@ impl UART {
                 self.port | 6,
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, _out_byte: u8| {
-                    dev.uart0_mut().map(|uart| {
+                    dev.uart0_mut().map(|_uart| {
                         dbg_log!(LOG::SERIAL, "Unkown register write (base+6)");
                     });
                 },
@@ -363,8 +363,11 @@ impl UART {
     }
 
     fn write_data(&mut self, out_byte: u8) {
+        
         if self.line_control & DLAB > 0 {
+            dbg_log!(LOG::SERIAL, "data return : {:#X}", self.line_control);
             self.baud_rate = self.baud_rate & !0xFF | out_byte as u16;
+
             return;
         }
 

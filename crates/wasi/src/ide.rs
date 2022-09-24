@@ -1,7 +1,7 @@
 #![allow(unused)]
 use std::{collections::HashSet};
 
-use crate::{StoreT, ContextTrait, Dev, log::LOG, bus::BusData, io::IO, FileBuffer, pci::GenericPCIDevice};
+use crate::{StoreT, ContextTrait, Dev, log::LOG, bus::BusData, io::IO, FileBuffer, pci::{GenericPCIDevice, PCIBar}, CMOS_BIOS_DISKTRANSFLAG, CMOS_DISK_DATA, CMOS_DISK_DRIVE1_CYL};
 
 const CDROM_SECTOR_SIZE: u32 = 2048;
 
@@ -14,6 +14,7 @@ struct IDEInterface {
     error: u16,
     status: u8,
     is_lba: u8,
+    is_cd: bool,
     sector: u16,
     last_id: u32,
     data: Vec<u8>,
@@ -26,6 +27,7 @@ struct IDEInterface {
     data_end: usize,
     sector_size: u32,
     cylinder_low: u16,
+    write_dest: usize,
     cylinder_high: u16,
     sector_count: u32,
     last_io_id: usize,
@@ -33,6 +35,7 @@ struct IDEInterface {
     data_pointer: usize,
     sectors_per_drq: u8,
     current_command: u8,
+    cylinder_count: u32,
     sectors_per_track: u16,
     current_atapi_command: u8,
     data16: &'static mut [u16],
@@ -79,17 +82,20 @@ impl IDEInterface {
         let drive_head = 0;
         let data_pointer = 0;
         let data_length = 0;
+        let cylinder_count = 0;
         let current_command = 0xFF;
         let current_atapi_command = 0xFF;
         let sectors_per_track = 0;
         let head_count = 0;
         let lba_count = 0;
         let last_io_id = 0;
+        let write_dest = 0;
         let sectors_per_drq = 0x80;
         IDEInterface { 
             nr,
             data,
             head,
+            is_cd,
             store,
             status,
             error,
@@ -107,18 +113,72 @@ impl IDEInterface {
             head_count,
             drive_head,
             last_io_id,
+            write_dest,
             data_length,
             sector_size,
             sector_count,
             data_pointer,
             cylinder_low,
             cylinder_high,
+            cylinder_count,
             current_command,
             sectors_per_drq,
             cancelled_io_ids,
             sectors_per_track,
             in_progress_io_ids,
             current_atapi_command,
+        }
+    }
+
+    fn init(&mut self) {
+        if self.buffer.is_some() {
+            let byte_length = self.buffer.as_ref().map(|b| b.byte_length()).unwrap();
+            let sector_count = byte_length as f64 / self.sector_size as f64;
+
+            self.sector_count = if self.sector_count != (self.sector_count | 0) {
+                dbg_log!(LOG::DISK, "Warning: Disk size not aligned with sector size");
+                sector_count.ceil() as u32
+            } else {
+                self.sector_count as u32
+            };
+
+            if self.is_cd {
+                self.head_count = 1;
+                self.sectors_per_track = 0;
+            } else {
+                // "default" values: 16/63
+                // common: 255, 63
+                self.head_count = 16;
+                self.sectors_per_track = 63;
+            }
+
+
+            let cylinder_count = self.sector_count as f64 / self.head_count as f64 / self.sectors_per_track as f64;
+
+            self.cylinder_count = if self.cylinder_count != (self.cylinder_count | 0) {
+                dbg_log!(LOG::DISK, "Warning: Rounding up cylinder count. Choose different head number");
+                cylinder_count.floor() as u32
+            } else  {
+                cylinder_count as u32
+            };
+            self.store.rtc_mut().map(|rtc| {
+                rtc.cmos_write(CMOS_BIOS_DISKTRANSFLAG,
+                    rtc.cmos_read(CMOS_BIOS_DISKTRANSFLAG) | 1 << self.nr * 4); 
+
+                rtc.cmos_write(CMOS_DISK_DATA, rtc.cmos_read(CMOS_DISK_DATA) & 0x0F | 0xF0);
+                let reg = CMOS_DISK_DRIVE1_CYL;
+                rtc.cmos_write(reg + 0, (self.cylinder_count & 0xFF) as u8);
+                rtc.cmos_write(reg + 1, (self.cylinder_count >> 8 & 0xFF) as u8);
+                rtc.cmos_write(reg + 2, (self.head_count & 0xFF) as u8);
+                rtc.cmos_write(reg + 3, 0xFF);
+                rtc.cmos_write(reg + 4, 0xFF);
+                rtc.cmos_write(reg + 5, 0xC8);
+
+                rtc.cmos_write(reg + 6, (self.cylinder_count & 0xFF) as u8);
+                rtc.cmos_write(reg + 7, (self.cylinder_count >> 8 & 0xFF) as u8);
+                rtc.cmos_write(reg + 8, (self.sectors_per_track & 0xFF) as u8);
+            });
+
         }
     }
 
@@ -226,18 +286,15 @@ impl IDEInterface {
         self.status = 0x50;
     
         assert!(self.data_length <= self.data.len());
-        let data = &self.data[0..self.data_length];
-    
         //dbg_log(hex_dump(data), LOG_DISK);
         assert!(self.data_length % 512 == 0);
         self.ata_advance(self.current_command, (self.data_length / 512) as u32);
         self.push_irq();
-    
-        //TODO:
-        // self.buffer.set(this.write_dest, data, function()
-        // {
-        // });
-    
+
+        self.buffer.as_mut().map(|b| {
+            let data = &self.data[0..self.data_length];
+            b.set(self.write_dest, data, Box::new(|store| {}));
+        });
         self.report_write(self.data_length);
     }
 
@@ -286,6 +343,7 @@ impl IDEInterface {
         self.data.copy_from_slice(data);
     }
 
+    #[inline]
     fn data_allocate_noclear(&mut self, len: usize) {
         if self.data.len() < len {
             self.data = vec![0; len + 3 & !3];
@@ -359,7 +417,6 @@ impl IDEInterface {
             let is_master = self.is_master;
             buffer.get(start, length, Box::new(move |store, bs| {
                 store.ide_mut().map(|ide| {
-                    //TODO remove the test
                     let ide_i = ide.interface_mut(is_master);
                     if ide_i.cancelled_io_ids.remove(&id) {
                         assert!(!ide_i.in_progress_io_ids.contains(&id));
@@ -371,6 +428,450 @@ impl IDEInterface {
                 });
             }));
         });
+    }
+
+    fn create_identify_packet(&mut self) {
+        if self.drive_head & 0x10 > 0 {
+            // slave
+            self.data_allocate(0);
+            return;
+        }
+
+        for i in 0..512 {
+            self.data[i] = 0;
+        }
+        let cylinder_count = 16383.min(self.cylinder_count);
+        let apapi = if self.is_atapi { 
+            0x85 
+        } else {
+            0
+        }; 
+        self.data_set(&[
+            0x40, apapi, 
+            cylinder_count as u8, (cylinder_count >> 8) as u8,
+            0, 0,
+            (self.head_count) as u8, (self.head_count >> 8) as u8,
+            (self.sectors_per_track / 512) as u8, (self.sectors_per_track / 512 >> 8) as u8,
+            0, (512 >> 8) as u8,
+            // sectors per track
+            (self.sectors_per_track) as u8, (self.sectors_per_track >> 8) as u8,
+            0, 0, 0, 0, 0, 0,
+            // 10-19 serial number
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            // 15
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            // 20
+            3, 0,
+            0, 2,
+            4, 0,
+            // 23-26 firmware revision
+            0, 0, 0, 0, 0, 0, 0, 0,
+
+            // 27 model number
+            56, 118, 32, 54, 68, 72, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
+            32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
+
+            // 47 max value for set multiple mode
+            0x80, 0,
+            1, 0,
+            //0, 3,  // capabilities, 2: Only LBA / 3: LBA and DMA
+            0, 2,  // capabilities, 2: Only LBA / 3: LBA and DMA
+            // 50
+            0, 0,
+            0, 2,
+            0, 2,
+            7, 0,
+            // 54 cylinders
+            cylinder_count as u8, (cylinder_count >> 8) as u8,
+            // 55 heads
+            self.head_count as u8, (self.head_count >> 8) as u8,
+            // 56 sectors per track
+            self.sectors_per_track as u8, 0,
+            // capacity in sectors
+            (self.sector_count & 0xFF) as u8, (self.sector_count >> 8 & 0xFF) as u8,
+            (self.sector_count >> 16 & 0xFF) as u8, (self.sector_count >> 24 & 0xFF) as u8,
+
+            0, 0,
+            // 60
+            (self.sector_count & 0xFF) as u8, (self.sector_count >> 8 & 0xFF) as u8,
+            (self.sector_count >> 16 & 0xFF) as u8, (self.sector_count >> 24 & 0xFF) as u8,
+
+            0, 0,
+            // 63, dma supported mode, dma selected mode
+            if self.current_command == 0xA0 { 0 } else {7}, if self.current_command == 0xA0 { 0 } else { 4 },
+            //0, 0, // no DMA
+
+            0, 0,
+            // 65
+            30, 0, 30, 0, 30, 0, 30, 0, 0, 0,
+            // 70
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            // 75
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            // 80
+            0x7E, 0, 0, 0, 0, 0, 0, 0x74, 0, 0x40,
+            // 85
+            0, 0x40, 0, 0x74, 0, 0x40, 0, 0, 0, 0,
+            // 90
+            0, 0, 0, 0, 0, 0, 1, 0x60, 0, 0,
+            // 95
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            // 100
+            (self.sector_count & 0xFF) as u8, (self.sector_count >> 8 & 0xFF) as u8,
+            (self.sector_count >> 16 & 0xFF) as u8, (self.sector_count >> 24 & 0xFF) as u8,    
+        ]);
+    }
+
+    fn ata_command(&mut self, cmd: u8) {
+        dbg_log!(LOG::DISK, "ATA Command: {:#X} slave={}", cmd, self.drive_head >> 4 & 1);
+
+        if self.buffer.is_none() {
+            dbg_log!(LOG::DISK, "abort: No buffer");
+            self.error = 4;
+            self.status = 0x41;
+            self.push_irq();
+            return;
+        }
+
+        self.current_command = cmd;
+        self.error = 0;
+
+        match cmd {
+            0x08 => {
+                dbg_log!(LOG::DISK, "ATA device reset");
+                self.data_pointer = 0;
+                self.data_end = 0;
+                self.data_length = 0;
+                self.device_reset();
+                self.push_irq();
+            }
+
+            0x10 => {
+                // calibrate drive
+                self.status = 0x50;
+                self.cylinder_low = 0;
+                self.push_irq();
+            }
+
+            0xF8 => {
+                // read native max address
+                self.status = 0x50;
+                let last_sector = self.sector_count - 1;
+                self.sector = (last_sector & 0xFF) as u16;
+                self.cylinder_low = (last_sector >> 8 & 0xFF) as u16;
+                self.cylinder_high = (last_sector >> 16 & 0xFF) as u16;
+                self.drive_head = self.drive_head & 0xF0 | (last_sector >> 24 & 0x0F) as u16;
+                self.push_irq();
+            }
+
+            0x27 => {
+                // read native max address ext
+                self.status = 0x50;
+                let last_sector = self.sector_count - 1;
+                self.sector = (last_sector & 0xFF) as u16;
+                self.cylinder_low = (last_sector >> 8 & 0xFF) as u16;
+                self.cylinder_high = (last_sector >> 16 & 0xFF) as u16;
+                self.sector |= (last_sector >> 24 << 8 & 0xFF00) as u16;
+                self.push_irq();
+            }
+
+            // 0x20 read sectors
+            // 0x24 read sectors ext
+            // 0xC4 read multiple
+            // 0x29 read multiple ext
+            0x20|0x24|0x29|0xC4 => self.ata_read_sectors(cmd),
+
+            // 0x30 write sectors
+            // 0x34 write sectors ext
+            // 0xC5 write multiple
+            // 0x39 write multiple ext
+            0x30|0x34|0x39|0xC5 => self.ata_write_sectors(cmd),
+
+            0x90 => {
+                // execute device diagnostic
+                self.push_irq();
+                self.error = 0x101;
+                self.status = 0x50;
+            }
+            0x91 => {
+                // initialize device parameters
+                self.status = 0x50;
+                self.push_irq();
+            }
+
+            0xA0 => {
+                // ATA packet
+                if self.is_atapi {
+                    self.status = 0x58;
+                    self.data_allocate(12);
+                    self.data_end = 12;
+                    self.bytecount = 1;
+                    self.push_irq();
+                }
+            }
+
+            0xA1 => {
+                dbg_log!(LOG::DISK, "ATA identify packet device");
+
+                if self.is_atapi {
+                    self.create_identify_packet();
+                    self.status = 0x58;
+
+                    self.cylinder_low = 0x14;
+                    self.cylinder_high = 0xEB;
+
+                    self.push_irq();
+                } else {
+                    self.status = 0x41;
+                    self.push_irq();
+                }
+            }
+
+            0xC6 => {
+                // set multiple mode
+                // Logical sectors per DRQ Block in word 1
+                dbg_log!(
+                    LOG::DISK, 
+                    "Logical sectors per DRQ Block: {:#X}",
+                    self.bytecount & 0xFF
+                );
+                self.sectors_per_drq = (self.bytecount & 0xFF) as u8;
+                self.status = 0x50;
+                self.push_irq();
+            }
+            // read dma ext
+            // read dma
+            0x25|0xC8 => self.ata_read_sectors_dma(cmd),
+            // write dma ext
+            // write dma
+            0x35|0xCA => self.ata_write_sectors_dma(cmd),
+            0x40 => {
+                dbg_log!(LOG::DISK, "read verify sectors");
+                self.status = 0x50;
+                self.push_irq();
+            }
+            0xDA => {
+                dbg_log!(LOG::DISK, "Unimplemented: get media status");
+                self.status = 0x41;
+                self.error = 4;
+                self.push_irq();
+            }
+
+            0xE0 => {
+                dbg_log!(LOG::DISK, "ATA standby immediate");
+                self.status = 0x50;
+                self.push_irq();
+            }
+
+            0xE1 => {
+                dbg_log!(LOG::DISK, "ATA idle immediate");
+                self.status = 0x50;
+                self.push_irq();
+            }
+
+            0xE7 => {
+                dbg_log!(LOG::DISK, "ATA flush cache");
+                self.status = 0x50;
+                self.push_irq();
+            }
+
+            0xEC => {
+                dbg_log!(LOG::DISK, "ATA identify device");
+
+                if self.is_atapi {
+                    self.status = 0x41;
+                    self.error = 4;
+                    self.push_irq();
+                    return;
+                }
+
+                self.create_identify_packet();
+                self.status = 0x58;
+
+                self.push_irq();
+            }
+
+            0xEA => {
+                dbg_log!(LOG::DISK, "flush cache ext");
+                self.status = 0x50;
+                self.push_irq();
+            }
+
+            0xEF => {
+                dbg_log!(LOG::DISK, "set features: {:#X}", self.bytecount & 0xFF);
+                self.status = 0x50;
+                self.push_irq();
+            }
+
+            0xDE => {
+                // obsolete
+                self.status = 0x50;
+                self.push_irq();
+            }
+
+            0xF5 => {
+                dbg_log!(LOG::DISK, "security freeze lock");
+                self.status = 0x50;
+                self.push_irq();
+            }
+
+            0xF9 => {
+                dbg_log!(LOG::DISK, "Unimplemented: set max address");
+                self.status = 0x41;
+                self.error = 4;
+            }
+            
+            _ => {
+                assert!(false, "New ATA cmd on 1F7: {:#X}", cmd);
+
+                self.status = 0x41;
+                // abort bit set
+                self.error = 4;
+            }
+        }
+    }
+
+    fn ata_write_sectors_dma(&mut self, cmd: u8) {
+        let is_lba48 = cmd == 0x35;
+        let count = self.get_count(is_lba48);
+        let lba = self.get_lba(is_lba48);
+
+        let byte_count = count * self.sector_size;
+        let start = lba * self.sector_size;
+
+        dbg_log!(
+            LOG::DISK, 
+            "ATA DMA write lba={:#X} lbacount={:#X} bytecount={:#X}",
+            lba, count, byte_count
+        );
+        let byte_length =  self.buffer.as_ref().map(|b| b.byte_length()).unwrap();
+        if (start + byte_count) as usize > byte_length {
+            assert!(false, "ATA DMA write: Outside of disk");
+
+            self.status = 0xFF;
+            self.push_irq();
+            return;
+        }
+
+        self.status = 0x58;
+        self.store.ide_mut().map(|ide| ide.dma_status |= 1);
+    }
+
+    fn ata_read_sectors_dma(&mut self, cmd: u8) {
+        let is_lba48 = cmd == 0x25;
+        let count = self.get_count(is_lba48);
+        let lba = self.get_lba(is_lba48);
+
+        let byte_count = (count * self.sector_size) as usize;
+        let start = (lba * self.sector_size) as usize;
+
+        dbg_log!(LOG::DISK, 
+            "ATA DMA read lba={:#X} lbacount={:#X} bytecount={:#X}", 
+            lba, count, byte_count
+        );
+        let byte_length = self.buffer.as_ref().map(|b| b.byte_length()).unwrap();
+        if start + byte_count > byte_length {
+            assert!(false, "ATA read: Outside of disk");
+
+            self.status = 0xFF;
+            self.push_irq();
+            return;
+        }
+
+        self.status = 0x58;
+        self.store.ide_mut().map(|ide| ide.dma_status |= 1);
+    }
+
+    fn ata_write_sectors(&mut self, cmd: u8) {
+        let is_lba48 = cmd == 0x34 || cmd == 0x39;
+        let count = self.get_count(is_lba48);
+        let lba = self.get_lba(is_lba48);
+
+        let is_single = cmd == 0x30 || cmd == 0x34;
+
+        let byte_count = (count * self.sector_size) as usize;
+        let start = (lba * self.sector_size) as usize;
+
+        let mode = if self.is_lba > 0 {
+            "lba"
+        } else {
+            "chs"
+        };
+        dbg_log!(
+            LOG::DISK, 
+            "ATA write lba={:#X} mode={} lbacount={:#X} bytecount={:#X}",
+            lba, mode, count, byte_count
+        );
+        let byte_length = self.buffer.as_ref().map(|b| b.byte_length()).unwrap();
+        if start + byte_count > byte_length {
+            assert!(false, "ATA write: Outside of disk");
+
+            self.status = 0xFF;
+            self.push_irq();
+        } else {
+            self.status = 0x58;
+            self.data_allocate_noclear(byte_count);
+            self.data_end = if is_single {
+                512
+            } else {
+                byte_count.min((self.sectors_per_drq as usize) * 512)
+            };
+            self.write_dest = start;
+        }
+    }
+
+    fn ata_read_sectors(&mut self, cmd: u8) {
+        let is_lba48 = cmd == 0x24 || cmd == 0x29;
+        let count = self.get_count(is_lba48);
+        let lba = self.get_lba(is_lba48);
+
+        let is_single = cmd == 0x20 || cmd == 0x24;
+
+        let byte_count = (count * self.sector_size) as usize;
+        let start = (lba * self.sector_size) as usize;
+
+        let mode = if self.is_lba > 0 {
+            "lba"
+        }  else { 
+            "chs"
+        };
+        dbg_log!(
+            LOG::DISK, 
+            "ATA read cmd={:#X} mode={} lba={:#X} lbacount={:#X} bytecount={:#X}",
+            cmd, mode, lba, count, byte_count
+        );
+        let byte_len = self.buffer.as_ref().map(|buffer| buffer.byte_length()).unwrap();
+        if start + byte_count > byte_len {
+            assert!(false, "ATA read: Outside of disk");
+
+            self.status = 0xFF;
+            self.push_irq();
+        } else {
+            self.status = 0x80 | 0x40;
+            self.report_read_start();
+            let is_master = self.is_master;
+            self.read_buffer(start, byte_count, Box::new(move |store, data| {
+                store.ide_mut().map(|ide| {
+                    dbg_log!(LOG::DISK, "ata_read: Data arrived");
+                    let ide_i = ide.interface_mut(is_master);
+                    ide_i.data_set(data);
+                    ide_i.status = 0x58;
+                    ide_i.data_end = if is_single {
+                        512
+                    } else {
+                        byte_count.min((ide_i.sectors_per_drq as usize) * 512)
+                    };
+                    let ata_p = if is_single {
+                        1
+                    }  else {
+                        count.min(ide_i.sectors_per_track as u32) 
+                    };
+                    ide_i.ata_advance(cmd, ata_p);
+                    ide_i.push_irq();
+                    ide_i.report_read_end(byte_count);
+                });
+            }));
+        }
     }
 
     fn atapi_handle(&mut self) {
@@ -1046,10 +1547,10 @@ impl IDEInterface {
         let lba = self.get_lba(is_lba48);
 
         let byte_count = (count as u32) * self.sector_size;
-        let start = lba * self.sector_size;
+        let start = (lba * self.sector_size) as usize;
 
         let mut prdt_start = self.store.ide().map(|ide| ide.prdt_addr).unwrap();
-        let mut offset = 0;
+        let mut offset: usize = 0;
 
         dbg_log!(LOG::DISK, "prdt addr: {:#X}", prdt_start);
 
@@ -1057,8 +1558,8 @@ impl IDEInterface {
         let mut end: u8 = 0;
         while end == 0 {
             let (prd_addr, mut prd_count, e) = self.store.cpu_mut().map(|cpu| {
-                let addr = cpu.read32s(prdt_start);
-                let count = cpu.read16(prdt_start + 4) as u32;
+                let addr = cpu.read32s(prdt_start) as usize;
+                let count = cpu.read16(prdt_start + 4) as usize;
                 let e = (cpu.read8(prdt_start + 7) & 0x80) as u8;
                 (addr, count, e)
             }).unwrap();
@@ -1077,13 +1578,13 @@ impl IDEInterface {
 
             //var slice = this.cpu.mem8.subarray(prd_addr, prd_addr + prd_count);
             self.store.cpu_mut().map(|cpu| {
-                let sl = &mut buffer[offset as _..(offset+prd_count) as _];
-                assert!(sl.len() == prd_count as usize);
-                cpu.mem8_read_slice(prd_addr as _, sl);
+                let sl = &mut buffer[offset..offset+prd_count];
+                assert!(sl.len() == prd_count);
+                cpu.mem8_read_slice(prd_addr, sl);
             });
             
 
-            //buffer.set(slice, offset);
+            //replace by upper code, buffer.set(slice, offset);
 
             //if(DEBUG)
             //{
@@ -1095,17 +1596,20 @@ impl IDEInterface {
         }
 
         assert!(offset as usize == buffer.len());
-
-        // this.buffer.set(start, buffer, () =>
-        // {
-        //     dbg_log("dma write completed", LOG_DISK);
-        //     this.ata_advance(this.current_command, count);
-        //     this.status = 0x50;
-        //     this.push_irq();
-        //     this.device.dma_status &= ~1;
-        //     this.current_command = -1;
-        // });
-
+        let is_master = self.is_master;
+        self.buffer.as_mut().map(|b| {
+            b.set(start, &buffer, Box::new(move |store| {
+                store.ide_mut().map(|ide| {
+                    dbg_log!(LOG::DISK, "dma write completed"); 
+                    let ide_i = ide.interface_mut(is_master);
+                    ide_i.ata_advance(ide_i.current_command, count);
+                    ide_i.status = 0x50;
+                    ide_i.push_irq();
+                    ide_i.current_command = 0xFF;
+                    ide.dma_status &= !1;
+                });
+            }));
+        });
         self.report_write(byte_count as _);
     }
 
@@ -1173,6 +1677,8 @@ impl IDEDevice {
     }
 
     pub fn init(&mut self) {
+        self.master.init();
+        self.slave.init();
         self.store.io_mut().map(|io| {
             io.register_read8(
                 (self.ata_port as u32) | 7, 
@@ -1426,6 +1932,18 @@ impl IDEDevice {
                 },
             );
 
+            io.register_write8(
+                (self.ata_port as u32) | 7, 
+                Dev::Emulator(self.store.clone()),
+                |dev: &Dev, _addr: u32, data: u8| {
+                    dev.ide_mut().map(|ide| {
+                        dbg_log!(LOG::DISK, "lower irq");
+                        dev.cpu_mut().map(|cpu| cpu.device_lower_irq(ide.irq));
+                        ide.current_interface_mut().ata_command(data);
+                    });
+                }
+            );
+
             io.register_read(
                 (self.master_port as u32) | 4,
                 Dev::Emulator(self.store.clone()),
@@ -1465,7 +1983,6 @@ impl IDEDevice {
                     })
                 }
             );
-
 
             io.register_write(
                 self.master_port as u32,
@@ -1555,11 +2072,18 @@ impl IDEDevice {
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ];
+        let pci_bars = vec![
+            Some(PCIBar::new(8)),
+            Some(PCIBar::new(4)),
+            None,
+            None,
+            Some(PCIBar::new(0x10))
+        ];
         self.store.pci_mut().map(|pci| {
             let pci_dev = GenericPCIDevice::new(
                 self.pci_id,
                 pci_space,
-                vec![],
+                pci_bars,
                 &format!("ide{}", self.nr),
             );
         });

@@ -14,6 +14,16 @@ pub(crate) struct PCIBar {
     pub entries: Vec<IOps>,
 }
 
+impl PCIBar {
+    pub fn new(size: u32) -> Self {
+        Self { 
+            size, 
+            original_bar: 0, 
+            entries: Default::default(),
+        }
+    }
+}
+
 pub(crate) trait PCIDevice {
     fn pci_id(&self) -> u16;
 
