@@ -1034,7 +1034,6 @@ impl VGAScreen {
         let col = memory_start % self.max_cols as u32;
         let chr;
         let color;
-
         // XXX: Should handle 16 bit write if possible
         if addr & 1 > 0 {
             color = value;
@@ -1754,12 +1753,12 @@ impl VGAScreen {
     }
 
     fn port3D4_write(&mut self, register: u8) {
-        dbg_log!(LOG::VGA, "3D4 / crtc index: {:#X}", register);
+        dbg_log!(LOG::VGA, "3D4 / crtc index: {}", register);
         self.index_crtc = register;
     }
 
     fn port3D4_read(&self) -> u8 {
-        dbg_log!(LOG::VGA, "3D4 read / crtc index: {:#X}", self.index_crtc);
+        dbg_log!(LOG::VGA, "3D4 read / crtc index: {}", self.index_crtc);
         self.index_crtc
     }
 
