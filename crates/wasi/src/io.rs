@@ -396,7 +396,6 @@ impl IO {
     #[inline]
     fn mmap_write32_shim(dev: &Dev, addr: u32, val: u32) {
         let aligned_addr = addr >> MMAP_BLOCK_BITS;
-        dbg_log!(LOG::E, "addr{:#X} val:{:#X}", addr, val);
         dev.cpu_mut().map(|cpu| {
             let mmp_fn = cpu.mmap_fn.memory_map_write8.get(&aligned_addr).unwrap();
             (mmp_fn)(dev, addr, (val & 0xFF) as u8);

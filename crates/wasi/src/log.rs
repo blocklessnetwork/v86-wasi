@@ -56,7 +56,7 @@ impl LOG {
             Self::PCI => true,
             Self::PS2 => false,
             Self::NET => true,
-            Self::VGA => true,
+            Self::VGA => false,
             Self::RTC => true,
             Self::DMA => true,
             Self::PIT => false,
