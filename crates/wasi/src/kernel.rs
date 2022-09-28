@@ -1,6 +1,7 @@
+#![allow(unused)]
 use crate::{dev::OptionRom, log::LOG, CPU};
 
-use std::{rc::Rc, slice, ops::Add};
+use std::{rc::Rc, slice};
 
 const LINUX_BOOT_HDR_SETUP_SECTS: u16 = 0x1F1;
 const LINUX_BOOT_HDR_SYSSIZE: u16 = 0x1F4;

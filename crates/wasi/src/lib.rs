@@ -8,6 +8,7 @@ const ALL_DEBUG: bool = true;
 
 type StoreT = Weak<Store<Emulator>>;
 
+use adapter::NetTermAdapter;
 use bus::BUS;
 use dma::DMA;
 use ide::IDEDevice;
@@ -20,13 +21,12 @@ use ps2::PS2;
 use rtc::RTC;
 use uart::UART;
 use wasmtime::*;
-use screen::Screen;
 use vga::VGAScreen;
+mod io;
 mod bus;
 mod cpu;
 mod dev;
 mod dma;
-mod io;
 mod jit;
 mod mem;
 mod pic;
@@ -41,10 +41,10 @@ mod uart;
 mod debug;
 mod floppy;
 mod kernel;
-mod screen;
 mod setting;
+mod ws_thr;
 mod emulator;
-mod timewheel;
+mod adapter;
 pub(crate) mod consts;
 pub use consts::*;
 pub use cpu::CPU;
@@ -144,9 +144,6 @@ trait ContextTrait {
     fn pit_mut(&self) -> Option<&mut PIT>;
     fn pit(&self) -> Option<&PIT>;
 
-    fn screen_mut(&self) -> Option<&mut Screen>;
-    fn screen(&self) -> Option<&Screen>;
-
     fn ne2k_mut(&self) -> Option<&mut Ne2k>;
     fn ne2k(&self) -> Option<&Ne2k>;
 
@@ -154,6 +151,9 @@ trait ContextTrait {
 
     fn ide(&self) -> Option<&IDEDevice>;
     fn ide_mut(&self) -> Option<&mut IDEDevice>;
+
+    fn net_term_adp_mut(&self) -> Option<&mut NetTermAdapter>;
+    fn net_term_adp(&self) -> Option<&NetTermAdapter>;
 }
 
 impl ContextTrait for StoreT {
@@ -317,21 +317,23 @@ impl ContextTrait for StoreT {
     }
 
     #[inline]
-    fn screen_mut(&self) -> Option<&mut Screen> {
-        self.emulator().screen_mut()
-    }
-
-    #[inline]
-    fn screen(&self) -> Option<&Screen> {
-        self.emulator().screen()
-    }
-
     fn ne2k_mut(&self) -> Option<&mut Ne2k> {
         self.emulator().ne2k_mut()
     }
 
+    #[inline]
     fn ne2k(&self) -> Option<&Ne2k> {
         self.emulator().ne2k()
+    }
+
+    #[inline]
+    fn net_term_adp_mut(&self) -> Option<&mut NetTermAdapter> {
+        self.emulator_mut().net_term_adp_mut()
+    }
+
+    #[inline]
+    fn net_term_adp(&self) -> Option<&NetTermAdapter> {
+        self.emulator().net_term_adp()
     }
 }
 

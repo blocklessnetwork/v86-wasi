@@ -1,12 +1,34 @@
 #![allow(unused)]
-use std::{cell::Cell, rc::{Rc, Weak}, time, collections::HashMap, thread::{Thread, JoinHandle}, sync::mpsc::{self, Sender, Receiver}};
+use std::{
+    cell::Cell,
+    collections::HashMap,
+    rc::{Rc, Weak},
+    sync::mpsc::{self, Receiver, Sender},
+    thread::{JoinHandle, Thread},
+    time,
+};
 
-use wasmtime::{Instance, Extern, Linker, Table, Store};
+use wasmtime::{Extern, Instance, Linker, Store, Table};
 
 use crate::{
-    ContextTrait,
-    bus::BUS, dma::DMA, floppy::FloppyController, io::IO, log, pci::PCI, pic::PIC, pit::PIT,
-    ps2::PS2, rtc::RTC, screen::Screen, uart::UART, vga::VGAScreen, Setting, StoreT, CPU, ne2k::Ne2k, jit::{JitMsg, JitWorker}, WASM_TABLE_OFFSET, ide::IDEDevice,
+    adapter::NetTermAdapter,
+    bus::BUS,
+    dma::DMA,
+    floppy::FloppyController,
+    ide::IDEDevice,
+    io::IO,
+    jit::{JitMsg, JitWorker},
+    log,
+    ne2k::Ne2k,
+    pci::PCI,
+    pic::PIC,
+    pit::PIT,
+    ps2::PS2,
+    rtc::RTC,
+    uart::UART,
+    vga::VGAScreen,
+    ws_thr::WsThread,
+    ContextTrait, Setting, StoreT, CPU, WASM_TABLE_OFFSET,
 };
 
 pub(crate) struct InnerEmulator {
@@ -16,10 +38,10 @@ pub(crate) struct InnerEmulator {
     bus: Option<BUS>,
     table: Option<Table>,
     bios: Option<Vec<u8>>,
-    screen: Option<Screen>,
     vga_bios: Option<Vec<u8>>,
     jit_tx: Option<Sender<JitMsg>>,
     jit_result_rx: Option<Receiver<JitMsg>>,
+    net_term_adapter: Option<NetTermAdapter>,
     externs: Option<HashMap<String, Extern>>,
 }
 
@@ -32,33 +54,33 @@ impl InnerEmulator {
             bus: None,
             bios: None,
             table: None,
-            screen: None,
             jit_tx: None,
             externs: None,
             vga_bios: None,
             jit_result_rx: None,
+            net_term_adapter: None,
         }
     }
 
     #[inline]
     fn init(
-        &mut self, 
-        externs: HashMap<String, Extern>, 
+        &mut self,
+        externs: HashMap<String, Extern>,
         table: Table,
-        mut inst: Instance, 
-        store: StoreT
+        mut inst: Instance,
+        store: StoreT,
     ) {
         let store_cl = store.clone().into_raw() as usize;
         let (tx, rx) = mpsc::channel();
         let (rs_tx, rs_rx) = mpsc::channel();
-        let mem = store.store_mut().map(|store| {
-            inst.get_memory(store, "memory")
-        }).flatten().unwrap();
-        let jit_thread: JoinHandle<()> = std::thread::spawn(move || {
-            let table  = table;
-            let store: StoreT = unsafe {
-                Weak::from_raw(store_cl as *const Store<Emulator>)
-            };
+        let mem = store
+            .store_mut()
+            .map(|store| inst.get_memory(store, "memory"))
+            .flatten()
+            .unwrap();
+        std::thread::spawn(move || {
+            let table = table;
+            let store: StoreT = unsafe { Weak::from_raw(store_cl as *const Store<Emulator>) };
             let mut jit_worker = JitWorker {
                 sender: rs_tx,
                 recv: rx,
@@ -72,9 +94,19 @@ impl InnerEmulator {
         self.table = Some(table);
         self.jit_result_rx = Some(rs_rx);
         self.bus = Some(BUS::new(store.clone()));
+
+        //tx rx for term adapater
+        let (tx, rs) = mpsc::channel();
+        std::thread::Builder::new()
+            .name("ws thread".to_string())
+            .spawn(move || {
+                let ws_thr = WsThread::new(tx);
+                ws_thr.start();
+            });
+
+        self.net_term_adapter = Some(NetTermAdapter::new(store.clone(), rs));
         self.cpu = Some(CPU::new(&mut inst, store.clone()));
-        self.screen = Some(Screen::new(store.clone()));
-        self.screen.as_mut().map(|sc| sc.init());
+        self.net_term_adapter.as_mut().map(|t| t.init());
     }
 
     #[inline]
@@ -121,24 +153,14 @@ impl Emulator {
     }
 
     pub fn start(
-        &mut self, 
-        externs: HashMap<String, Extern>, 
+        &mut self,
+        externs: HashMap<String, Extern>,
         table: Table,
-        inst: Instance, 
-        store: StoreT
+        inst: Instance,
+        store: StoreT,
     ) {
         self.inner_mut().init(externs, table, inst, store);
         self.inner_mut().start();
-    }
-
-    #[inline]
-    pub(crate) fn screen_mut(&self) -> Option<&mut Screen> {
-        self.inner_mut().screen.as_mut()
-    }
-
-    #[inline]
-    pub(crate) fn screen(&self) -> Option<&Screen> {
-        self.inner().screen.as_ref()
     }
 
     #[inline]
@@ -198,22 +220,24 @@ impl Emulator {
 
     #[inline]
     pub fn jit_done(&mut self) {
-        self.inner_mut().jit_result_rx.as_mut().map(|rx| {
-            loop {
-                let (index, start, state_flags, func) = match rx.try_recv() {
-                    Ok(JitMsg::JitResult(index, start, state_flags, func)) => (index, start, state_flags, func),
-                    Ok(_) => return,
-                    Err(_) => return,
-                };
-                self.cpu_mut().map(|cpu| {
-                    cpu.codegen_finalize_finished(index, start, state_flags);
-                    cpu.store_mut().map(|store| {
-                        self.inner_mut().table.map(|table| {
-                            table.set(store, WASM_TABLE_OFFSET + index as u32, func).unwrap();
-                        })
-                    });
+        self.inner_mut().jit_result_rx.as_mut().map(|rx| loop {
+            let (index, start, state_flags, func) = match rx.try_recv() {
+                Ok(JitMsg::JitResult(index, start, state_flags, func)) => {
+                    (index, start, state_flags, func)
+                }
+                Ok(_) => return,
+                Err(_) => return,
+            };
+            self.cpu_mut().map(|cpu| {
+                cpu.codegen_finalize_finished(index, start, state_flags);
+                cpu.store_mut().map(|store| {
+                    self.inner_mut().table.map(|table| {
+                        table
+                            .set(store, WASM_TABLE_OFFSET + index as u32, func)
+                            .unwrap();
+                    })
                 });
-            }
+            });
         });
     }
 
@@ -346,6 +370,16 @@ impl Emulator {
     }
 
     #[inline]
+    pub(crate) fn net_term_adp_mut(&self) -> Option<&mut NetTermAdapter> {
+        self.inner_mut().net_term_adapter.as_mut()
+    }
+
+    #[inline]
+    pub(crate) fn net_term_adp(&self) -> Option<&NetTermAdapter> {
+        self.inner().net_term_adapter.as_ref()
+    }
+
+    #[inline]
     pub(crate) fn wasm_externs(&self, names: Vec<String>) -> Vec<Extern> {
         let mut rs = Vec::new();
         self.inner_mut().externs.as_ref().map(|e| {
@@ -358,5 +392,4 @@ impl Emulator {
         });
         rs
     }
-
 }

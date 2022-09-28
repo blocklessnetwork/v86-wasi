@@ -72,25 +72,25 @@ impl PS2 {
 
     pub fn init(&mut self) {
         self.store.bus_mut().map(|bus| {
-            bus.register("keyboard-code", |dev: &Dev, data: &BusData| match data {
+            bus.register("keyboard-code", |s: &StoreT, data: &BusData| match data {
                 &BusData::U8(data) => {
-                    dev.ps2_mut().map(|ps2| ps2.kbd_send_code(data));
+                    s.ps2_mut().map(|ps2| ps2.kbd_send_code(data));
                 }
                 _ => {}
             });
 
-            bus.register("mouse-click", |dev: &Dev, data: &BusData| match data {
+            bus.register("mouse-click", |s: &StoreT, data: &BusData| match data {
                 &BusData::MouseEvent(left, middle, right) => {
-                    dev.ps2_mut().map(|ps2| {
+                    s.ps2_mut().map(|ps2| {
                         ps2.mouse_send_click(left, middle, right);
                     });
                 }
                 _ => {}
             });
 
-            bus.register("mouse-delta", |dev: &Dev, data: &BusData| match data {
+            bus.register("mouse-delta", |s: &StoreT, data: &BusData| match data {
                 &BusData::U8Tuple(d1, d2) => {
-                    dev.ps2_mut().map(|ps2| {
+                    s.ps2_mut().map(|ps2| {
                         ps2.mouse_send_delta(d1, d2);
                     });
                 }

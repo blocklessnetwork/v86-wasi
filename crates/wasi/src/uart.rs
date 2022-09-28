@@ -66,10 +66,10 @@ impl UART {
         self.store.bus_mut().map(|bus| {
             bus.register(
                 &format!("serial{}-input", self.com),
-                |dev: &Dev, data: &BusData| {
+                |s: &StoreT, data: &BusData| {
                     match data {
                         BusData::U8(data) => {
-                            dev.uart0_mut().map(|uart| {
+                            s.uart0_mut().map(|uart| {
                                 uart.data_received(*data);
                             });
                         }

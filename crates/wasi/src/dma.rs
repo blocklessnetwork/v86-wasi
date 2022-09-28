@@ -1,3 +1,4 @@
+#![allow(unused)]
 use crate::{log::LOG, ContextTrait, Dev, StoreT};
 
 type WR_DONE_FN = fn(&StoreT, bool);

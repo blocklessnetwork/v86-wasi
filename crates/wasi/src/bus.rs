@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use crate::{Dev, StoreT};
 
+#[derive(Clone)]
 pub(crate) enum BusData {
     None,
     String(String),
@@ -21,6 +22,73 @@ pub(crate) enum BusData {
 }
 
 impl BusData {
+
+    pub fn to_vec(&self) -> Vec<u8> {
+        match self {
+            BusData::None => Vec::new(),
+            BusData::String(s) => s.as_bytes().to_vec(),
+            BusData::Bool(b) => vec![*b as u8],
+            BusData::U8(b) => vec![*b],
+            BusData::U32(b) => b.to_le_bytes().to_vec(),
+            BusData::Vec(b) => b.clone(),
+            BusData::U8Tuple(a, b) => vec![*a, *b],
+            BusData::U16Tuple(a, b) => {
+                let a = a.to_le_bytes();
+                let b = b.to_le_bytes();
+                let mut rs = a.to_vec();
+                rs.extend_from_slice(&b);
+                rs
+            }
+            BusData::MouseEvent(a, b, c) => vec![*a, *b, *c],
+            BusData::PcspeakerUpdate(a, b) => {
+                let mut rs = vec![*a];
+                let b = b.to_le_bytes();
+                rs.extend_from_slice(&b);
+                rs
+            }
+            BusData::IdeReadEnd(a, b, c) => {
+                let mut rs = vec![*a];
+                let b = b.to_le_bytes();
+                rs.extend_from_slice(&b);
+                let c = c.to_le_bytes();
+                rs.extend_from_slice(&c);
+                rs
+            }
+            BusData::IdeWriteEnd(a, b, c) => {
+                let mut rs = vec![*a];
+                let b = b.to_le_bytes();
+                rs.extend_from_slice(&b);
+                let c = c.to_le_bytes();
+                rs.extend_from_slice(&c);
+                rs
+            }
+            BusData::ScreenPutChar(a, b, c, d, e) => {
+                let mut rs = a.to_le_bytes().to_vec();
+                let b = b.to_le_bytes();
+                rs.extend_from_slice(&b);
+                let c = c.to_le_bytes();
+                rs.extend_from_slice(&c);
+                let d = d.to_le_bytes();
+                rs.extend_from_slice(&d);
+                let e = e.to_le_bytes();
+                rs.extend_from_slice(&e);
+                rs
+            },
+            BusData::ScreenSetSizeGraphical(a, b, c, d, e) => {
+                let mut rs = a.to_le_bytes().to_vec();
+                let b = b.to_le_bytes();
+                rs.extend_from_slice(&b);
+                let c = c.to_le_bytes();
+                rs.extend_from_slice(&c);
+                let d = d.to_le_bytes();
+                rs.extend_from_slice(&d);
+                let e = e.to_le_bytes();
+                rs.extend_from_slice(&e);
+                rs
+            }
+        }
+    }
+
     #[inline]
     pub fn map_string<F>(&self, f: F)
     where
@@ -121,18 +189,16 @@ impl BusData {
     }
 }
 
-pub(crate) type BusCall = fn(dev: &Dev, data: &BusData);
+pub(crate) type BusCall = fn(store: &StoreT, data: &BusData);
 
 struct BusController {
     listeners: HashMap<String, Vec<*const ()>>,
     store: StoreT,
-    dev: Dev,
 }
 
 impl BusController {
     fn new(store: StoreT) -> Self {
         Self {
-            dev: Dev::Emulator(store.clone()),
             listeners: HashMap::new(),
             store,
         }
@@ -169,7 +235,7 @@ impl BusController {
                 v.iter().for_each(|call| {
                     let call = *call;
                     let call = unsafe { std::mem::transmute::<_, BusCall>(call) };
-                    call(&self.dev, &data);
+                    call(&self.store, &data);
                 });
             }
             None => {}
