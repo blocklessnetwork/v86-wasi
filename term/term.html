@@ -1,16 +1,18 @@
 <html>
 <head>
 <title>Terminal</title>
-<link rel="stylesheet" type="text/css" href="v86.css"></link>
+<link rel="stylesheet" type="text/css" href="term.css"></link>
 <script src="bus.js"></script>
 <script src="keyboard.js"></script>
 <script src="screen.js"></script>
 <script src="term_ws.js"></script>
 </head>
 <body>
+<div id="term_status"><span id="status"></span></div>
 <div id="screen_container">
     <canvas></canvas>
     <div id="screen"></div>
+    
 </div>
 <script>
 function dbg_assert(cond, msg) {

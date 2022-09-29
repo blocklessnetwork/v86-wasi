@@ -257,3 +257,13 @@ h4 {
 .xterm-underline {
     text-decoration: underline;
 }
+
+
+div#term_status {
+    top: 0;
+}
+
+div#term_status>span {
+    color: yellow;
+    background-color: red;
+}

@@ -3,6 +3,7 @@ function TermWS(addr, bus) {
     this.bus = bus;
     this.is_connected = false;
     var that = this;
+    this.status = document.getElementById("status");
     this.bus.register("keyboard-code", function(c) {
         that.send_kb(c);
     });
@@ -14,9 +15,7 @@ TermWS.prototype.connect = function() {
     var self = this;
     this.ws.onclose = function() {
         console.log("on close connect after 100ms");
-        if (self.is_connected) {
-            bus.send("screen-clear");
-        }
+        self.status.innerHTML = "Lost connect to VM, will reconnect after 100ms";
         self.is_connected = false;
         setTimeout(function(){
             self.connect();
@@ -24,6 +23,7 @@ TermWS.prototype.connect = function() {
     }
 
     this.ws.onopen = function() {
+        self.status.innerHTML = "";
         self.is_connected = true;
     }
 
