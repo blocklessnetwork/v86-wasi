@@ -55,7 +55,7 @@ impl WsThread {
                 let msg = Message::Binary(rs);
                 let _ = sink.send(msg).await;
             } else {
-                time::sleep(Duration::from_millis(20)).await;
+                time::sleep(Duration::from_millis(50)).await;
             }
         }
         Ok(())
