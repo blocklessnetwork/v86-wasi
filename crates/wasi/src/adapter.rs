@@ -87,7 +87,7 @@ impl NetTermAdapter {
     }
 
     #[inline]
-    pub fn send(&mut self, msg: u16, d: BusData) {
+    fn send(&mut self, msg: u16, d: BusData) {
         let sender = self.try_recv_channel_from_rx();
         if self.sender.as_mut().map_or(false, |s| s.send((msg, d)).is_err()) {
             self.clear_channel();

@@ -40,6 +40,7 @@ pub(crate) struct InnerEmulator {
     bios: Option<Vec<u8>>,
     vga_bios: Option<Vec<u8>>,
     jit_tx: Option<Sender<JitMsg>>,
+    tick_trigger: Vec<fn(&StoreT)>,
     jit_result_rx: Option<Receiver<JitMsg>>,
     net_term_adapter: Option<NetTermAdapter>,
     externs: Option<HashMap<String, Extern>>,
@@ -59,7 +60,18 @@ impl InnerEmulator {
             vga_bios: None,
             jit_result_rx: None,
             net_term_adapter: None,
+            tick_trigger: Vec::new(),
         }
+    }
+
+    #[inline]
+    fn register_trigger(&mut self, call: fn(&StoreT)) {
+        self.tick_trigger.push(call);
+    }
+
+    #[inline]
+    fn triggers(&self, store: &StoreT) {
+        self.tick_trigger.iter().for_each(|cb| cb(store));
     }
 
     #[inline]
@@ -107,6 +119,14 @@ impl InnerEmulator {
         self.net_term_adapter = Some(NetTermAdapter::new(store.clone(), rs));
         self.cpu = Some(CPU::new(&mut inst, store.clone()));
         self.net_term_adapter.as_mut().map(|t| t.init());
+
+        self.register_trigger(|store| {
+            store.emulator_mut().jit_done();
+        });
+
+        self.register_trigger(|store| {
+            store.net_term_adp_mut().map(|a| a.try_recv_from_term());
+        });
     }
 
     #[inline]
@@ -114,19 +134,21 @@ impl InnerEmulator {
         (self.start_time.elapsed().as_micros() as f64) / 1000.
     }
 
-    fn start(&mut self) {
-        self.cpu.as_mut().map(|c| {
+    fn start(&mut self, store: StoreT) {
+        let t = self.cpu.as_mut().map_or(0, |c| {
             c.init();
-            let mut t = c.main_run();
-            loop {
-                c.jit_done();
-                self.net_term_adapter.as_mut().map(|a| a.try_recv_from_term());
-                t = c.next_tick(t as u64);
-                if t > 0 {
-                    std::thread::sleep(time::Duration::from_millis(t as u64));
-                }
-            }
+            c.main_run()
         });
+        loop {
+            self.triggers(&store);
+            let t = self.cpu.as_mut()
+                .map_or(0, |c| {
+                    c.next_tick(t as u64)
+                });
+            if t > 0 {
+                std::thread::sleep(time::Duration::from_millis(t as u64));
+            }
+        }
     }
 }
 
@@ -147,6 +169,29 @@ impl Emulator {
     }
 
     #[inline]
+    pub fn jit_done(&mut self) {
+        self.inner_mut().jit_result_rx.as_mut().map(|rx| loop {
+            let (index, start, state_flags, func) = match rx.try_recv() {
+                Ok(JitMsg::JitResult(index, start, state_flags, func)) => {
+                    (index, start, state_flags, func)
+                }
+                Ok(_) => return,
+                Err(_) => return,
+            };
+            self.cpu_mut().map(|cpu| {
+                cpu.codegen_finalize_finished(index, start, state_flags);
+                cpu.store_mut().map(|store| {
+                    self.inner_mut().table.map(|table| {
+                        table
+                            .set(store, WASM_TABLE_OFFSET + index as u32, func)
+                            .unwrap();
+                    })
+                });
+            });
+        });
+    }
+
+    #[inline]
     pub(crate) fn jit(&mut self, msg: JitMsg) {
         self.inner_mut().jit_tx.as_mut().map(|tx| {
             let _ = tx.send(msg);
@@ -160,8 +205,8 @@ impl Emulator {
         inst: Instance,
         store: StoreT,
     ) {
-        self.inner_mut().init(externs, table, inst, store);
-        self.inner_mut().start();
+        self.inner_mut().init(externs, table, inst, store.clone());
+        self.inner_mut().start(store);
     }
 
     #[inline]
@@ -217,29 +262,6 @@ impl Emulator {
     #[inline]
     pub fn set_vga_bios(&self, b: Vec<u8>) {
         self.inner_mut().vga_bios = Some(b);
-    }
-
-    #[inline]
-    pub fn jit_done(&mut self) {
-        self.inner_mut().jit_result_rx.as_mut().map(|rx| loop {
-            let (index, start, state_flags, func) = match rx.try_recv() {
-                Ok(JitMsg::JitResult(index, start, state_flags, func)) => {
-                    (index, start, state_flags, func)
-                }
-                Ok(_) => return,
-                Err(_) => return,
-            };
-            self.cpu_mut().map(|cpu| {
-                cpu.codegen_finalize_finished(index, start, state_flags);
-                cpu.store_mut().map(|store| {
-                    self.inner_mut().table.map(|table| {
-                        table
-                            .set(store, WASM_TABLE_OFFSET + index as u32, func)
-                            .unwrap();
-                    })
-                });
-            });
-        });
     }
 
     #[inline]

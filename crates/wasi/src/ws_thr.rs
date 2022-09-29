@@ -81,7 +81,9 @@ impl WsThread {
                     msg_id_buf.copy_from_slice(&b[..2]);
                     let msg_id = u16::from_le_bytes(msg_id_buf);
                     if msg_id == 0x0100 {
-                        s_tx.send((msg_id, BusData::U8(b[2])));
+                        if let Err(_) = s_tx.send((msg_id, BusData::U8(b[2]))) {
+                            break;
+                        }
                     }
                 }
                 Message::Close(_) => break,
