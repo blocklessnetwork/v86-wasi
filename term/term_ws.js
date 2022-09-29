@@ -2,6 +2,10 @@ function TermWS(addr, bus) {
     this.addr = addr;
     this.bus = bus;
     this.is_connected = false;
+    var that = this;
+    this.bus.register("keyboard-code", function(c) {
+        that.send_kb(c);
+    });
 }
 
 TermWS.prototype.connect = function() {
@@ -29,12 +33,12 @@ TermWS.prototype.connect = function() {
     }
 }
 
-TermWS.prototype.screen_set_model = function(b) {
-    console.log(b);
-}
-
-TermWS.prototype.screen_put_char = function(putchr) {
-    
+TermWS.prototype.send_kb = function(code) {
+    var buf = new Uint8Array(3);
+    buf[0] = 0x00;
+    buf[1] = 0x01;
+    buf[2] = code;
+    this.ws.send(buf);
 }
 
 function putc_decode(p, buf) {

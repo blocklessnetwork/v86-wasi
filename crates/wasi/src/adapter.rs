@@ -1,4 +1,4 @@
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
 use crate::{StoreT, ContextTrait, bus::BusData};
 
@@ -6,16 +6,21 @@ use crate::{StoreT, ContextTrait, bus::BusData};
 pub(crate) struct NetTermAdapter {
     store: StoreT,
     sender: Option<Sender<(u16, BusData)>>,
-    sender_rx: Receiver<Sender<(u16, BusData)>>,
+    recv: Option<Receiver<(u16, BusData)>>,
+    channel_rx: Receiver<(Receiver<(u16, BusData)>, Sender<(u16, BusData)>)>,
 
 }
 
 impl NetTermAdapter {
 
-    pub fn new(store: StoreT, sender_rx: Receiver<Sender<(u16, BusData)>>) -> Self {
+    pub fn new(
+        store: StoreT, 
+        channel_rx: Receiver<(Receiver<(u16, BusData)>, Sender<(u16, BusData)>)>
+    ) -> Self {
         Self {
             store,
-            sender_rx,
+            channel_rx,
+            recv: None,
             sender: None,
         }
     }
@@ -34,15 +39,46 @@ impl NetTermAdapter {
     }
 
     #[inline]
-    fn try_recv_sender_from_rx(&mut self) -> Option<&mut Sender<(u16, BusData)>> {
+    fn try_recv_channel_from_rx(&mut self) {
         if self.sender.is_some() {
-            return self.sender.as_mut();
+            return;
         }
-        self.sender = match self.sender_rx.try_recv() {
-            Ok(s) => Some(s),
-            Err(_) => None,
+        (self.recv, self.sender) = match self.channel_rx.try_recv() {
+            Ok((r, s)) => (Some(r), Some(s)),
+            Err(_) => return,
         };
-        self.sender.as_mut()
+    }
+
+    pub fn try_recv_from_term(&mut self) {
+        let clear = self.recv.as_mut().map_or(false, |r| {
+            let mut clear = false;
+            loop {
+                match r.try_recv() {
+                    Ok((msg_id, bus_data)) => {
+                        if msg_id == 0x0100 {
+                            self.store.clone().bus_mut().map(|bus| {
+                                bus.send("keyboard-code", bus_data);
+                            });
+                        }
+                    },
+                    Err(TryRecvError::Empty) => break,
+                    Err(_) => {
+                        clear = true;
+                        break;
+                    }
+                }
+            }
+            clear
+        });
+        if clear {
+            self.clear_channel();
+        }
+    }
+
+    #[inline]
+    fn clear_channel(&mut self) {
+        self.sender.take();
+        self.recv.take();
     }
 
     #[inline]
@@ -50,10 +86,11 @@ impl NetTermAdapter {
         s.net_term_adp_mut().map(|n| n.send(msg_id, data));
     }
 
+    #[inline]
     pub fn send(&mut self, msg: u16, d: BusData) {
-        let sender = self.try_recv_sender_from_rx();
-        if sender.map_or(false, |s| s.send((msg, d)).is_err()) {
-            self.sender.take();
+        let sender = self.try_recv_channel_from_rx();
+        if self.sender.as_mut().map_or(false, |s| s.send((msg, d)).is_err()) {
+            self.clear_channel();
         }
     }
 }

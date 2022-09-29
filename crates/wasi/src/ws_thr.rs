@@ -7,11 +7,11 @@ use tokio_tungstenite::{accept_async, tungstenite::{Error, Message}};
 use tokio_tungstenite::WebSocketStream;
 
 pub(crate) struct WsThread {
-    sender: Sender<Sender<(u16, BusData)>>,
+    sender: Sender<(Receiver<(u16, BusData)>, Sender<(u16, BusData)>)>,
 }
 
 impl WsThread {
-    pub fn new(sender: Sender<Sender<(u16, BusData)>>) -> Self {
+    pub fn new(sender: Sender<(Receiver<(u16, BusData)>, Sender<(u16, BusData)>)>) -> Self {
         Self {
             sender,
         }
@@ -58,22 +58,37 @@ impl WsThread {
                 time::sleep(Duration::from_millis(50)).await;
             }
         }
-        Ok(())
     }
 
     async fn handle_connection(&mut self, peer: SocketAddr, stream: TcpStream) -> Result<(), Error> {
         let mut ws_stream = accept_async(stream).await.expect("Failed to accept");
         let (sink, mut ws_stream) = ws_stream.split();
         let (tx, rx) = mpsc::channel();
-        self.sender.send(tx).unwrap();
+        let (s_tx, s_rx) = mpsc::channel();
+        self.sender.send((s_rx, tx)).unwrap();
         tokio::spawn(async move {
             Self::handle_incoming(sink, rx).await
         });
         while let Some(msg) = ws_stream.next().await {
-            // let msg = msg?;
-            // if msg.is_text() || msg.is_binary() {
-            //     ws_stream.send(msg).await?;
-            // }
+            let msg = msg?;
+            match msg {
+                Message::Binary(b) => {
+                    if b.len() <= 2 {
+                        dbg_log!(LOG::E, "Error msg recv");
+                        return Ok(());
+                    }
+                    let mut msg_id_buf = [0; 2];
+                    msg_id_buf.copy_from_slice(&b[..2]);
+                    let msg_id = u16::from_le_bytes(msg_id_buf);
+                    if msg_id == 0x0100 {
+                        s_tx.send((msg_id, BusData::U8(b[2])));
+                    }
+                }
+                Message::Close(_) => break,
+                _ => {
+                    dbg_log!(LOG::E, "Unknow ws msg recv");
+                }
+            }
         }
         Ok(())
     }

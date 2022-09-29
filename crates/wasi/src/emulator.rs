@@ -120,6 +120,7 @@ impl InnerEmulator {
             let mut t = c.main_run();
             loop {
                 c.jit_done();
+                self.net_term_adapter.as_mut().map(|a| a.try_recv_from_term());
                 t = c.next_tick(t as u64);
                 if t > 0 {
                     std::thread::sleep(time::Duration::from_millis(t as u64));
