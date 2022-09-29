@@ -1,0 +1,25 @@
+<html>
+<head>
+<title>Terminal</title>
+<link rel="stylesheet" type="text/css" href="v86.css"></link>
+<script src="bus.js"></script>
+<script src="screen.js"></script>
+<script src="term_ws.js"></script>
+</head>
+<body>
+<div id="screen_container">
+    <canvas></canvas>
+    <div id="screen"></div>
+</div>
+<script>
+function dbg_assert(cond, msg) {
+    console.assert(cond, msg);
+}
+var bus = new BusConnector();
+var screen_elem = document.getElementById("screen_container");
+var screen = new ScreenAdapter(screen_elem, bus);
+var ws = new TermWS("ws://localhost:9002", bus);
+ws.connect();
+</script>
+</body>
+</html>
