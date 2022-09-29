@@ -1,6 +1,6 @@
-use tokio::{net::{TcpListener, TcpStream}, runtime::Builder};
+use tokio::{net::{TcpListener, TcpStream}, runtime::Builder, time};
 use futures_util::{SinkExt, StreamExt, stream::SplitSink};
-use std::sync::mpsc::{Sender, self, Receiver};
+use std::{sync::mpsc::{Sender, self, Receiver, TryRecvError}, time::Duration};
 use crate::{bus::BusData, log::LOG};
 use std::net::SocketAddr;
 use tokio_tungstenite::{accept_async, tungstenite::{Error, Message}};
@@ -36,30 +36,27 @@ impl WsThread {
             let mut rs = Vec::new();
             let mut msgid;
             let mut data: BusData;
-            let mut ct = 0;
-            if let Ok((t, d)) = rx.recv() {
-                data = d;
-                msgid = t;
-                loop {
-                    ct += 1;
-                    let msg_id = msgid.to_le_bytes();
-                    let mut msg = Vec::with_capacity(8);
-                    msg.extend_from_slice(&msg_id);
-                    msg.extend(data.to_vec());
-                    rs.extend_from_slice(&msg);
-                    if let Ok((t, d)) = rx.try_recv() {
+            loop {
+                match rx.try_recv() {
+                    Ok((t, d)) => {
                         data = d;
                         msgid = t;
-                    } else {
-                        break;
+                        let msg_id = msgid.to_le_bytes();
+                        let mut msg = Vec::with_capacity(8);
+                        msg.extend_from_slice(&msg_id);
+                        msg.extend(data.to_vec());
+                        rs.extend_from_slice(&msg);
                     }
+                    Err(TryRecvError::Empty) => break,
+                    Err(_) => return Ok(()),
                 }
+            }
+            if rs.len() > 0 {
+                let msg = Message::Binary(rs);
+                let _ = sink.send(msg).await;
             } else {
-                return Ok(());
-            };
-            let msg = Message::Binary(rs);
-            let _ = sink.send(msg).await;
-            sink.flush().await;
+                time::sleep(Duration::from_millis(20)).await;
+            }
         }
         Ok(())
     }
@@ -85,6 +82,7 @@ impl WsThread {
     pub fn start(mut self) {
         let runtime = Builder::new_current_thread()
             .enable_io()
+            .enable_time()
             .build()
             .unwrap();
         runtime.block_on(async move {
