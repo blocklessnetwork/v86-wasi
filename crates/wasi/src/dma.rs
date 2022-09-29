@@ -1,7 +1,7 @@
 #![allow(unused)]
 use crate::{log::LOG, ContextTrait, Dev, StoreT};
 
-type WR_DONE_FN = fn(&StoreT, bool);
+type WrDoneFn = fn(&StoreT, bool);
 
 pub(crate) struct DMA {
     store: StoreT,
@@ -163,7 +163,7 @@ impl DMA {
     }
 
     // TODO
-    // fn do_write(&mut self, buffer: &mut [u8], start: usize, len: usize, channel: usize, done_fn: WR_DONE_FN) {
+    // fn do_write(&mut self, buffer: &mut [u8], start: usize, len: usize, channel: usize, done_fn: WrDoneFn) {
     //     let mut read_count = (self.channel_count[channel] + 1) & 0xFFFF;
     //     let mut bytes_per_count = if channel >= 5 {
     //         2

@@ -37,7 +37,7 @@ impl WsThread {
             let mut msgid;
             let mut data: BusData;
             let mut ct = 0;
-            let msg = if let Ok((t, d)) = rx.recv() {
+            if let Ok((t, d)) = rx.recv() {
                 data = d;
                 msgid = t;
                 loop {

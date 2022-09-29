@@ -95,7 +95,7 @@ TermWS.prototype.onmessage = function(event) {
                 continue;
             }
 
-            if (msg_id == 4) {
+            if (msg_id === 4) {
                 var rs = tuple8_decode(p, buf);
                 p += rs[0];
                 this.bus.send("screen-update-cursor-scanline", rs[1]);

@@ -445,7 +445,7 @@ impl CPU {
             .unwrap();
         let dev = Dev::Emulator(self.store.clone());
         mfn(&dev, addr, (value & 0xFF) as u8);
-        mfn(&dev, addr + 1, (value >> 8) as u8);
+        mfn(&dev, addr + 1|0, (value >> 8) as u8);
     }
 
     #[inline]

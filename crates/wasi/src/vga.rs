@@ -1,6 +1,6 @@
 #![allow(unused)]
 #![allow(non_snake_case)]
-use std::slice;
+use std::{slice, rc::Rc};
 
 use crate::{
     bus::BusData,
@@ -1027,7 +1027,6 @@ impl VGAScreen {
             self.vga_memory_write_text_mode(addr, value);
         }
     }
-
     fn vga_memory_write_text_mode(&mut self, addr: u32, value: u8) {
         let memory_start = (addr >> 1) - self.start_address;
         let row = memory_start / self.max_cols as u32 | 0;
@@ -1042,6 +1041,7 @@ impl VGAScreen {
             chr = value;
             color = self.vga_memory[addr as usize | 1];
         }
+        
         self.store.bus_mut().map(|bus| {
             bus.send(
                 "screen-put-char",
@@ -1131,7 +1131,7 @@ impl VGAScreen {
         let mut addr = (self.start_address << 1) as usize;
         let mut chr = 0;
         let mut color = 0;
-
+        // let mut data = Vec::with_capacity(self.max_cols as usize * self.max_rows as usize);
         for row in 0..self.max_rows {
             for col in 0..self.max_cols {
                 chr = self.vga_memory[addr];
@@ -1145,7 +1145,7 @@ impl VGAScreen {
                             chr,
                             self.vga256_palette[(color >> 4 & 0xF) as usize],
                             self.vga256_palette[(color & 0xF) as usize],
-                        ),
+                        )
                     );
                 });
                 addr += 2;
