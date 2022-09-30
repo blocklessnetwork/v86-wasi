@@ -14,7 +14,6 @@ TermWS.prototype.connect = function() {
     this.ws.binaryType = "arraybuffer";
     var self = this;
     this.ws.onclose = function() {
-        console.log("on close connect after 100ms");
         self.status.innerHTML = "Lost connect to VM, will reconnect after 100ms";
         self.is_connected = false;
         setTimeout(function(){
@@ -103,6 +102,13 @@ TermWS.prototype.onmessage = function(event) {
                 var rs = tuple8_decode(p, buf);
                 p += rs[0];
                 this.bus.send("screen-update-cursor-scanline", rs[1]);
+                continue;
+            }
+
+            if (msg_id === 5) {
+                var rs = tuple16_decode(p, buf);
+                p += rs[0];
+                this.bus.send("screen-update-cursor", rs[1]);
                 continue;
             }
             dbg_assert(msg_id);

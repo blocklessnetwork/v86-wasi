@@ -35,6 +35,8 @@ impl NetTermAdapter {
                 |s: &StoreT, data: &BusData| Self::try_send(s, 3, data.clone()));
             bus.register("screen-update-cursor-scanline", 
                 |s: &StoreT, data: &BusData| Self::try_send(s, 4, data.clone()));
+            bus.register("screen-update-cursor", 
+                |s: &StoreT, data: &BusData| Self::try_send(s, 5, data.clone()));
         });
     }
 
