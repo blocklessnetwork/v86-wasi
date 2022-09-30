@@ -70,11 +70,6 @@ impl InnerEmulator {
     }
 
     #[inline]
-    fn triggers(&self, store: &StoreT) {
-        self.tick_trigger.iter().for_each(|cb| cb(store));
-    }
-
-    #[inline]
     fn init(
         &mut self,
         externs: HashMap<String, Extern>,
@@ -135,20 +130,17 @@ impl InnerEmulator {
     }
 
     fn start(&mut self, store: StoreT) {
-        let t = self.cpu.as_mut().map_or(0, |c| {
+        self.cpu.as_mut().map(|c| {
             c.init();
-            c.main_run()
-        });
-        loop {
-            self.triggers(&store);
-            let t = self.cpu.as_mut()
-                .map_or(0, |c| {
-                    c.next_tick(t as u64)
-                });
-            if t > 0 {
-                std::thread::sleep(time::Duration::from_millis(t as u64));
+            let mut t = c.main_run();
+            loop {
+                self.tick_trigger.iter().for_each(|cb| cb(&store));
+                t = c.next_tick(t as u64);
+                if t > 0 {
+                    std::thread::sleep(time::Duration::from_millis(t as u64));
+                }
             }
-        }
+        });
     }
 }
 

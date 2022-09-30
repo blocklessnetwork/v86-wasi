@@ -74,7 +74,7 @@ impl WsThread {
             match msg {
                 Message::Binary(b) => {
                     if b.len() <= 2 {
-                        dbg_log!(LOG::E, "Error msg recv");
+                        dbg_log!(LOG::WS, "Error msg recv");
                         return Ok(());
                     }
                     let mut msg_id_buf = [0; 2];
@@ -82,13 +82,17 @@ impl WsThread {
                     let msg_id = u16::from_le_bytes(msg_id_buf);
                     if msg_id == 0x0100 {
                         if let Err(_) = s_tx.send((msg_id, BusData::U8(b[2]))) {
+                            dbg_log!(LOG::WS, "send Error.");
                             break;
                         }
                     }
                 }
-                Message::Close(_) => break,
+                Message::Close(_) => {
+                    dbg_log!(LOG::WS, "close by peer.");
+                    break;
+                },
                 _ => {
-                    dbg_log!(LOG::E, "Unknow ws msg recv");
+                    dbg_log!(LOG::WS, "Unknow ws msg recv");
                 }
             }
         }

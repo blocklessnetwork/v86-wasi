@@ -40,7 +40,7 @@ impl NetTermAdapter {
 
     #[inline]
     fn try_recv_channel_from_rx(&mut self) {
-        if self.sender.is_some() {
+        if self.sender.is_some() && self.recv.is_some() {
             return;
         }
         (self.recv, self.sender) = match self.channel_rx.try_recv() {
@@ -50,6 +50,7 @@ impl NetTermAdapter {
     }
 
     pub fn try_recv_from_term(&mut self) {
+        self.try_recv_channel_from_rx();
         let clear = self.recv.as_mut().map_or(false, |r| {
             let mut clear = false;
             loop {
@@ -88,7 +89,7 @@ impl NetTermAdapter {
 
     #[inline]
     fn send(&mut self, msg: u16, d: BusData) {
-        let sender = self.try_recv_channel_from_rx();
+        self.try_recv_channel_from_rx();
         if self.sender.as_mut().map_or(false, |s| s.send((msg, d)).is_err()) {
             self.clear_channel();
         }

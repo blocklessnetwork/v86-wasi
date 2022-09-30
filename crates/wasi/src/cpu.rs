@@ -1006,11 +1006,6 @@ impl CPU {
     }
 
     #[inline]
-    pub fn jit_done(&self) {
-        self.store.emulator_mut().jit_done();
-    }
-
-    #[inline]
     pub fn codegen_finalize_finished(&mut self, index: i32, phys_addr: i32, state_flags: i32) {
         self.store_mut().map(|store| {
             self.vm_opers.typed_codegen_finalize_finished.call(store, (index, phys_addr, state_flags));
