@@ -54,6 +54,10 @@ function putc_decode(p, buf) {
     return [13, [row, col, ch, bg_color, fg_color]];
 }
 
+function screen_chars_decode(p, buf) {
+   
+}
+
 function tuple8_decode(p, buf) {
     var v1 = buf[p];
     var v2 = buf[p+1];
@@ -111,9 +115,17 @@ TermWS.prototype.onmessage = function(event) {
                 this.bus.send("screen-update-cursor", rs[1]);
                 continue;
             }
+            if (msg_id === 6) {
+                var len = buf[p]|buf[p+1]<<8|buf[p+2]<<16|buf[p+3]<<24;
+                p += 4;
+                for (var i = 0; i < len; i++) {
+                    var rs = putc_decode(p, buf);
+                    p += rs[0];
+                    this.bus.send("screen-put-char", rs[1]);
+                }
+                continue;
+            }
             dbg_assert(msg_id);
         }
     } 
 }
-
-

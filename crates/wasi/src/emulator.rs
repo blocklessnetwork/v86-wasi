@@ -8,6 +8,7 @@ use std::{
     time,
 };
 
+use crossbeam_channel::bounded;
 use wasmtime::{Extern, Instance, Linker, Store, Table};
 
 use crate::{
@@ -103,7 +104,7 @@ impl InnerEmulator {
         self.bus = Some(BUS::new(store.clone()));
 
         //tx rx for term adapater
-        let (tx, rs) = mpsc::channel();
+        let (tx, rs) = bounded(1);
         std::thread::Builder::new()
             .name("ws thread".to_string())
             .spawn(move || {

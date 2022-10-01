@@ -3,7 +3,7 @@
 use std::{slice, rc::Rc};
 
 use crate::{
-    bus::BusData,
+    bus::{BusData, ScreenSetSizeGraphical, ScreenPutChar},
     io::IO,
     log::LOG,
     pci::{PCIBar, PCIDevice},
@@ -1045,13 +1045,13 @@ impl VGAScreen {
         self.store.bus_mut().map(|bus| {
             bus.send(
                 "screen-put-char",
-                BusData::ScreenPutChar(
+                BusData::ScreenPutChar(ScreenPutChar(
                     row as u16,
                     col as u16,
                     chr,
                     self.vga256_palette[(color as usize) >> 4 & 0xF],
                     self.vga256_palette[(color as usize) & 0xF],
-                ),
+                )),
             );
         });
         self.vga_memory[addr as usize] = value;
@@ -1132,25 +1132,27 @@ impl VGAScreen {
         let mut chr = 0;
         let mut color = 0;
         // let mut data = Vec::with_capacity(self.max_cols as usize * self.max_rows as usize);
+        let mut vec = Vec::new();
         for row in 0..self.max_rows {
             for col in 0..self.max_cols {
                 chr = self.vga_memory[addr];
                 color = self.vga_memory[addr | 1];
-                self.store.bus_mut().map(|bus| {
-                    bus.send(
-                        "screen-put-char",
-                        BusData::ScreenPutChar(
-                            row,
-                            col,
-                            chr,
-                            self.vga256_palette[(color >> 4 & 0xF) as usize],
-                            self.vga256_palette[(color & 0xF) as usize],
-                        )
-                    );
-                });
+                vec.push(ScreenPutChar(
+                    row,
+                    col,
+                    chr,
+                    self.vga256_palette[(color >> 4 & 0xF) as usize],
+                    self.vga256_palette[(color & 0xF) as usize],
+                ));
                 addr += 2;
             }
         }
+        self.store.bus_mut().map(|bus| {
+            bus.send(
+                "screen-put-sreenchars",
+                BusData::ScreenPutChars(vec),
+            );
+        });
     }
 
     #[inline]
@@ -1576,13 +1578,13 @@ impl VGAScreen {
             self.store.bus_mut().map(|bus| {
                 bus.send(
                     "screen-set-size-graphical",
-                    BusData::ScreenSetSizeGraphical(
+                    BusData::ScreenSetSizeGraphical(ScreenSetSizeGraphical(
                         width,
                         height,
                         virtual_width,
                         virtual_height,
                         bpp,
-                    ),
+                    )),
                 );
             });
         }

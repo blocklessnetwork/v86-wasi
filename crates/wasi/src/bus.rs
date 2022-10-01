@@ -2,8 +2,41 @@
 use std::{collections::HashMap, os::unix::prelude::OsStrExt, rc::Rc};
 
 use crate::{Dev, StoreT};
+pub(crate) struct ScreenPutChar(pub u16, pub u16, pub u8, pub i32, pub i32);
+pub(crate) struct ScreenSetSizeGraphical(pub u32, pub u32, pub u32, pub u32, pub u16);
 
-#[derive(Clone)]
+impl ScreenPutChar {
+    #[inline]
+    fn to_vec(&self) -> Vec<u8> {
+        let mut rs = self.0.to_le_bytes().to_vec();
+        let b = self.1.to_le_bytes();
+        rs.extend(b);
+        let c = self.2.to_le_bytes();
+        rs.extend(c);
+        let d = self.3.to_le_bytes();
+        rs.extend(d);
+        let e = self.4.to_le_bytes();
+        rs.extend(e);
+        rs
+    }
+}
+
+impl ScreenSetSizeGraphical {
+    #[inline]
+    fn to_vec(&self) -> Vec<u8> {
+        let mut rs = self.0.to_le_bytes().to_vec();
+        let b = self.1.to_le_bytes();
+        rs.extend(b);
+        let c = self.2.to_le_bytes();
+        rs.extend(c);
+        let d = self.3.to_le_bytes();
+        rs.extend(d);
+        let e = self.4.to_le_bytes();
+        rs.extend(e);
+        rs
+    }
+}
+
 pub(crate) enum BusData {
     None,
     String(String),
@@ -15,10 +48,11 @@ pub(crate) enum BusData {
     U16Tuple(u16, u16),
     MouseEvent(u8, u8, u8),
     PcspeakerUpdate(u8, u16),
+    ScreenPutChar(ScreenPutChar),
     IdeReadEnd(u8, usize, usize),
     IdeWriteEnd(u8, usize, usize),
-    ScreenPutChar(u16, u16, u8, i32, i32),
-    ScreenSetSizeGraphical(u32, u32, u32, u32, u16),
+    ScreenPutChars(Vec<ScreenPutChar>),
+    ScreenSetSizeGraphical(ScreenSetSizeGraphical),
 }
 
 impl BusData {
@@ -36,55 +70,43 @@ impl BusData {
                 let a = a.to_le_bytes();
                 let b = b.to_le_bytes();
                 let mut rs = a.to_vec();
-                rs.extend_from_slice(&b);
+                rs.extend(b);
                 rs
             }
             BusData::MouseEvent(a, b, c) => vec![*a, *b, *c],
             BusData::PcspeakerUpdate(a, b) => {
                 let mut rs = vec![*a];
                 let b = b.to_le_bytes();
-                rs.extend_from_slice(&b);
+                rs.extend(b);
                 rs
             }
             BusData::IdeReadEnd(a, b, c) => {
                 let mut rs = vec![*a];
                 let b = b.to_le_bytes();
-                rs.extend_from_slice(&b);
+                rs.extend(b);
                 let c = c.to_le_bytes();
-                rs.extend_from_slice(&c);
+                rs.extend(c);
                 rs
             }
             BusData::IdeWriteEnd(a, b, c) => {
                 let mut rs = vec![*a];
                 let b = b.to_le_bytes();
-                rs.extend_from_slice(&b);
+                rs.extend(b);
                 let c = c.to_le_bytes();
-                rs.extend_from_slice(&c);
+                rs.extend(c);
                 rs
             }
-            BusData::ScreenPutChar(a, b, c, d, e) => {
-                let mut rs = a.to_le_bytes().to_vec();
-                let b = b.to_le_bytes();
-                rs.extend_from_slice(&b);
-                let c = c.to_le_bytes();
-                rs.extend_from_slice(&c);
-                let d = d.to_le_bytes();
-                rs.extend_from_slice(&d);
-                let e = e.to_le_bytes();
-                rs.extend_from_slice(&e);
+            BusData::ScreenPutChar(s) => {
+                s.to_vec()
+            },
+            BusData::ScreenPutChars(s) => {
+                let mut rs = Vec::with_capacity(16);
+                rs.extend((s.len() as u32).to_le_bytes());
+                s.iter().for_each(|s| rs.extend(s.to_vec()));
                 rs
             },
-            BusData::ScreenSetSizeGraphical(a, b, c, d, e) => {
-                let mut rs = a.to_le_bytes().to_vec();
-                let b = b.to_le_bytes();
-                rs.extend_from_slice(&b);
-                let c = c.to_le_bytes();
-                rs.extend_from_slice(&c);
-                let d = d.to_le_bytes();
-                rs.extend_from_slice(&d);
-                let e = e.to_le_bytes();
-                rs.extend_from_slice(&e);
-                rs
+            BusData::ScreenSetSizeGraphical(s) => {
+                s.to_vec()
             }
         }
     }
@@ -172,7 +194,7 @@ impl BusData {
         F: FnOnce(u16, u16, u8, i32, i32),
     {
         match self {
-            &BusData::ScreenPutChar(a, b, c, d, e) => f(a, b, c, d, e),
+            &BusData::ScreenPutChar(ScreenPutChar(a, b, c, d, e)) => f(a, b, c, d, e),
             _ => {}
         }
     }
@@ -183,7 +205,7 @@ impl BusData {
         F: FnOnce(u32, u32, u32, u32, u16),
     {
         match self {
-            &BusData::ScreenSetSizeGraphical(a, b, c, d, e) => f(a, b, c, d, e),
+            &BusData::ScreenSetSizeGraphical(ScreenSetSizeGraphical(a, b, c, d, e)) => f(a, b, c, d, e),
             _ => {}
         }
     }

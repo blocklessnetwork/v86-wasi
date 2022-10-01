@@ -1,17 +1,18 @@
+use crossbeam_channel::{Receiver, Sender, bounded, TryRecvError};
 use tokio::{net::{TcpListener, TcpStream}, runtime::Builder, time};
 use futures_util::{SinkExt, StreamExt, stream::SplitSink};
-use std::{sync::mpsc::{Sender, self, Receiver, TryRecvError}, time::Duration};
+use std::time::Duration;
 use crate::{bus::BusData, log::LOG};
 use std::net::SocketAddr;
 use tokio_tungstenite::{accept_async, tungstenite::{Error, Message}};
 use tokio_tungstenite::WebSocketStream;
 
 pub(crate) struct WsThread {
-    sender: Sender<(Receiver<(u16, BusData)>, Sender<(u16, BusData)>)>,
+    sender: Sender<(Receiver<(u16, BusData)>, Sender<(u16, Vec<u8>)>)>,
 }
 
 impl WsThread {
-    pub fn new(sender: Sender<(Receiver<(u16, BusData)>, Sender<(u16, BusData)>)>) -> Self {
+    pub fn new(sender: Sender<(Receiver<(u16, BusData)>, Sender<(u16, Vec<u8>)>)>) -> Self {
         Self {
             sender,
         }
@@ -30,22 +31,22 @@ impl WsThread {
 
     async fn handle_incoming(
         mut sink: SplitSink<WebSocketStream<TcpStream>, Message>,
-        rx: Receiver<(u16, BusData)>,
+        rx: Receiver<(u16, Vec<u8>)>,
     ) -> Result<(), Error> {
         loop {
             let mut rs = Vec::new();
             let mut msgid;
-            let mut data: BusData;
+            let mut data: Vec<u8>;
             loop {
                 match rx.try_recv() {
                     Ok((t, d)) => {
                         data = d;
                         msgid = t;
                         let msg_id = msgid.to_le_bytes();
-                        let mut msg = Vec::with_capacity(8);
-                        msg.extend_from_slice(&msg_id);
-                        msg.extend(data.to_vec());
-                        rs.extend_from_slice(&msg);
+                        let mut msg = Vec::with_capacity(2+data.len());
+                        msg.extend(msg_id);
+                        msg.extend(data);
+                        rs.extend(msg);
                     }
                     Err(TryRecvError::Empty) => break,
                     Err(_) => return Ok(()),
@@ -55,7 +56,7 @@ impl WsThread {
                 let msg = Message::Binary(rs);
                 let _ = sink.send(msg).await;
             } else {
-                time::sleep(Duration::from_millis(50)).await;
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
         }
     }
@@ -63,8 +64,8 @@ impl WsThread {
     async fn handle_connection(&mut self, peer: SocketAddr, stream: TcpStream) -> Result<(), Error> {
         let mut ws_stream = accept_async(stream).await.expect("Failed to accept");
         let (sink, mut ws_stream) = ws_stream.split();
-        let (tx, rx) = mpsc::channel();
-        let (s_tx, s_rx) = mpsc::channel();
+        let (tx, rx) = bounded(10240);
+        let (s_tx, s_rx) = bounded(10240);
         self.sender.send((s_rx, tx)).unwrap();
         tokio::spawn(async move {
             Self::handle_incoming(sink, rx).await

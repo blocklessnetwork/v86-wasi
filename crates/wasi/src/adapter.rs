@@ -1,13 +1,14 @@
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::time::Duration;
+
+use crossbeam_channel::{Receiver, Sender, TryRecvError, TrySendError};
 
 use crate::{StoreT, ContextTrait, bus::BusData};
 
-
 pub(crate) struct NetTermAdapter {
     store: StoreT,
-    sender: Option<Sender<(u16, BusData)>>,
+    sender: Option<Sender<(u16, Vec<u8>)>>,
     recv: Option<Receiver<(u16, BusData)>>,
-    channel_rx: Receiver<(Receiver<(u16, BusData)>, Sender<(u16, BusData)>)>,
+    channel_rx: Receiver<(Receiver<(u16, BusData)>, Sender<(u16, Vec<u8>)>)>,
 
 }
 
@@ -15,7 +16,7 @@ impl NetTermAdapter {
 
     pub fn new(
         store: StoreT, 
-        channel_rx: Receiver<(Receiver<(u16, BusData)>, Sender<(u16, BusData)>)>
+        channel_rx: Receiver<(Receiver<(u16, BusData)>, Sender<(u16, Vec<u8>)>)>
     ) -> Self {
         Self {
             store,
@@ -28,15 +29,17 @@ impl NetTermAdapter {
     pub fn init(&mut self) {
         self.store.bus_mut().map(|bus| {
             bus.register("screen-set-mode", 
-                |s: &StoreT, data: &BusData| Self::try_send(s, 1, data.clone()));
+                |s: &StoreT, data| Self::try_send(s, 1, data.to_vec()));
             bus.register("screen-put-char", 
-                |s: &StoreT, data: &BusData| Self::try_send(s, 2, data.clone()));
+                |s: &StoreT, data| Self::try_send(s, 2, data.to_vec()));
             bus.register("screen-set-size-text", 
-                |s: &StoreT, data: &BusData| Self::try_send(s, 3, data.clone()));
+                |s: &StoreT, data| Self::try_send(s, 3, data.to_vec()));
             bus.register("screen-update-cursor-scanline", 
-                |s: &StoreT, data: &BusData| Self::try_send(s, 4, data.clone()));
+                |s: &StoreT, data| Self::try_send(s, 4, data.to_vec()));
             bus.register("screen-update-cursor", 
-                |s: &StoreT, data: &BusData| Self::try_send(s, 5, data.clone()));
+                |s: &StoreT, data| Self::try_send(s, 5, data.to_vec()));
+            bus.register("screen-put-sreenchars", 
+                |s: &StoreT, data| Self::try_send(s, 6, data.to_vec()));
         });
     }
 
@@ -85,14 +88,23 @@ impl NetTermAdapter {
     }
 
     #[inline]
-    fn try_send(s: &StoreT, msg_id: u16, data: BusData) {
+    fn try_send(s: &StoreT, msg_id: u16, data: Vec<u8>) {
         s.net_term_adp_mut().map(|n| n.send(msg_id, data));
     }
 
     #[inline]
-    fn send(&mut self, msg: u16, d: BusData) {
+    fn send(&mut self, msg: u16, d: Vec<u8>) {
         self.try_recv_channel_from_rx();
-        if self.sender.as_mut().map_or(false, |s| s.send((msg, d)).is_err()) {
+        if self.sender.as_mut().map_or(false, |s| {
+            match s.try_send((msg, d)) {
+                Ok(_) => false,
+                Err(TrySendError::Full(_)) => {
+                    std::thread::sleep(Duration::from_millis(10));
+                    false
+                },
+                Err(e) => true,
+            }
+        }) {
             self.clear_channel();
         }
     }

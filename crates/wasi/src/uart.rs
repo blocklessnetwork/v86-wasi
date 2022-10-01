@@ -14,21 +14,21 @@ const UART_LSR_TRANSMITTER_EMPTY: u8 = 0x40; // TX empty and line is idle
 
 pub(crate) struct UART {
     store: StoreT,
-    ints: u8,
+    irq: u8,
+    lsr: u8,
     ier: u8,
     iir: u8,
-    port: u32,
     com: u8,
+    ints: u8,
+    port: u32,
     current_line: Vec<u8>,
     input: Vec<u8>,
     baud_rate: u16,
     line_control: u8,
     fifo_control: u8,
     modem_control: u8,
-    scratch_register: u8,
     modem_status: u8,
-    irq: u8,
-    lsr: u8,
+    scratch_register: u8,
 }
 
 impl UART {
