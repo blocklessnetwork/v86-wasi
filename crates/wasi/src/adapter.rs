@@ -99,10 +99,11 @@ impl NetTermAdapter {
             match s.try_send((msg, d)) {
                 Ok(_) => false,
                 Err(TrySendError::Full(_)) => {
+                    println!("queue full");
                     std::thread::sleep(Duration::from_millis(10));
                     false
                 },
-                Err(e) => true,
+                Err(_) => true,
             }
         }) {
             self.clear_channel();

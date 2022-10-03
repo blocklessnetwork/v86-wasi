@@ -1,5 +1,5 @@
 use crossbeam_channel::{Receiver, Sender, bounded, TryRecvError};
-use tokio::{net::{TcpListener, TcpStream}, runtime::Builder, time};
+use tokio::{net::{TcpListener, TcpStream}, runtime::Builder};
 use futures_util::{SinkExt, StreamExt, stream::SplitSink};
 use std::time::Duration;
 use crate::{bus::BusData, log::LOG};
@@ -56,13 +56,13 @@ impl WsThread {
                 let msg = Message::Binary(rs);
                 let _ = sink.send(msg).await;
             } else {
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                tokio::time::sleep(Duration::from_millis(20)).await;
             }
         }
     }
 
-    async fn handle_connection(&mut self, peer: SocketAddr, stream: TcpStream) -> Result<(), Error> {
-        let mut ws_stream = accept_async(stream).await.expect("Failed to accept");
+    async fn handle_connection(&mut self, _peer: SocketAddr, stream: TcpStream) -> Result<(), Error> {
+        let ws_stream = accept_async(stream).await.expect("Failed to accept");
         let (sink, mut ws_stream) = ws_stream.split();
         let (tx, rx) = bounded(10240);
         let (s_tx, s_rx) = bounded(10240);

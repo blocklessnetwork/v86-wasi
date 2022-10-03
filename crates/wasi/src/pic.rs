@@ -62,6 +62,7 @@ impl InnerPIC {
         }
     }
 
+    #[inline]
     pub fn get_isr(&self) -> u8 {
         self.isr
     }
