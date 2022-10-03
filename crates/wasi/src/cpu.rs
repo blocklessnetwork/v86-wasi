@@ -27,7 +27,7 @@ use crate::{
     rtc::RTC,
     uart::UART,
     vga::VGAScreen,
-    ContextTrait, Dev, Emulator, StoreT, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, ne2k::Ne2k, ide::{self, IDEDevice},
+    ContextTrait, Dev, Emulator, StoreT, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, ne2k::Ne2k, ide::{self, IDEDevice}, storage::SyncFileBuffer,
 };
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
@@ -335,9 +335,10 @@ pub struct CPU {
     pub(crate) uart0: UART,
     pub(crate) debug: Debug,
     pub(crate) mmap_fn: MMapFn,
-    pub(crate) ide: IDEDevice,
     pub(crate) vga: VGAScreen,
     pub(crate) fdc: FloppyController,
+    pub(crate) ide: Option<IDEDevice>,
+    pub(crate) cdrom: Option<IDEDevice>,
 }
 
 impl CPU {
@@ -362,7 +363,8 @@ impl CPU {
         let vga = VGAScreen::new(store.clone(), vga_mem_size);
         let uart0 = UART::new(store.clone(), 0x3F8);
         let ne2k = Ne2k::new(store.clone());
-        let ide = IDEDevice::new(store.clone(), None, None, false, 0);
+        let ide = None;
+        let cdrom = None;
         Self {
             ps2,
             rtc,
@@ -372,6 +374,7 @@ impl CPU {
             ide,
             ne2k,
             uart0,
+            cdrom,
             memory,
             idle: true,
             a20_byte: 0,
@@ -669,6 +672,17 @@ impl CPU {
         }
     }
 
+    #[inline]
+    fn cdrom_init(&mut self) {
+        let setting = self.store.setting();
+        if setting.cdrom_file.is_some() {
+            let cdrom_buf = setting.load_cdrom_file().unwrap();
+            let sync_file_buf = Box::new(SyncFileBuffer::new(self.store.clone(), cdrom_buf));
+            let cdrom_ide = IDEDevice::new(self.store.clone(), Some(sync_file_buf), None, true, 1);
+            self.cdrom = Some(cdrom_ide);
+        }
+    }
+
     pub fn init(&mut self) {
         self.rust_init();
         self.set_tsc(0, 0);
@@ -683,15 +697,16 @@ impl CPU {
         self.pit.init();
         self.pic.init();
         self.ps2.init();
-        self.uart0.init();
         self.dma.init();
         self.fdc.init();
-        self.ide.init();
         self.vga.init();
         self.ne2k.init();
         self.reset_cpu();
         self.load_bios();
+        self.uart0.init();
+        self.ide.as_mut().map(|ide| ide.init());
         self.load_kernel();
+        self.cdrom_init();
 
         self.io.register_read8(
             0x511,

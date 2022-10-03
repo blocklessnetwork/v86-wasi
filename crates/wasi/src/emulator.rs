@@ -365,12 +365,24 @@ impl Emulator {
 
     #[inline]
     pub(crate) fn ide_mut(&self) -> Option<&mut IDEDevice> {
-        self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.ide)
+            self.inner_mut().cpu.as_mut().map(|cpu| {
+                if cpu.ide.is_some() {
+                    cpu.ide.as_mut()
+                } else {
+                    cpu.cdrom.as_mut()
+                }
+            }).flatten()
     }
 
     #[inline]
     pub(crate) fn ide(&self) -> Option<&IDEDevice> {
-        self.inner_mut().cpu.as_ref().map(|cpu| &cpu.ide)
+        self.inner().cpu.as_ref().map(|cpu| {
+            if cpu.ide.is_some() {
+                cpu.ide.as_ref()
+            } else {
+                cpu.cdrom.as_ref()
+            }
+        }).flatten()
     }
 
     #[inline]

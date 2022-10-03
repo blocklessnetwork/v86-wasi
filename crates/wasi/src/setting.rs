@@ -1,11 +1,13 @@
 pub struct Setting {
     pub(crate) cmdline: Option<String>,
+    pub(crate) hda_file: Option<String>,
     pub(crate) bios_file: Option<String>,
+    pub(crate) cdrom_file: Option<String>,
     pub(crate) initrd_file: Option<String>,
     pub(crate) bzimage_file: Option<String>,
     pub(crate) vga_bios_file: Option<String>,
-    pub(crate) memory_size: u32,
     pub(crate) vga_memory_size: u32,
+    pub(crate) memory_size: u32,
     pub(crate) fast_boot: bool,
 }
 
@@ -13,13 +15,15 @@ impl Setting {
     pub fn new() -> Self {
         Self {
             cmdline: None,
+            hda_file: None,
             bios_file: None,
+            fast_boot: false,
+            cdrom_file: None,
             initrd_file: None,
             bzimage_file: None,
             vga_bios_file: None,
             vga_memory_size: 8 * 1024 * 1024,
             memory_size: 128 * 1024 * 1024,
-            fast_boot: false,
         }
     }
 
@@ -49,8 +53,28 @@ impl Setting {
     }
 
     #[inline]
+    pub fn hda_file(&mut self, f: String) {
+        self.hda_file = Some(f)
+    }
+
+    #[inline]
+    pub fn cdrom_file(&mut self, f: String) {
+        self.cdrom_file = Some(f)
+    }
+
+    #[inline]
     pub fn vga_bios_file(&mut self, f: String) {
         self.vga_bios_file = Some(f)
+    }
+
+    #[inline]
+    pub fn load_hda_file(&self) -> Option<Vec<u8>> {
+        self.load_file(self.hda_file.as_ref())
+    }
+
+    #[inline]
+    pub fn load_cdrom_file(&self) -> Option<Vec<u8>> {
+        self.load_file(self.cdrom_file.as_ref())
     }
 
     #[inline]

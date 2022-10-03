@@ -7,21 +7,8 @@ use std::{slice};
 const ALL_DEBUG: bool = true;
 
 type StoreT = Weak<Store<Emulator>>;
-
-use adapter::NetTermAdapter;
-use bus::BUS;
-use dma::DMA;
-use ide::IDEDevice;
-use io::IO;
-use ne2k::Ne2k;
-use pci::PCI;
-use pic::PIC;
-use pit::PIT;
-use ps2::PS2;
-use rtc::RTC;
-use uart::UART;
 use wasmtime::*;
-use vga::VGAScreen;
+
 mod io;
 mod bus;
 mod cpu;
@@ -39,19 +26,35 @@ mod ne2k;
 mod vga;
 mod uart;
 mod debug;
+mod ws_thr;
 mod floppy;
 mod kernel;
-mod setting;
-mod ws_thr;
-mod emulator;
 mod adapter;
-pub(crate) mod consts;
-pub use consts::*;
+mod storage;
+mod setting;
+mod emulator;
+pub mod consts;
+
+use io::IO;
+use bus::BUS;
+use dma::DMA;
+use pci::PCI;
+use pic::PIC;
+use pit::PIT;
+use ps2::PS2;
+use rtc::RTC;
+use ne2k::Ne2k;
+use uart::UART;
 pub use cpu::CPU;
+use ide::IDEDevice;
+use vga::VGAScreen;
+pub use consts::*;
+pub use setting::*;
 pub(crate) use log::LOG;
 pub use emulator::Emulator;
+use adapter::NetTermAdapter;
 use floppy::FloppyController;
-pub use setting::*;
+pub(crate) use storage::FileBuffer;
 
 pub use dev::Dev;
 
@@ -676,14 +679,4 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
         )
         .unwrap();
     mem::add_mem_to_linker(linker);
-}
-
-
-pub(crate) trait FileBuffer {
-    
-    fn get(&mut self, start: usize, len: usize, cb: Box<dyn FnOnce(&StoreT, &[u8])>);
-    
-    fn set(&mut self, offset: usize, sl: &[u8], cb: Box<dyn FnOnce(&StoreT)>);
-
-    fn byte_length(&self) -> usize;
 }
