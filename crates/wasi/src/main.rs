@@ -8,12 +8,12 @@ fn main() {
     conf.cache_config_load_default().unwrap();
     let engine = Engine::new(&conf).unwrap();
     let mut setting = Setting::new();
-    // setting.bzimage_file("arch/buildroot-bzimage.bin".into());
-    // setting.cmdline("tsc=reliable mitigations=off random.trust_cpu=on".into());
+    setting.bzimage_file("arch/buildroot-bzimage.bin".into());
+    setting.cmdline("tsc=reliable mitigations=off random.trust_cpu=on".into());
 
     setting.bios_file("arch/seabios-debug.bin".into());
     setting.vga_bios_file("arch/vgabios-debug.bin".into()); 
-    setting.cdrom_file("arch/linux.iso".into()); 
+    // setting.cdrom_file("arch/linux.iso".into()); 
     let mut emulator = Emulator::new(setting);
     let mut store = Store::new(&engine, emulator.clone());
     let module = Module::from_file(&engine, "target/v86-debug.wasm").unwrap();
