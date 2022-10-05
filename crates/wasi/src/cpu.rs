@@ -693,11 +693,9 @@ impl CPU {
         self.create_memory(memory_size);
         self.debug.init();
         self.init_io();
+        self.pci.init();
+        self.pic.init();
         
-        self.dma.init();
-        self.fdc.init();
-        self.vga.init();
-        self.ne2k.init();
         self.reset_cpu();
         self.load_bios();
         self.uart0.init();
@@ -812,10 +810,12 @@ impl CPU {
         self.rtc.init();
         //TODO device loading
         self.fill_cmos();
-        self.pci.init();
-
+        
         self.pit.init();
-        self.pic.init();
+        self.dma.init();
+        self.fdc.init();
+        self.vga.init();
+        self.ne2k.init();
         self.ps2.init();
         self.cdrom_init();
     }

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crossbeam_channel::{Receiver, Sender, TryRecvError, TrySendError};
 
-use crate::{StoreT, ContextTrait, bus::BusData};
+use crate::{StoreT, ContextTrait, bus::BusData, log::LOG};
 
 pub(crate) struct NetTermAdapter {
     store: StoreT,
@@ -99,7 +99,7 @@ impl NetTermAdapter {
             match s.try_send((msg, d)) {
                 Ok(_) => false,
                 Err(TrySendError::Full(_)) => {
-                    println!("queue full");
+                    dbg_log!(LOG::WS, "queue full. ");
                     std::thread::sleep(Duration::from_millis(10));
                     false
                 },
