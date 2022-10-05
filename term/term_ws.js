@@ -26,6 +26,11 @@ TermWS.prototype.connect = function() {
         self.is_connected = true;
     }
 
+    this.ws.onerror = function() {
+        self.is_connected = false;
+        self.status.innerHTML = "";
+    }
+
     this.ws.onmessage = function(event) {
         this.is_connected = true;
         self.onmessage(event);
@@ -33,6 +38,9 @@ TermWS.prototype.connect = function() {
 }
 
 TermWS.prototype.send_kb = function(code) {
+    if (!this.is_connected) {
+        return
+    }
     var buf = new Uint8Array(3);
     buf[0] = 0x00;
     buf[1] = 0x01;

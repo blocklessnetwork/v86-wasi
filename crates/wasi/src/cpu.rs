@@ -678,7 +678,7 @@ impl CPU {
         if setting.cdrom_file.is_some() {
             let cdrom_buf = setting.load_cdrom_file().unwrap();
             let sync_file_buf = Box::new(SyncFileBuffer::new(self.store.clone(), cdrom_buf));
-            let cdrom_ide = IDEDevice::new(self.store.clone(), Some(sync_file_buf), None, true, 1);
+            let cdrom_ide = IDEDevice::new(self.store.clone(), Some(sync_file_buf), None, true, 0);
             self.cdrom = Some(cdrom_ide);
             self.cdrom.as_mut().map(|cdrom| cdrom.init());
         }

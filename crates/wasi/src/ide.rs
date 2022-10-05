@@ -154,6 +154,7 @@ impl IDEInterface {
 
 
             let cylinder_count = self.sector_count as f64 / self.head_count as f64 / self.sectors_per_track as f64;
+            
 
             self.cylinder_count = if self.cylinder_count != (self.cylinder_count | 0) {
                 dbg_log!(LOG::DISK, "Warning: Rounding up cylinder count. Choose different head number");
