@@ -81,7 +81,7 @@ impl IDEInterface {
         let data_end = 0;
         let drive_head = 0;
         let data_pointer = 0;
-        let data_length = 0;
+        let data_length = 512;
         let cylinder_count = 0;
         let current_command = 0xFF;
         let current_atapi_command = 0xFF;
@@ -139,7 +139,7 @@ impl IDEInterface {
                 dbg_log!(LOG::DISK, "Warning: Disk size not aligned with sector size");
                 sector_count.ceil() as u32
             } else {
-                self.sector_count as u32
+                sector_count as u32
             };
 
             if self.is_cd {
@@ -205,10 +205,15 @@ impl IDEInterface {
                 0xFF 
             };
             if (self.data_pointer & align) == 0 {
+                let curr_data = if self.data_pointer < self.data.len() {
+                    self.data[self.data_pointer]
+                } else {
+                    0
+                };
                 dbg_log!(
                     LOG::DISK,
                     "Read 1F0: {:#X} cur={:#X} cnt={:#X}", 
-                    self.data[self.data_pointer],
+                    curr_data,
                     self.data_pointer,
                     self.data_length,
                 );
@@ -341,7 +346,7 @@ impl IDEInterface {
     #[inline]
     fn data_set(&mut self, data: &[u8]) {
         self.data_allocate_noclear(data.len());
-        self.data.copy_from_slice(data);
+        self.data[0..data.len()].copy_from_slice(data);
     }
 
     #[inline]
@@ -441,7 +446,12 @@ impl IDEInterface {
         for i in 0..512 {
             self.data[i] = 0;
         }
-        let cylinder_count = 16383.min(self.cylinder_count);
+        let cylinder_count = if self.cylinder_count > 0 {
+            16383.min(self.cylinder_count)
+        } else {
+            16383
+        };
+        
         let apapi = if self.is_atapi { 
             0x85 
         } else {
@@ -521,6 +531,8 @@ impl IDEInterface {
             (self.sector_count & 0xFF) as u8, (self.sector_count >> 8 & 0xFF) as u8,
             (self.sector_count >> 16 & 0xFF) as u8, (self.sector_count >> 24 & 0xFF) as u8,    
         ]);
+        self.data_length = 512;
+        self.data_end = 512;
     }
 
     fn ata_command(&mut self, cmd: u8) {
@@ -2087,6 +2099,7 @@ impl IDEDevice {
                 pci_bars,
                 &format!("ide{}", self.nr),
             );
+            pci.register_device(pci_dev);
         });
     }
 
