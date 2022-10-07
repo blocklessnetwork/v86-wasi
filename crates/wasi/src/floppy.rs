@@ -167,8 +167,8 @@ impl FloppyController {
         }
 
         dbg_log!(LOG::FLOPPY, "start motors: {:#X}", value >> 4);
-        dbg_log!(LOG::FLOPPY, "enable dma: {}", !!(value & 8));
-        dbg_log!(LOG::FLOPPY, "reset fdc: {}", !!(value & 4));
+        dbg_log!(LOG::FLOPPY, "enable dma: {}", (value & 8) != 0);
+        dbg_log!(LOG::FLOPPY, "reset fdc: {}", (value & 4) != 0);
         dbg_log!(LOG::FLOPPY, "drive select: {}", (value & 3));
         dbg_log!(LOG::FLOPPY, "DOR = {:#X}", value);
 

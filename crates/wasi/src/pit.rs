@@ -268,7 +268,7 @@ impl PIT {
         let diff = now - self.counter_start_time[i];
         let diff_in_ticks = (diff * OSCILLATOR_FREQ).floor();
 
-        let mut value = self.counter_start_value[i] - diff_in_ticks as u16;
+        let mut value: i32 = self.counter_start_value[i] as i32 - diff_in_ticks as i32;
 
         dbg_log!(
             LOG::PIT,
@@ -281,7 +281,7 @@ impl PIT {
 
         let reload = self.counter_reload[i];
 
-        if value >= reload {
+        if value >= reload as i32 {
             dbg_log!(
                 LOG::PIT,
                 "Warning: Counter{} value {} is larger than reload {}",
@@ -289,11 +289,11 @@ impl PIT {
                 value,
                 reload
             );
-            value %= reload;
-        } else if value > i16::MAX as u16 {
-            value = value % reload + reload;
+            value %= reload as i32; 
+        } else if value < 0 {
+            value = value % (reload as i32) + reload as i32;
         }
-        return value;
+        return value as u16;
     }
 
     fn port43_write(&mut self, reg_byte: u8) {

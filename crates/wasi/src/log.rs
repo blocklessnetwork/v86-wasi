@@ -59,7 +59,7 @@ impl LOG {
             Self::VGA => false,
             Self::RTC => true,
             Self::DMA => true,
-            Self::PIT => false,
+            Self::PIT => true,
             Self::DISK => false,
             Self::BIOS => true,
             Self::WS => true,
