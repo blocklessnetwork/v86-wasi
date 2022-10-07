@@ -60,7 +60,7 @@ impl LOG {
             Self::RTC => true,
             Self::DMA => true,
             Self::PIT => false,
-            Self::DISK => true,
+            Self::DISK => false,
             Self::BIOS => true,
             Self::WS => true,
             Self::FLOPPY => true,

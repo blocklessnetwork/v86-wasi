@@ -13,7 +13,7 @@ fn main() {
 
     setting.bios_file("arch/seabios-debug.bin".into());
     setting.vga_bios_file("arch/vgabios-debug.bin".into()); 
-    setting.cdrom_file("arch/linux.iso".into()); 
+    setting.cdrom_file("arch/linux4.iso".into()); 
     let mut emulator = Emulator::new(setting);
     let mut store = Store::new(&engine, emulator.clone());
     let module = Module::from_file(&engine, "target/v86-debug.wasm").unwrap();
