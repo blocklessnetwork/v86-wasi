@@ -53,7 +53,7 @@ impl LOG {
             Self::IO => true,
             Self::CPU => true,
             Self::PIC => false,
-            Self::PCI => true,
+            Self::PCI => false,
             Self::PS2 => false,
             Self::NET => true,
             Self::VGA => false,
