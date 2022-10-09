@@ -1,10 +1,10 @@
 #![allow(non_snake_case)]
 use crate::{log::LOG, ContextTrait, Dev, StoreT};
 
-const PIC_LOG_VERBOSE: bool = false;
+const PIC_LOG_VERBOSE: bool = true;
 
 lazy_static::lazy_static! {
-    static ref INT_LOG2_TABLE: [i8; 256] = {
+    static ref INT_LOG2_TABLE: [i32; 256] = {
         let mut table = [0; 256];
         let mut b = -2;
         for i in 0..256 {
@@ -18,26 +18,26 @@ lazy_static::lazy_static! {
 }
 
 #[inline]
-fn int_log2_byte(i: u8) -> i8 {
+fn int_log2_byte(i: u8) -> i32 {
     INT_LOG2_TABLE[i as usize]
 }
 
 struct InnerPIC {
     store: StoreT,
+    irq_mask: i32,
     is_master: bool,
-    irq_mask: u8,
     name: &'static str,
+    isr: i32,
+    irr: i32,
     irq_map: u8,
-    isr: u8,
-    irr: u8,
-    irq_value: u8,
-    requested_irq: i8,
+    irq_value: i32,
+    requested_irq: i32,
     expect_icw4: bool,
     state: u8,
     read_isr: bool,
     auto_eoi: u8,
     special_mask_mode: bool,
-    elcr: u8,
+    elcr: i32,
 }
 
 impl InnerPIC {
@@ -64,7 +64,7 @@ impl InnerPIC {
 
     #[inline]
     pub fn get_isr(&self) -> u8 {
-        self.isr
+        self.isr as u8
     }
 
     fn init(&mut self) {
@@ -174,7 +174,7 @@ impl InnerPIC {
         dbg_log!(LOG::PIC, "20 write: {:#X}", data_byte);
         if data_byte & 0x10 > 0 {
             // icw1
-            dbg_log!(LOG::PIC, "icw1 = {:x}", data_byte);
+            dbg_log!(LOG::PIC, "icw1 = {:#X}", data_byte);
             self.isr = 0;
             self.irr = 0;
             self.irq_mask = 0;
@@ -186,7 +186,7 @@ impl InnerPIC {
             self.state = 1;
         } else if data_byte & 8 > 0 {
             // ocw3
-            dbg_log!(LOG::PIC, "ocw3: 0x{:x}", data_byte);
+            dbg_log!(LOG::PIC, "ocw3: {:#X}", data_byte);
             if data_byte & 2 > 0 {
                 self.read_isr = data_byte & 1 > 0;
             }
@@ -200,22 +200,22 @@ impl InnerPIC {
         } else {
             // ocw2
             // end of interrupt
-            dbg_log!(LOG::PIC, "eoi: 0x{:x} ({})", data_byte, self.name);
+            dbg_log!(LOG::PIC, "eoi: {:#X} ({})", data_byte, self.name);
 
             let eoi_type = data_byte >> 5;
             if eoi_type == 1 {
                 // non-specific eoi
                 self.isr &= self.isr - 1;
-                dbg_log!(LOG::PIC, "new isr: 0x{:02x}", self.isr);
+                dbg_log!(LOG::PIC, "new isr: {:#X}", self.isr);
             } else if eoi_type == 3 {
                 // specific eoi
                 self.isr &= !(1 << (data_byte & 7));
             } else if (data_byte & 0xC8) == 0xC0 {
                 // os2 v4
                 let priority = data_byte & 7;
-                dbg_log!(LOG::PIC, "lowest priority: 0x{:02x}", priority);
+                dbg_log!(LOG::PIC, "lowest priority: {:#X}", priority);
             } else {
-                dbg_log!(LOG::PIC, "Unknown eoi: 0x{:02x}", data_byte);
+                dbg_log!(LOG::PIC, "Unknown eoi: {:#X}", data_byte);
                 assert!(false);
                 self.isr &= self.isr - 1;
             }
@@ -225,16 +225,16 @@ impl InnerPIC {
 
     fn port20_read(&self) -> u8 {
         if self.read_isr {
-            dbg_log!(LOG::PIC, "read port 20h (isr): 0x{:02x}", self.isr);
-            return self.isr;
+            dbg_log!(LOG::PIC, "read port 20h (isr): {:#X}", self.isr);
+            return self.isr as u8;
         } else {
-            dbg_log!(LOG::PIC, "read port 20h (irr): 0x{:02x}", self.irr);
-            return self.irr;
+            dbg_log!(LOG::PIC, "read port 20h (irr): {:#X}", self.irr);
+            return self.irr as u8;
         }
     }
 
     fn port21_write(&mut self, data_byte: u8) {
-        // dbg_log!("21 write: 0x{:02x}", data_byte);
+        // dbg_log!(LOG::PIC, "21 write: {:#X}", data_byte);
         if self.state == 0 {
             if self.expect_icw4 {
                 // icw4
@@ -242,7 +242,7 @@ impl InnerPIC {
                 self.auto_eoi = data_byte & 2;
                 dbg_log!(
                     LOG::PIC,
-                    "icw4: 0x{:0x} autoeoi={}",
+                    "icw4: {:#X} autoeoi={}",
                     data_byte,
                     self.auto_eoi
                 );
@@ -252,12 +252,11 @@ impl InnerPIC {
                 }
             } else {
                 // ocw1
-                self.irq_mask = !data_byte;
-
+                self.irq_mask = !(data_byte as i32);
                 if PIC_LOG_VERBOSE {
                     dbg_log!(
                         LOG::PIC,
-                        "interrupt mask: 0x{:x} ({})",
+                        "interrupt mask: {:#X} ({})",
                         self.irq_mask & 0xFF,
                         self.name
                     );
@@ -269,7 +268,7 @@ impl InnerPIC {
             self.irq_map = data_byte;
             dbg_log!(
                 LOG::PIC,
-                "interrupts are mapped to 0x{:x} ({})",
+                "interrupts are mapped to {:#X} ({})",
                 self.irq_map,
                 self.name
             );
@@ -277,24 +276,24 @@ impl InnerPIC {
         } else if self.state == 2 {
             // icw3
             self.state = 0;
-            dbg_log!(LOG::PIC, "icw3: {}", data_byte);
+            dbg_log!(LOG::PIC, "icw3: {:#X}", data_byte);
         }
     }
 
     fn port21_read(&self) -> u8 {
-        dbg_log!(LOG::PIC, "21h read 0x{:x}", !self.irq_mask & 0xff);
-        !self.irq_mask & 0xFF
+        dbg_log!(LOG::PIC, "21h read {:#X}", !self.irq_mask & 0xff);
+        (!self.irq_mask & 0xFF) as u8
     }
 
     fn port4D0_read(&self) -> u8 {
-        dbg_log!(LOG::PIC, "elcr read: 0x{:02x}", self.elcr);
-        self.elcr
+        dbg_log!(LOG::PIC, "elcr read: {:#X}", self.elcr);
+        self.elcr as u8
     }
 
     fn port4D0_write(&mut self, value: u8) {
-        dbg_log!(LOG::PIC, "elcr write: 0x{:02}", value);
+        dbg_log!(LOG::PIC, "elcr write: {:#X}", value);
         // set by seabios to 00 0C (only set for pci interrupts)
-        self.elcr = value;
+        self.elcr = value as i32;
     }
 
     fn check_irqs(&mut self) {
@@ -317,12 +316,12 @@ impl InnerPIC {
             self.store.cpu_mut().map(|cpu| cpu.handle_irqs());
             return;
         }
-        let enabled_irr: i8 = (self.irr & self.irq_mask) as i8;
+        let enabled_irr: i32 = self.irr as i32  & self.irq_mask;
         if enabled_irr == 0 {
             if PIC_LOG_VERBOSE {
                 dbg_log!(
                     LOG::PIC,
-                    "master> no unmasked irrs. irr=0x{:x} mask=0x{:x} isr=0x{:x}",
+                    "master> no unmasked irrs. irr={:#X} mask={:#X} isr={:#X}",
                     self.irr,
                     self.irq_mask & 0xff,
                     self.isr,
@@ -330,17 +329,17 @@ impl InnerPIC {
             }
             return;
         }
-        let irq_mask: u8 = (enabled_irr & -enabled_irr) as u8;
+        let irq_mask = enabled_irr & -enabled_irr;
         let special_mask = if self.special_mask_mode {
             self.irq_mask
         } else {
-            0xFF
+            -1
         };
-        let isr: i8 = self.isr as i8;
-        if self.isr != 0 && ((isr & -isr) as u8 & special_mask) <= irq_mask {
+        let isr: i32 = self.isr as i32;
+        if self.isr != 0 && (isr & -isr & special_mask) <= irq_mask {
             dbg_log!(
                 LOG::PIC,
-                "master> higher prio: isr=0x{:02x} mask=0x{:02x} irq=0x{:02x}",
+                "master> higher prio: isr={:#X} mask={:#X} irq={:#X}",
                 self.isr,
                 self.irq_mask & 0xff,
                 self.irq_mask
@@ -348,7 +347,7 @@ impl InnerPIC {
             return;
         }
         assert!(irq_mask != 0);
-        let irq_number = int_log2_byte(irq_mask);
+        let irq_number = int_log2_byte(irq_mask as u8);
         assert!(irq_mask == (1 << irq_number));
         if PIC_LOG_VERBOSE {
             dbg_log!(LOG::PIC, "master> request irq {}", irq_number);
@@ -385,7 +384,7 @@ impl InnerPIC {
         }
         assert!(self.irr > 0); // spurious
         assert!(self.requested_irq >= 0);
-        let irq_mask = 1 << self.requested_irq;
+        let irq_mask: i32 = 1 << self.requested_irq;
 
         // not in level mode
         if (self.elcr & irq_mask) == 0 {
@@ -463,6 +462,7 @@ impl InnerPIC {
 
     #[inline]
     fn set_irq(&mut self, irq_number: u8) {
+        dbg_log!(LOG::PIC, "set irq is_master:{} {}", self.is_master, irq_number);
         if self.is_master {
             self.set_master_irq(irq_number);
         } else {
@@ -538,7 +538,7 @@ impl InnerPIC {
             dbg_log!(LOG::PIC, "slave > clear irq {}", irq_number);
         }
 
-        let irq_mask = 1 << irq_number;
+        let irq_mask: i32 = 1 << irq_number;
         if self.irq_value & irq_mask > 0 {
             self.irq_value &= !irq_mask;
             self.irr &= !irq_mask;
@@ -570,13 +570,13 @@ impl InnerPIC {
             return;
         }
 
-        let enabled_irr: i8 = (self.irr & self.irq_mask) as i8;
+        let enabled_irr = self.irr as i32 & self.irq_mask;
 
         if enabled_irr == 0 {
             if PIC_LOG_VERBOSE {
                 dbg_log!(
                     LOG::PIC,
-                    "slave > no unmasked irrs. irr=0x{:02x} mask=0x{:02x} isr=0x{:02x}",
+                    "slave > no unmasked irrs. irr={:#X} mask={:#X} isr={:#X}",
                     self.irr,
                     self.irq_mask & 0xff,
                     self.isr
@@ -585,18 +585,18 @@ impl InnerPIC {
             return;
         }
 
-        let irq_mask = (enabled_irr & -enabled_irr) as u8;
+        let irq_mask = enabled_irr & -enabled_irr;
         let special_mask = if self.special_mask_mode {
             self.irq_mask
         } else {
-            0xFF
+            -1
         };
-        let isr: i8 = self.isr as i8;
-        if self.isr > 0 && ((isr & -isr) as u8 & special_mask) <= irq_mask {
+        let isr = self.isr as i32;
+        if self.isr > 0 && (isr & -isr & special_mask) <= irq_mask {
             // wait for eoi of higher or same priority interrupt
             dbg_log!(
                 LOG::PIC,
-                "slave > higher prio: isr=0x{:02x} irq=0x{:02x}",
+                "slave > higher prio: isr={:#X} irq={:#X}",
                 self.isr,
                 self.irq_mask
             );
@@ -604,7 +604,7 @@ impl InnerPIC {
         }
 
         assert!(irq_mask != 0);
-        let irq_number = int_log2_byte(irq_mask);
+        let irq_number = int_log2_byte(irq_mask as u8);
         assert!(irq_mask == (1 << irq_number));
         if PIC_LOG_VERBOSE {
             dbg_log!(LOG::PIC, "slave> request irq {}", irq_number);

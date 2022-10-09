@@ -1698,8 +1698,8 @@ impl IDEDevice {
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32| {
                     dev.ide().map_or(0, |ide| {
-                        dbg_log!(LOG::DISK, "lower irq");
-                        dev.cpu_mut().map(|cpu| cpu.device_raise_irq(ide.irq));
+                        dbg_log!(LOG::DISK, "lower irq {}", ide.irq);
+                        dev.cpu_mut().map(|cpu| cpu.device_lower_irq(ide.irq));
                         ide.read_status()
                     })
                 }
@@ -1950,7 +1950,7 @@ impl IDEDevice {
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32, data: u8| {
                     dev.ide_mut().map(|ide| {
-                        dbg_log!(LOG::DISK, "lower irq");
+                        dbg_log!(LOG::DISK, "lower irq {}", ide.irq);
                         dev.cpu_mut().map(|cpu| cpu.device_lower_irq(ide.irq));
                         ide.current_interface_mut().ata_command(data);
                     });

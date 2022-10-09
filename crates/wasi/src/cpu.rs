@@ -810,13 +810,13 @@ impl CPU {
         self.rtc.init();
         //TODO device loading
         self.fill_cmos();
-        
+
         self.pit.init();
         self.dma.init();
-        self.fdc.init();
         self.vga.init();
         self.ne2k.init();
         self.ps2.init();
+        self.fdc.init();
         self.cdrom_init();
     }
 
@@ -898,8 +898,8 @@ impl CPU {
     #[inline]
     fn run_hardware_timers(&mut self, now: f64) -> i32 {
         //TODO:
-        let rtc_time = self.rtc.timer(now) as i32;
         let pit_time = self.pit.timer(now, false) as i32;
+        let rtc_time = self.rtc.timer(now) as i32;
         100.min(rtc_time).min(pit_time)
     }
 

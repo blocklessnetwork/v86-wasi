@@ -157,7 +157,8 @@ impl RTC {
                 CMOS_STATUS_A => rtc.cmos_a,
                 CMOS_STATUS_B => rtc.cmos_b,
                 CMOS_STATUS_C => {
-                    //TODO: this.cpu.device_lower_irq(8);
+                    //this.cpu.device_lower_irq(8);
+                    dev.cpu_mut().map(|cpu| cpu.device_lower_irq(8));
                     dbg_log!(LOG::RTC, "cmos reg C read");
                     let c = rtc.cmos_c;
                     let mask: u8 = !0xF0;
@@ -187,7 +188,6 @@ impl RTC {
         let time = Utc::now().timestamp_millis(); // XXX
         self.rtc_time += time - self.last_update;
         self.last_update = time;
-
         if self.periodic_interrupt && self.next_interrupt < time {
             self.store.cpu_mut().map(|cpu| {
                 cpu.device_raise_irq(8);
