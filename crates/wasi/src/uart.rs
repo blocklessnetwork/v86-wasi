@@ -342,7 +342,7 @@ impl UART {
         } else {
             self.iir = UART_IIR_NO_INT;
             self.store.cpu_mut().map(|cpu| {
-                cpu.device_raise_irq(self.irq);
+                cpu.device_lower_irq(self.irq);
             });
         }
     }
@@ -365,7 +365,6 @@ impl UART {
     fn write_data(&mut self, out_byte: u8) {
         
         if self.line_control & DLAB > 0 {
-            dbg_log!(LOG::SERIAL, "data return : {:#X}", self.line_control);
             self.baud_rate = self.baud_rate & !0xFF | out_byte as u16;
 
             return;
@@ -385,8 +384,6 @@ impl UART {
             )
         });
 
-        self.current_line.push(out_byte);
-
         if out_byte == b'\n' {
             //TODO const line = String.fromCharCode.apply("", this.current_line).trimRight().replace(/[\x00-\x08\x0b-\x1f\x7f\x80-\xff]/g, "");
             let line = unsafe { std::str::from_utf8_unchecked(&self.current_line) };
@@ -398,6 +395,8 @@ impl UART {
                 );
             });
             self.current_line.clear();
+        } else {
+            self.current_line.push(out_byte);
         }
     }
 }

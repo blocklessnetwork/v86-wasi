@@ -423,46 +423,45 @@ impl InnerPIC {
                     "slave > spurious requested={}",
                     self.requested_irq
                 );
-                self.requested_irq = -1;
-                self.store.pic_mut().map(|pic| {
-                    pic.master.irq_value &= !(1 << 2);
-                });
-                self.store.cpu_mut().map(|cpu| {
-                    cpu.pic_call_irq((self.irq_map | 7) as i32);
-                });
-                return;
             }
-
-            assert!(self.irr > 0); // spurious
-            assert!(self.requested_irq >= 0);
-
-            let irq_mask = 1 << self.requested_irq;
-            // not in level mode
-            if (self.elcr & irq_mask) == 0 {
-                self.irr &= !irq_mask;
-            }
-
-            if self.auto_eoi == 0 {
-                self.isr |= irq_mask;
-            }
-
+            self.requested_irq = -1;
             self.store.pic_mut().map(|pic| {
                 pic.master.irq_value &= !(1 << 2);
             });
-            if PIC_LOG_VERBOSE {
-                dbg_log!(LOG::PIC, "slave > acknowledge {}", self.requested_irq);
-            }
             self.store.cpu_mut().map(|cpu| {
-                cpu.pic_call_irq(self.irq_map as i32 | self.requested_irq as i32);
+                cpu.pic_call_irq((self.irq_map | 7) as i32);
             });
-            self.requested_irq = -1;
-            self.check_irqs();
+            return;
         }
+
+        assert!(self.irr > 0); // spurious
+        assert!(self.requested_irq >= 0);
+
+        let irq_mask = 1 << self.requested_irq;
+        // not in level mode
+        if (self.elcr & irq_mask) == 0 {
+            self.irr &= !irq_mask;
+        }
+
+        if self.auto_eoi == 0 {
+            self.isr |= irq_mask;
+        }
+
+        self.store.pic_mut().map(|pic| {
+            pic.master.irq_value &= !(1 << 2);
+        });
+        if PIC_LOG_VERBOSE {
+            dbg_log!(LOG::PIC, "slave > acknowledge {}", self.requested_irq);
+        }
+        self.store.cpu_mut().map(|cpu| {
+            cpu.pic_call_irq(self.irq_map as i32 | self.requested_irq as i32);
+        });
+        self.requested_irq = -1;
+        self.check_irqs();
     }
 
     #[inline]
     fn set_irq(&mut self, irq_number: u8) {
-        dbg_log!(LOG::PIC, "set irq is_master:{} {}", self.is_master, irq_number);
         if self.is_master {
             self.set_master_irq(irq_number);
         } else {
