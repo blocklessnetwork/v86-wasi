@@ -926,7 +926,7 @@ impl IDEInterface {
     
                 // http://www.t10.org/ftp/x3t9.2/document.87/87-106r0.txt
                 //this.data_allocate(36);
-                self.data.copy_from_slice(&[
+                let data_from = &[
                     0x05, 0x80, 0x01, 0x31,
                     // additional length
                     31,
@@ -944,7 +944,8 @@ impl IDEInterface {
     
                     // 32
                     0x31, 0x2E, 0x31, 0x61,
-                ]);
+                ];
+                self.data[0..data_from.len()].copy_from_slice(data_from);
                 self.data_end = 36.min(length as usize);
                 self.data_length = self.data_end;
             }

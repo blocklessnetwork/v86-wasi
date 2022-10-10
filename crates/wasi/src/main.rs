@@ -12,10 +12,10 @@ fn main() {
     setting.vga_bios_file("arch/vgabios-debug.bin".into()); 
 
 
-    setting.bzimage_file("arch/buildroot-bzimage.bin".into());
-    setting.cmdline("tsc=reliable mitigations=off random.trust_cpu=on".into());
+    // setting.bzimage_file("arch/buildroot-bzimage.bin".into());
+    // setting.cmdline("tsc=reliable mitigations=off random.trust_cpu=on".into());
     
-    // setting.cdrom_file("arch/linux4.iso".into()); 
+    setting.cdrom_file("arch/linux4.iso".into()); 
     let mut emulator = Emulator::new(setting);
     let mut store = Store::new(&engine, emulator.clone());
     let module = Module::from_file(&engine, "target/v86-debug.wasm").unwrap();
