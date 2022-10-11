@@ -138,11 +138,7 @@ impl InnerEmulator {
                 self.tick_trigger.iter().for_each(|cb| cb(&store));
                 t = c.next_tick(t as u64);
                 if t > 0f64 {
-                    if t > 1f64 {
-                        std::thread::sleep(time::Duration::from_millis(t as u64));
-                    } else {
-                        std::thread::sleep(time::Duration::from_micros((t * 1000f64) as u64));
-                    }
+                    std::thread::sleep(time::Duration::from_secs_f64(t / 1000f64));
                 }
             }
         });
