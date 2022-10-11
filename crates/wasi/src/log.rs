@@ -64,7 +64,7 @@ impl LOG {
             Self::BIOS => true,
             Self::WS => true,
             Self::FLOPPY => true,
-            Self::SERIAL => true,
+            Self::SERIAL => false,
         }
     }
 }

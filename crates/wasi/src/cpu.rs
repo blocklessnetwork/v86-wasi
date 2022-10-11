@@ -29,6 +29,7 @@ use crate::{
     vga::VGAScreen,
     ContextTrait, Dev, Emulator, StoreT, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, ne2k::Ne2k, ide::{self, IDEDevice}, storage::SyncFileBuffer,
 };
+use chrono::Duration;
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
 struct IOMap {
@@ -823,11 +824,13 @@ impl CPU {
     #[inline]
     fn in_hlt(&mut self) -> bool {
         self.store_mut()
-            .map_or(false, |store| self.iomap.in_hlt_io.read(store, 0) > 0)
+            .map_or(false, |store| {
+                self.iomap.in_hlt_io.read(store, 0) > 0
+            })
     }
 
     #[inline]
-    pub fn next_tick(&mut self, t: u64) -> i32 {
+    pub fn next_tick(&mut self, t: u64) -> f64 {
         self.tick_counter += 1;
         let tick = self.tick_counter;
         self.idle = true;
@@ -835,15 +838,14 @@ impl CPU {
     }
 
     #[inline]
-    fn cpu_yield(&mut self, t: u64, tick: u64) -> i32 {
+    fn cpu_yield(&mut self, t: u64, tick: u64) -> f64 {
         self.do_tick()
     }
 
     #[inline]
-    fn do_tick(&mut self) -> i32 {
+    fn do_tick(&mut self) -> f64 {
         self.idle = false;
         self.main_run()
-        //self.next_tick(t as u64);
     }
 
     pub fn handle_irqs(&mut self) {
@@ -876,7 +878,7 @@ impl CPU {
     pub fn hlt_op(&mut self) {
         if !self.has_interrupt() {
             self.store.bus_mut().map(|bus| {
-                bus.send("pu-event-halt", crate::bus::BusData::None);
+                bus.send("cpu-event-halt", crate::bus::BusData::None);
             });
         }
         self.store_mut()
@@ -885,22 +887,22 @@ impl CPU {
     }
 
     #[inline]
-    fn hlt_loop(&mut self) -> i32 {
+    fn hlt_loop(&mut self) -> f64 {
         if self.has_interrupt() {
             let s = self.run_hardware_timers(self.microtick());
             self.handle_irqs();
             s
         } else {
-            100
+            100f64
         }
     }
 
     #[inline]
-    fn run_hardware_timers(&mut self, now: f64) -> i32 {
+    fn run_hardware_timers(&mut self, now: f64) -> f64 {
         //TODO:
-        let pit_time = self.pit.timer(now, false) as i32;
-        let rtc_time = self.rtc.timer(now) as i32;
-        100.min(rtc_time).min(pit_time)
+        let pit_time = self.pit.timer(now, false);
+        let rtc_time = self.rtc.timer(now) as f64;
+        100f64.min(rtc_time).min(pit_time)
     }
 
     #[inline]
@@ -915,7 +917,7 @@ impl CPU {
         //TODO:
     }
 
-    pub fn main_run(&mut self) -> i32 {
+    pub fn main_run(&mut self) -> f64 {
         if self.in_hlt() {
             let t = self.hlt_loop();
             if self.in_hlt() {
@@ -933,7 +935,7 @@ impl CPU {
                 return t;
             }
         }
-        return 0;
+        return 0f64;
     }
 
     pub fn fill_cmos(&mut self) {
@@ -1012,9 +1014,8 @@ impl CPU {
 
     pub fn reboot_internal(&mut self) {
         self.reset_cpu();
+        self.fw_value = Rc::new(Vec::new());
         //TODO:
-        //self.fw_value = [];
-
         // if(this.devices.virtio)
         // {
         //     this.devices.virtio.reset();

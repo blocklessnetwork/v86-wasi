@@ -102,6 +102,7 @@ impl RTC {
     fn bcd_pack(mut n: u8) -> u8 {
         let mut i = 0;
         let mut result = 0;
+        #[allow(unused_assignments)]
         let mut digit = 0;
         while n != 0 {
             digit = n % 10;
@@ -157,7 +158,6 @@ impl RTC {
                 CMOS_STATUS_A => rtc.cmos_a,
                 CMOS_STATUS_B => rtc.cmos_b,
                 CMOS_STATUS_C => {
-                    //this.cpu.device_lower_irq(8);
                     dev.cpu_mut().map(|cpu| cpu.device_lower_irq(8));
                     dbg_log!(LOG::RTC, "cmos reg C read");
                     let c = rtc.cmos_c;
