@@ -7,5 +7,9 @@
     "memory_size": 134217728, 
     "vga_memory_size": 8388608,
     "cmdline": ["tsc=reliable mitigations=off random.trust_cpu=on"],
+    "logger": {
+        "log_file": "debug.log",
+        "log_module": ["E", "BIOS"]
+    },
     "muiltiboot_order": ["bin", "cdrom"]
 }
