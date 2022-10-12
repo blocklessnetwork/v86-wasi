@@ -3,6 +3,7 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::sync::Once;
 use std::time::Instant;
+#[allow(unused_imports)]
 use crate::consts::*;
 
 static mut LOG_FNAME: Option<String> = None;
@@ -60,22 +61,22 @@ impl LOG {
 
     #[inline]
     pub fn from_str(s :&str) -> Self {
-        match s {
-            "IO"|"io" => LOG::IO,
-            "WS"|"ws" => LOG::WS,
-            "CPU"|"cpu" => LOG::CPU,
-            "PIC"|"pic" => LOG::PIC,
-            "PCI"|"pci" => LOG::PCI,
-            "DMA"|"dma" => LOG::DMA,
-            "VGA"|"vga" => LOG::VGA,
-            "PIT"|"pit" => LOG::PIT,
-            "RTC"|"rtc" => LOG::RTC,
-            "PS2"|"ps2" => LOG::PS2,
-            "NET"|"net" => LOG::NET,
-            "DISK"|"disk" => LOG::DISK,
-            "BIOS"|"bios" => LOG::BIOS,
-            "SERIAL"|"serial" => LOG::SERIAL,
-            "FLOPPY"|"floppy" => LOG::FLOPPY,
+        match s.to_ascii_uppercase().as_str() {
+            "IO" => LOG::IO,
+            "WS" => LOG::WS,
+            "CPU" => LOG::CPU,
+            "PIC" => LOG::PIC,
+            "PCI" => LOG::PCI,
+            "DMA" => LOG::DMA,
+            "VGA" => LOG::VGA,
+            "PIT" => LOG::PIT,
+            "RTC" => LOG::RTC,
+            "PS2" => LOG::PS2,
+            "NET" => LOG::NET,
+            "DISK" => LOG::DISK,
+            "BIOS" => LOG::BIOS,
+            "SERIAL" => LOG::SERIAL,
+            "FLOPPY" => LOG::FLOPPY,
             _ => LOG::E,
         }
     }

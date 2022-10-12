@@ -1,5 +1,6 @@
 use std::path::Path;
 
+#[allow(unused_imports)]
 use crate::consts::*;
 use crate::LOG;
 
