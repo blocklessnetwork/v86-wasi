@@ -1,6 +1,9 @@
+use std::path::Path;
+
 pub struct Setting {
     pub(crate) cmdline: Option<String>,
     pub(crate) hda_file: Option<String>,
+    pub(crate) wasm_file: Option<String>,
     pub(crate) bios_file: Option<String>,
     pub(crate) cdrom_file: Option<String>,
     pub(crate) initrd_file: Option<String>,
@@ -17,6 +20,7 @@ impl Setting {
             cmdline: None,
             hda_file: None,
             bios_file: None,
+            wasm_file: None,
             fast_boot: false,
             cdrom_file: None,
             initrd_file: None,
@@ -25,6 +29,32 @@ impl Setting {
             vga_memory_size: 8 * 1024 * 1024,
             memory_size: 128 * 1024 * 1024,
         }
+    }
+
+    pub fn load_from_file(f: impl AsRef<Path>) -> Self {
+        let data = std::fs::read(f).unwrap();
+        let json_str = std::str::from_utf8(&data).unwrap();
+        let setting_obj = json::parse(json_str).unwrap();
+        let mut setting = Self::new();
+        setting.cdrom_file = setting_obj["cdrom"].as_str().map(|s| s.into());
+        setting.bzimage_file = setting_obj["bzimage_file"].as_str().map(|s| s.into());
+        setting.bios_file = setting_obj["bios_file"].as_str().map(|s| s.into());
+        setting.vga_bios_file = setting_obj["vga_bios_file"].as_str().map(|s| s.into());
+        setting.wasm_file = setting_obj["wasm_file"].as_str().map(|s| s.into());
+        setting.memory_size = setting_obj["memory_size"].as_u32().unwrap_or(128 * 1024 * 1024);
+        setting.vga_memory_size = setting_obj["vga_memory_size"].as_u32().unwrap_or( 8 * 1024 * 1024);
+        if setting_obj["cmdline"].is_array() {
+            setting.cmdline = match &setting_obj["cmdline"] {
+                json::JsonValue::Array(arr) => {
+                    let cmdline: Vec<String> = arr.iter()
+                        .map(|s| s.as_str().unwrap().into()).collect();
+                    Some(cmdline.join("\n"))
+                }
+                _ => None,
+            };
+        }
+        
+        setting
     }
 
     #[inline]
@@ -50,6 +80,11 @@ impl Setting {
     #[inline]
     pub fn cmdline(&mut self, f: String) {
         self.cmdline = Some(f)
+    }
+
+    #[inline]
+    pub fn wasm_file(&self) -> Option<&String> {
+        self.wasm_file.as_ref()
     }
 
     #[inline]

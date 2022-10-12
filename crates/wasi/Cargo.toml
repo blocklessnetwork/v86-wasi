@@ -13,3 +13,4 @@ tokio = {version = "1", features = ["rt", "net", "time", "io-util"]}
 tokio-tungstenite = "0.17.2"
 futures-util = "0.3"
 crossbeam-channel = "0.5"
+json = "0.12"
