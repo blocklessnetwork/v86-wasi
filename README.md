@@ -12,11 +12,35 @@ use the follow command  to generate the wasm file.
 $ make
 ```
 
-### 2. Run the test linux
+### 2. Modify the config file.
 
-use the follow command to run the linux of memory.
+The follow is the configure file
+```
+{
+    "cdrom": "arch/linux4.iso",
+    "bzimage_file": "arch/buildroot-bzimage.bin",
+    "bios_file": "arch/seabios-debug.bin",
+    "vga_bios_file": "arch/vgabios-debug.bin",
+    "wasm_file": "target/v86-debug.wasm",
+    "memory_size": 134217728, 
+    "vga_memory_size": 8388608,
+    "cmdline": ["tsc=reliable mitigations=off random.trust_cpu=on"],
+    "logger": {
+        "log_file": "debug.log",
+        "log_module": ["E", "BIOS"]
+    },
+    "muiltiboot_order": ["bin", "cdrom"]
+}
+```
+
+### 3. Run the test linux
+
+use the follow command to run the linux with the configure.
 
 ```bash
-$ cargo run -p v86-wasi --release
+$ cargo run -p v86-wasi --release $CONFG_FILE_PATH
 ```
+
+
+
 
