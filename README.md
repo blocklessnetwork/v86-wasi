@@ -41,6 +41,9 @@ use the follow command to run the linux with the configure file.
 $ cargo run -p v86-wasi --release $CONFG_FILE_PATH
 ```
 
+After run the VM, you can open the "term.html" file for control the VM.
 
+
+![](term/Screen.png)
 
 
