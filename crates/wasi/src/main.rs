@@ -14,6 +14,12 @@ fn load_setting() -> Setting {
 
 fn main() {
     let setting = load_setting();
+    
+    let logger_path = setting.logger_file().map(|f| f.clone());
+    v86_wasi::set_log_file_name(logger_path);
+    v86_wasi::set_log_mask(setting.log_mask());
+
+
     let mut conf = Config::new();
     conf.cache_config_load_default().unwrap();
     let engine = Engine::new(&conf).unwrap();

@@ -55,8 +55,10 @@ pub use emulator::Emulator;
 use adapter::NetTermAdapter;
 use floppy::FloppyController;
 pub(crate) use storage::FileBuffer;
-
 pub use dev::Dev;
+
+pub use log::set_log_file_name;
+pub use log::set_log_mask;
 
 macro_rules! copy_impl {
     ($name: ident, $type: ty, $l: literal) => {

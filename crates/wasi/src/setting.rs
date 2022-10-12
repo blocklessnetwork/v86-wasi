@@ -1,5 +1,8 @@
 use std::path::Path;
 
+use crate::consts::*;
+use crate::LOG;
+
 pub struct Setting {
     pub(crate) cmdline: Option<String>,
     pub(crate) hda_file: Option<String>,
@@ -7,22 +10,26 @@ pub struct Setting {
     pub(crate) bios_file: Option<String>,
     pub(crate) cdrom_file: Option<String>,
     pub(crate) initrd_file: Option<String>,
+    pub(crate) logger_file: Option<String>,
     pub(crate) bzimage_file: Option<String>,
     pub(crate) vga_bios_file: Option<String>,
     pub(crate) vga_memory_size: u32,
     pub(crate) memory_size: u32,
+    pub(crate) log_mask: u32,
     pub(crate) fast_boot: bool,
 }
 
 impl Setting {
     pub fn new() -> Self {
         Self {
+            log_mask: 0,
             cmdline: None,
             hda_file: None,
             bios_file: None,
             wasm_file: None,
             fast_boot: false,
             cdrom_file: None,
+            logger_file: None,
             initrd_file: None,
             bzimage_file: None,
             vga_bios_file: None,
@@ -44,8 +51,8 @@ impl Setting {
         setting.memory_size = setting_obj["memory_size"].as_u32().unwrap_or(128 * 1024 * 1024);
         setting.vga_memory_size = setting_obj["vga_memory_size"].as_u32().unwrap_or( 8 * 1024 * 1024);
         if setting_obj["cmdline"].is_array() {
-            setting.cmdline = match &setting_obj["cmdline"] {
-                json::JsonValue::Array(arr) => {
+            setting.cmdline = match setting_obj["cmdline"] {
+                json::JsonValue::Array(ref arr) => {
                     let cmdline: Vec<String> = arr.iter()
                         .map(|s| s.as_str().unwrap().into()).collect();
                     Some(cmdline.join("\n"))
@@ -53,8 +60,26 @@ impl Setting {
                 _ => None,
             };
         }
-        
+
+
+        if !setting_obj["logger"].is_null() {
+            let log_f = setting_obj["logger"]["log_file"].as_str().map(|s| s.into());
+            setting.logger_file = log_f;
+
+            if let json::JsonValue::Array(ref arr) = setting_obj["logger"]["log_module"] {
+                arr.iter().for_each(|s| {
+                    s.as_str().map(|s| {
+                        setting.log_mask |= LOG::from_str(s).bit_mask();
+                    });
+                });
+            }
+        }
         setting
+    }
+
+    #[inline]
+    pub fn logger_file(&self) -> Option<&String> {
+        self.logger_file.as_ref()
     }
 
     #[inline]
@@ -130,5 +155,10 @@ impl Setting {
     #[inline]
     pub fn load_initrd_file(&self) -> Option<Vec<u8>> {
         self.load_file(self.initrd_file.as_ref())
+    }
+
+    #[inline]
+    pub fn log_mask(&self) -> u32 {
+        self.log_mask
     }
 }

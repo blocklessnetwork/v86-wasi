@@ -58,3 +58,22 @@ pub const FW_CFG_FILE_DIR: u16 = 0x19;
 pub const FW_CFG_CUSTOM_START: u16 = 0x8000;
 pub const FW_CFG_FILE_START: u16 = 0xC000;
 pub const FW_CFG_SIGNATURE_QEMU: u32 = 0x554D4551;
+
+
+/** @const */
+pub const LOG_E: u32 = 0x1;
+pub const LOG_IO: u32 = 0x1<<1;
+pub const LOG_WS: u32 = 0x1<<2;
+pub const LOG_CPU: u32 = 0x1<<3;
+pub const LOG_PIC: u32 = 0x1<<4;
+pub const LOG_PCI: u32 = 0x1<<5;
+pub const LOG_DMA: u32 = 0x1<<6;
+pub const LOG_VGA: u32 = 0x1<<7;
+pub const LOG_PIT: u32 = 0x1<<8;
+pub const LOG_RTC: u32 = 0x1<<9;
+pub const LOG_PS2: u32 = 0x1<<10;
+pub const LOG_NET: u32 = 0x1<<11;
+pub const LOG_DISK: u32 = 0x1<<12;
+pub const LOG_BIOS: u32 = 0x1<<13;
+pub const LOG_SERIAL: u32 = 0x1<<14;
+pub const LOG_FLOPPY: u32 = 0x1<<15;

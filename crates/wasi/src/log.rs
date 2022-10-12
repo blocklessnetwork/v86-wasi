@@ -3,8 +3,10 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::sync::Once;
 use std::time::Instant;
+use crate::consts::*;
 
-static LOG_FNAME: &str = "debug.log";
+static mut LOG_FNAME: Option<String> = None;
+static mut LOG_MASK: u32 = 0;
 static mut LOG_FILE: Option<File> = None;
 static mut LAST_FLUSH: Option<Instant> = None;
 
@@ -17,7 +19,7 @@ pub fn log(record: &[u8]) {
                 .write(true)
                 .append(true)
                 .create(true)
-                .open(LOG_FNAME)
+                .open(LOG_FNAME.as_ref().map_or("debug.log", |s| s))
                 .ok();
             LAST_FLUSH.replace(Instant::now());
         });
@@ -25,6 +27,14 @@ pub fn log(record: &[u8]) {
             let _ = f.write_all(record);
         });
     }
+}
+
+pub fn set_log_file_name(f: Option<String>) {
+    unsafe {LOG_FNAME = f};
+}
+
+pub fn set_log_mask(m: u32) {
+    unsafe {LOG_MASK = m};
 }
 
 pub enum LOG {
@@ -47,25 +57,54 @@ pub enum LOG {
 }
 
 impl LOG {
-    pub(crate) fn display(&self) -> bool {
-        match *self {
-            Self::E => true,
-            Self::IO => true,
-            Self::CPU => true,
-            Self::PIC => false,
-            Self::PCI => false,
-            Self::PS2 => false,
-            Self::NET => true,
-            Self::VGA => false,
-            Self::RTC => true,
-            Self::DMA => true,
-            Self::PIT => false,
-            Self::DISK => false,
-            Self::BIOS => true,
-            Self::WS => true,
-            Self::FLOPPY => true,
-            Self::SERIAL => false,
+
+    #[inline]
+    pub fn from_str(s :&str) -> Self {
+        match s {
+            "IO"|"io" => LOG::IO,
+            "WS"|"ws" => LOG::WS,
+            "CPU"|"cpu" => LOG::CPU,
+            "PIC"|"pic" => LOG::PIC,
+            "PCI"|"pci" => LOG::PCI,
+            "DMA"|"dma" => LOG::DMA,
+            "VGA"|"vga" => LOG::VGA,
+            "PIT"|"pit" => LOG::PIT,
+            "RTC"|"rtc" => LOG::RTC,
+            "PS2"|"ps2" => LOG::PS2,
+            "NET"|"net" => LOG::NET,
+            "DISK"|"disk" => LOG::DISK,
+            "BIOS"|"bios" => LOG::BIOS,
+            "SERIAL"|"serial" => LOG::SERIAL,
+            "FLOPPY"|"floppy" => LOG::FLOPPY,
+            _ => LOG::E,
         }
+    }
+
+    #[inline]
+    pub(crate) fn bit_mask(&self) -> u32 {
+        match *self {
+            Self::E => LOG_E,
+            Self::IO => LOG_IO,
+            Self::CPU => LOG_CPU,
+            Self::PIC => LOG_PIC,
+            Self::PCI => LOG_PCI,
+            Self::PS2 => LOG_PS2,
+            Self::NET => LOG_NET,
+            Self::VGA => LOG_VGA,
+            Self::RTC => LOG_RTC,
+            Self::DMA => LOG_DMA,
+            Self::PIT => LOG_PIT,
+            Self::DISK => LOG_DISK,
+            Self::BIOS => LOG_BIOS,
+            Self::WS => LOG_WS,
+            Self::FLOPPY => LOG_FLOPPY,
+            Self::SERIAL => LOG_SERIAL,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn display(&self) -> bool {
+        unsafe {self.bit_mask() & LOG_MASK > 0}
     }
 }
 
