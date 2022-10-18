@@ -1,5 +1,5 @@
 {
-    "cdrom": "arch/linux4.iso",
+    "cdrom": "arch/linux3.iso",
     "bzimage_file": "arch/buildroot-bzimage.bin",
     "bios_file": "arch/seabios-debug.bin",
     "vga_bios_file": "arch/vgabios-debug.bin",

@@ -665,7 +665,7 @@ impl CPU {
     fn load_kernel(&mut self) {
         let setting = self.store.setting();
         if setting.bzimage_file.is_some() {
-            let bzimage = setting.load_bzimage_file().unwrap();
+            let bzimage = setting.load_bzimage_file().expect("can't load the bzimage file.");
             let initrd = setting.load_initrd_file();
             let cmd = setting.cmdline.clone().unwrap_or_default();
             load_kernel(self, bzimage, initrd, cmd)
@@ -677,7 +677,7 @@ impl CPU {
     fn cdrom_init(&mut self) {
         let setting = self.store.setting();
         if setting.cdrom_file.is_some() {
-            let cdrom_buf = setting.load_cdrom_file().unwrap();
+            let cdrom_buf = setting.load_cdrom_file().expect("can't load the cd rom file.");
             let sync_file_buf = Box::new(SyncFileBuffer::new(self.store.clone(), cdrom_buf));
             let cdrom_ide = IDEDevice::new(self.store.clone(), Some(sync_file_buf), None, true, 0);
             self.cdrom = Some(cdrom_ide);
