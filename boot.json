@@ -1,6 +1,6 @@
 {
-    "cdrom": "arch/linux3.iso",
-    "bzimage_file": "arch/buildroot-bzimage.bin",
+    "cdrom": "/Users/join/Downloads/9pboot.iso",
+    
     "bios_file": "arch/seabios-debug.bin",
     "vga_bios_file": "arch/vgabios-debug.bin",
     "wasm_file": "target/v86-debug.wasm",
@@ -9,7 +9,7 @@
     "cmdline": ["tsc=reliable mitigations=off random.trust_cpu=on"],
     "logger": {
         "log_file": "debug.log",
-        "log_module": ["E", "BIOS"]
+        "log_module": ["E", "BIOS", "NET", "PCI"]
     },
     "muiltiboot_order": ["bin", "cdrom"]
 }

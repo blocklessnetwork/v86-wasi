@@ -1,5 +1,5 @@
 #![allow(unused)]
-use crate::{StoreT, pci::{PCIDevice, GenericPCIDevice}, log::LOG, ContextTrait, Dev, bus::BusData};
+use crate::{StoreT, pci::{PCIDevice, GenericPCIDevice, PCIBar}, log::LOG, ContextTrait, Dev, bus::BusData};
 
 const NE2K_LOG_VERBOSE: bool = false;
 
@@ -80,7 +80,6 @@ pub(crate) struct Ne2k {
 impl Ne2k {
     pub fn new(store: StoreT) -> Self {
         let pci_id = 0x05 << 3;
-        let dev_name = "ne2k";
         let mac = vec![0x00, 0x22, 0x15,rand::random::<u8>(), rand::random::<u8>(), rand::random::<u8>()];
         let mut memory = vec![0u8; 256 * 0x80];
         let cr = 1;
@@ -110,26 +109,10 @@ impl Ne2k {
         memory[15 << 1 | 1] = 0x57;
         dbg_log!(
             LOG::NET, 
-            "Mac: {:#X}:{:#X}:{:#X}:{:#X}:{:#X}:{:#X}",
+            "Mac: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
         );
-        let pci_space = vec![
-            0xec, 0x10, 0x29, 0x80, 0x03, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
-            (PORT & 0xFF) as u8 | 1, (PORT >> 8) as u8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-            0x00, 0x00, 0x00, 0x00, 0x00,0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-            0x00, 0xf4, 0x1a, 0x00, 0x11, 0x00, 0x00, 0xb8, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-            0x00, 0x00, 0x01, 0x00, 0x00,
-        ];
 
-        let pci_dev = GenericPCIDevice::new(
-            pci_id,
-            pci_space,
-            vec![],
-            dev_name,
-        );
-        store.pci_mut().map(|pci| {
-            pci.register_device(pci_dev);
-        });
         Self {
             cr,
             mac,
@@ -810,7 +793,26 @@ impl Ne2k {
                     });
                 }
             );
+        });
+        
+        let dev_name = "ne2k";
 
+        let pci_space = vec![
+            0xec, 0x10, 0x29, 0x80, 0x03, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
+            (PORT & 0xFF) as u8 | 1, (PORT >> 8) as u8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+            0x00, 0x00, 0x00, 0x00, 0x00,0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+            0x00, 0xf4, 0x1a, 0x00, 0x11, 0x00, 0x00, 0xb8, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+            0x00, 0x00, 0x01, 0x00, 0x00,
+        ];
+
+        let pci_dev = GenericPCIDevice::new(
+            self.pci_id,
+            pci_space,
+            vec![Some(PCIBar::new(32))],
+            dev_name,
+        );
+        self.store.pci_mut().map(|pci| {
+            pci.register_device(pci_dev);
         });
     }
 
