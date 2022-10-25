@@ -1,11 +1,11 @@
-use crate::{StoreT, bus::BusData};
+use crate::{StoreT, bus::BusData, ContextTrait};
 
 
-pub(crate) struct NetAdpater {
+pub(crate) struct NetAdapter {
     store: StoreT,
 }
 
-impl NetAdpater {
+impl NetAdapter {
     pub fn new(store: StoreT) -> Self {
         Self { 
             store

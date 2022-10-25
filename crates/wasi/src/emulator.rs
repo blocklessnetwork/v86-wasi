@@ -26,8 +26,7 @@ use crate::{
     vga::VGAScreen,
     log::{self, LOG},
     ws_thr::WsThread,
-    adapter::NetAdpater,
-    adapter::NetTermAdapter,
+    adapter::{NetAdapter, NetTermAdapter},
     floppy::FloppyController,
     jit::{JitMsg, JitWorker},
     ContextTrait, Setting, StoreT, CPU, WASM_TABLE_OFFSET,
@@ -116,7 +115,7 @@ impl InnerEmulator {
             });
 
         self.net_term_adapter = Some(NetTermAdapter::new(store.clone(), rs));
-        self.net_adapter = Some(NetAdpater::new(store.clone()));
+        self.net_adapter = Some(NetAdapter::new(store.clone()));
         self.cpu = Some(CPU::new(&mut inst, store.clone()));
         self.net_term_adapter.as_mut().map(|t| t.init());
         self.net_adapter.as_mut().map(|t| t.init());
