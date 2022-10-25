@@ -84,15 +84,15 @@ impl Ne2k {
         let mut memory = vec![0u8; 256 * 0x80];
         let cr = 1;
         let imr = 0;
+        let tsr = 1;
+        let isr = 0;
         let txcr = 0;
         let tpsr = 0;
         let tcnt = 0;
         let rcnt = 0;
-        let isr = 0;
         let dcfg = 0;
         let rsar = 0;
         let rxcr = 0;
-        let tsr = 1;
         let pstop = STOP_PAGE;
         let pstart = START_PAGE;
         let curpg = START_RX_PAGE;

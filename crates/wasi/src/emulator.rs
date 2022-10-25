@@ -12,23 +12,24 @@ use crossbeam_channel::bounded;
 use wasmtime::{Extern, Instance, Linker, Store, Table};
 
 use crate::{
-    adapter::NetTermAdapter,
-    bus::BUS,
-    dma::DMA,
-    floppy::FloppyController,
-    ide::IDEDevice,
     io::IO,
-    jit::{JitMsg, JitWorker},
-    log::{self, LOG},
-    ne2k::Ne2k,
     pci::PCI,
     pic::PIC,
     pit::PIT,
     ps2::PS2,
     rtc::RTC,
+    bus::BUS,
+    dma::DMA,
+    ne2k::Ne2k,
     uart::UART,
+    ide::IDEDevice,
     vga::VGAScreen,
+    log::{self, LOG},
     ws_thr::WsThread,
+    adapter::NetAdpater,
+    adapter::NetTermAdapter,
+    floppy::FloppyController,
+    jit::{JitMsg, JitWorker},
     ContextTrait, Setting, StoreT, CPU, WASM_TABLE_OFFSET,
 };
 
@@ -42,6 +43,7 @@ pub(crate) struct InnerEmulator {
     vga_bios: Option<Vec<u8>>,
     jit_tx: Option<Sender<JitMsg>>,
     tick_trigger: Vec<fn(&StoreT)>,
+    net_adapter: Option<NetAdapter>,
     jit_result_rx: Option<Receiver<JitMsg>>,
     net_term_adapter: Option<NetTermAdapter>,
     externs: Option<HashMap<String, Extern>>,
@@ -50,7 +52,6 @@ pub(crate) struct InnerEmulator {
 impl InnerEmulator {
     fn new(setting: Setting) -> Self {
         Self {
-            start_time: time::Instant::now(),
             setting,
             cpu: None,
             bus: None,
@@ -59,9 +60,11 @@ impl InnerEmulator {
             jit_tx: None,
             externs: None,
             vga_bios: None,
+            net_adapter: None,
             jit_result_rx: None,
             net_term_adapter: None,
             tick_trigger: Vec::new(),
+            start_time: time::Instant::now(),
         }
     }
 
@@ -113,8 +116,10 @@ impl InnerEmulator {
             });
 
         self.net_term_adapter = Some(NetTermAdapter::new(store.clone(), rs));
+        self.net_adapter = Some(NetAdpater::new(store.clone()));
         self.cpu = Some(CPU::new(&mut inst, store.clone()));
         self.net_term_adapter.as_mut().map(|t| t.init());
+        self.net_adapter.as_mut().map(|t| t.init());
 
         self.register_trigger(|store| {
             store.emulator_mut().jit_done();
