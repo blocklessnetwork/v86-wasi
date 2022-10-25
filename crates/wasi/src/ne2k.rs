@@ -517,11 +517,10 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(LOG::NET, "Write remote start address low");
+                            dbg_log!(LOG::NET, "Write remote start address low: {:#X}", data_byte);
                             ne2k.rsar = ne2k.rsar & 0xFF | (data_byte as u16) << 8 & 0xFF00;
                         } else {
-                            dbg_log!(LOG::NET, "Unimplemented: Write pg{}/09", pg);
-                            assert!(false);
+                            dbg_log!(LOG::NET, "Unimplemented: Write pg{}/09 {:#X}", pg, data_byte);
                         }
                     });
                 }
@@ -775,7 +774,7 @@ impl Ne2k {
             );
 
             io.register_write(
-                (self.port | EN0_RXCR) as u32,  
+                (self.port | NE_DATAPORT) as u32,  
                 Dev::Emulator(self.store.clone()), 
                 |dev: &Dev, _addr: u32, data_byte: u8| {
                     dev.ne2k_mut().map(|ne2k| {
