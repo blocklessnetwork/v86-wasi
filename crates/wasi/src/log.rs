@@ -147,7 +147,7 @@ macro_rules! dbg_log {
     ($m: expr, $fmt:expr) => {
         if $m.display() {
             let values = format!($fmt);
-            let now = chrono::offset::Utc::now();
+            let now = chrono::offset::Local::now();
             let now = now.format("%H:%M:%S");
             let record = format!("{} [{:>5}] {}\n", now, $m, &values);
             crate::log::log(record.as_bytes());
