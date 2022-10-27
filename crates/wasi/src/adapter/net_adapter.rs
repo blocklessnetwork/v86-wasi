@@ -1,4 +1,4 @@
-use crate::{StoreT, bus::BusData, ContextTrait};
+use crate::{StoreT, bus::BusData, ContextTrait, log::LOG};
 
 
 pub(crate) struct NetAdapter {
@@ -10,7 +10,7 @@ impl NetAdapter {
         Self { 
             store
         }
-    }    
+    }
 
     pub fn init(&mut self) {
         self.store.bus_mut().map(|bus| {

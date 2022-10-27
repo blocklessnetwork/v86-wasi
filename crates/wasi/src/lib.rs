@@ -14,6 +14,7 @@ mod bus;
 mod cpu;
 mod dev;
 mod dma;
+
 mod jit;
 mod mem;
 mod pic;
@@ -29,6 +30,7 @@ mod debug;
 mod ws_thr;
 mod floppy;
 mod kernel;
+mod tun_thr;
 mod adapter;
 mod storage;
 mod setting;

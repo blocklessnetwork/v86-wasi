@@ -8,6 +8,7 @@ use std::{
     time,
 };
 
+use crossbeam_channel::bounded;
 
 use wasmtime::{Extern, Instance, Linker, Store, Table};
 
@@ -29,7 +30,7 @@ use crate::{
     adapter::{NetAdapter, NetTermAdapter},
     floppy::FloppyController,
     jit::{JitMsg, JitWorker},
-    ContextTrait, Setting, StoreT, CPU, WASM_TABLE_OFFSET,
+    ContextTrait, Setting, StoreT, CPU, WASM_TABLE_OFFSET, tun_thr::TunThread,
 };
 
 pub(crate) struct InnerEmulator {
@@ -106,12 +107,30 @@ impl InnerEmulator {
         self.bus = Some(BUS::new(store.clone()));
 
         //tx rx for term adapater
-        let (tx, rs) = tokio::sync::mpsc::channel(1);
+        let (tx, rs) = bounded(1);
         std::thread::Builder::new()
             .name("ws thread".to_string())
             .spawn(move || {
                 let ws_thr = WsThread::new(tx);
                 ws_thr.start();
+            });
+        store
+            .setting()
+            .tun_addr()
+            .map(String::clone)
+            .zip(
+                store
+                    .setting()
+                    .tun_netmask()
+                    .map(String::clone)
+            )
+            .map(|(addr, netmask)| {
+                std::thread::Builder::new()
+                .name("tun thread".to_string())
+                .spawn(move || {
+                    let tun_thr = TunThread::new(addr, netmask);
+                    tun_thr.start();
+                });
             });
 
         self.net_term_adapter = Some(NetTermAdapter::new(store.clone(), rs));

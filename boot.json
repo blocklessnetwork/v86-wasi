@@ -9,7 +9,11 @@
     "cmdline": ["tsc=reliable mitigations=off random.trust_cpu=on"],
     "logger": {
         "log_file": "debug.log",
-        "log_module": ["E", "BIOS", "NET", "PCI"]
+        "log_module": ["E", "BIOS", "NET"]
+    },
+    "tun": {
+        "address": "192.168.0.1",
+        "netmask": "255.255.255.0"
     },
     "muiltiboot_order": ["bin", "cdrom"]
 }

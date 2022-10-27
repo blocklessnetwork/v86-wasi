@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use json::JsonValue;
+
 #[allow(unused_imports)]
 use crate::consts::*;
 use crate::LOG;
@@ -14,6 +16,8 @@ pub struct Setting {
     pub(crate) logger_file: Option<String>,
     pub(crate) bzimage_file: Option<String>,
     pub(crate) vga_bios_file: Option<String>,
+    pub(crate) tun_addr: Option<String>,
+    pub(crate) tun_netmask: Option<String>,
     pub(crate) vga_memory_size: u32,
     pub(crate) memory_size: u32,
     pub(crate) log_mask: u32,
@@ -26,10 +30,12 @@ impl Setting {
             log_mask: 0,
             cmdline: None,
             hda_file: None,
+            tun_addr: None,
             bios_file: None,
             wasm_file: None,
             fast_boot: false,
             cdrom_file: None,
+            tun_netmask: None,
             logger_file: None,
             initrd_file: None,
             bzimage_file: None,
@@ -61,8 +67,12 @@ impl Setting {
                 _ => None,
             };
         }
+        Self::load_logger(&mut setting, &setting_obj);
+        Self::load_tunnel(&mut setting, &setting_obj);
+        setting
+    }
 
-
+    fn load_logger(setting: &mut Setting, setting_obj: &JsonValue) {
         if !setting_obj["logger"].is_null() {
             let log_f = setting_obj["logger"]["log_file"].as_str().map(|s| s.into());
             setting.logger_file = log_f;
@@ -75,8 +85,17 @@ impl Setting {
                 });
             }
         }
-        setting
     }
+
+    fn load_tunnel(setting: &mut Setting, setting_obj: &JsonValue) {
+        if !setting_obj["tun"].is_null() {
+            let tun_addr = setting_obj["tun"]["address"].as_str().map(|s| s.into());
+            setting.tun_addr = tun_addr;
+            let netmask = setting_obj["tun"]["netmask"].as_str().map(|s| s.into());
+            setting.tun_netmask = netmask;
+        }
+    }
+
 
     #[inline]
     pub fn logger_file(&self) -> Option<&String> {
@@ -111,6 +130,16 @@ impl Setting {
     #[inline]
     pub fn wasm_file(&self) -> Option<&String> {
         self.wasm_file.as_ref()
+    }
+
+    #[inline]
+    pub fn tun_addr(&self) -> Option<&String> {
+        self.tun_addr.as_ref()
+    }
+
+    #[inline]
+    pub fn tun_netmask(&self) -> Option<&String> {
+        self.tun_netmask.as_ref()
     }
 
     #[inline]
