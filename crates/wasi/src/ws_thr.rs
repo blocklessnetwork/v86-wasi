@@ -1,4 +1,4 @@
-use crossbeam_channel::{Receiver, bounded, Sender, TryRecvError};
+use tokio::sync::mpsc::{Receiver, channel, Sender, error::TryRecvError};
 
 use tokio::{net::{TcpListener, TcpStream}, runtime::Builder};
 use futures_util::{SinkExt, StreamExt, stream::SplitSink};
@@ -65,9 +65,9 @@ impl WsThread {
     async fn handle_connection(&mut self, _peer: SocketAddr, stream: TcpStream) -> Result<(), Error> {
         let ws_stream = accept_async(stream).await.expect("Failed to accept");
         let (sink, mut ws_stream) = ws_stream.split();
-        let (tx, rx) = bounded(10240);
-        let (s_tx, s_rx) = bounded(10240);
-        self.sender.send((s_rx, tx)).unwrap();
+        let (tx, rx) = channel(10240);
+        let (s_tx, s_rx) = channel(10240);
+        self.sender.send((s_rx, tx)).await.unwrap();
         tokio::spawn(async move {
             Self::handle_incoming(sink, rx).await
         });
@@ -83,7 +83,7 @@ impl WsThread {
                     msg_id_buf.copy_from_slice(&b[..2]);
                     let msg_id = u16::from_le_bytes(msg_id_buf);
                     if msg_id == 0x0100 {
-                        if let Err(_) = s_tx.send((msg_id, BusData::U8(b[2]))) {
+                        if let Err(_) = s_tx.send((msg_id, BusData::U8(b[2]))).await {
                             dbg_log!(LOG::WS, "send Error.");
                             break;
                         }

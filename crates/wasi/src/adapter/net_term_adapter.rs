@@ -1,6 +1,6 @@
-use crossbeam_channel::{Receiver, Sender, TryRecvError};
+use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
 
-use crate::{StoreT, ContextTrait, bus::BusData, log::LOG};
+use crate::{StoreT, ContextTrait, bus::BusData};
 
 pub(crate) struct NetTermAdapter {
     store: StoreT,
@@ -94,7 +94,7 @@ impl NetTermAdapter {
     fn send(&mut self, msg: u16, d: Vec<u8>) {
         self.try_recv_channel_from_rx();
         if self.sender.as_mut().map_or(false, |s| {
-            match s.send((msg, d)) {
+            match s.blocking_send((msg, d)) {
                 Ok(_) => false,
                 Err(_) => true,
             }

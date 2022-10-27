@@ -1,4 +1,4 @@
-use crate::{StoreT, bus::BusData, ContextTrait, log::LOG};
+use crate::{StoreT, bus::BusData, ContextTrait};
 
 
 pub(crate) struct NetAdapter {
