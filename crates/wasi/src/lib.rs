@@ -2,7 +2,7 @@
 mod log;
 
 use std::rc::Weak;
-use std::{slice};
+use std::slice;
 
 const ALL_DEBUG: bool = true;
 

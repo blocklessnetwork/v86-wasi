@@ -1,6 +1,4 @@
-use std::time::Duration;
-
-use crossbeam_channel::{Receiver, Sender, TryRecvError, TrySendError};
+use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
 
 use crate::{StoreT, ContextTrait, bus::BusData, log::LOG};
 
@@ -96,13 +94,8 @@ impl NetTermAdapter {
     fn send(&mut self, msg: u16, d: Vec<u8>) {
         self.try_recv_channel_from_rx();
         if self.sender.as_mut().map_or(false, |s| {
-            match s.try_send((msg, d)) {
+            match s.blocking_send((msg, d)) {
                 Ok(_) => false,
-                Err(TrySendError::Full(_)) => {
-                    dbg_log!(LOG::WS, "queue full. ");
-                    std::thread::sleep(Duration::from_millis(10));
-                    false
-                },
                 Err(_) => true,
             }
         }) {

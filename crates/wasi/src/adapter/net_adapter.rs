@@ -10,7 +10,7 @@ impl NetAdapter {
         Self { 
             store
         }
-    }
+    }    
 
     pub fn init(&mut self) {
         self.store.bus_mut().map(|bus| {
@@ -18,11 +18,15 @@ impl NetAdapter {
                 |s: &StoreT, data: &BusData| {
                     match data {
                         &BusData::Vec(ref v) => {
-                            println!("vec {}", v.len());
+                            let dst_mac_addr = &v[0..6];
+                            let src_mac_addr = &v[6..12];
+                            println!("{:#X}:{:#X}:{:#X}:{:#X}:{:#X}:{:#X}", v[0],v[1],v[2],v[3],v[4],v[5]);
+                            println!("{:#X}:{:#X}:{:#X}:{:#X}:{:#X}:{:#X}", v[6],v[7],v[8],v[9],v[10],v[11]);
                         }
                         _ => {}
                     }
-                });
+                }
+            );
         });
     }
 }
