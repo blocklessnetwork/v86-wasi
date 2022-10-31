@@ -7,6 +7,7 @@ use std::slice;
 const ALL_DEBUG: bool = true;
 
 type StoreT = Weak<Store<Emulator>>;
+use adapter::NetAdapter;
 use wasmtime::*;
 
 mod io;
@@ -161,6 +162,9 @@ trait ContextTrait {
 
     fn net_term_adp_mut(&self) -> Option<&mut NetTermAdapter>;
     fn net_term_adp(&self) -> Option<&NetTermAdapter>;
+
+    fn net_adp_mut(&self) -> Option<&mut NetAdapter>;
+    fn net_adp(&self) -> Option<&NetAdapter>;
 }
 
 impl ContextTrait for StoreT {
@@ -177,6 +181,18 @@ impl ContextTrait for StoreT {
         unsafe {
             Some(&mut (*(self.as_ptr() as *mut Store<_>)))
         }
+    }
+
+    #[inline]
+    fn net_adp_mut(&self) -> Option<&mut NetAdapter> {
+        let emu = self.emulator_mut();
+        emu.net_adp_mut()
+    }
+
+    #[inline]
+    fn net_adp(&self) -> Option<&NetAdapter> {
+        let emu = self.emulator_mut();
+        emu.net_adp()
     }
 
     #[inline]

@@ -793,6 +793,12 @@ impl Ne2k {
                 }
             );
         });
+
+        self.store.bus_mut().map(|bus| {
+            bus.register("net0-receive", |s: &StoreT, data: &BusData| {
+                s.ne2k_mut().map(|ne2k| ne2k.receive(data.to_vec()));
+            });
+        });
         
         let dev_name = "ne2k";
 
@@ -863,6 +869,120 @@ impl Ne2k {
             self.do_interrupt(ENISR_RDC);
         }
         return data;
+    }
+
+    fn receive(&mut self, data: Vec<u8>) {
+        // called from the adapter when data is received over the network
+
+        if self.cr & 1 > 0 {
+            // stop bit set
+            return;
+        }
+
+        self.store.bus_mut().map(|bus| {
+            bus.send("eth-receive-end", BusData::U32(data.len() as u32));
+        });
+
+        if self.rxcr & 0x10 > 0 {
+            // promiscuous
+        } else if(self.rxcr & 4 > 0 &&
+                data[0] == 0xFF && data[1] == 0xFF && data[2] == 0xFF &&
+                data[3] == 0xFF && data[4] == 0xFF && data[5] == 0xFF) {
+            // broadcast
+        } else if (self.rxcr & 8) > 0 && (data[0] & 1) == 1 {
+            // multicast
+            // XXX
+            return;
+        } else if(data[0] == self.mac[0] && data[1] == self.mac[1] &&
+                data[2] == self.mac[2] && data[3] == self.mac[3] &&
+                data[4] == self.mac[4] && data[5] == self.mac[5]) {
+        } else {
+            return;
+        }
+
+        let packet_length = 60.max(data.len());
+
+        let offset = (self.curpg as usize) << 8;
+        let total_length = packet_length + 4;
+        let data_start = offset + 4;
+        let mut next = self.curpg as usize + 1 + (total_length >> 8);
+
+        let end = offset as usize + total_length;
+
+        let needed = 1 + (total_length >> 8);
+
+        // boundary == curpg interpreted as ringbuffer empty
+        let available = if self.boundary > self.curpg {
+            self.boundary - self.curpg 
+        } else {
+            self.pstop - self.curpg + self.boundary - self.pstart
+        };
+
+        if (available as usize) < needed &&
+            self.boundary != 0 // XXX: ReactOS sets this to 0 initially and never updates it unless it receives a packet
+        {
+            dbg_log!(LOG::NET, 
+                "Buffer full, dropping packet pstart={:#X} pstop={:#X} curpg={:#X} needed={:#X} boundary={:#X} available={:#X}",
+                self.pstart,
+                self.pstop,
+                self.curpg,
+                needed,
+                self.boundary,
+                available,
+            );
+
+            return;
+        }
+
+        if end > ((self.pstop as usize) << 8) {
+            // Shouldn't happen because at this size it can't cross a page,
+            // so we can skip filling with zeroes
+            assert!(data.len() >= 60);
+
+            let cut = ((self.pstop as usize) << 8) - data_start as usize;
+            assert!(cut >= 0);
+
+            //this.memory.set(data.subarray(0, cut), data_start);
+            let start = data_start as usize;
+            let end = start + cut;
+            self.memory[start..end].copy_from_slice(&data[0..cut]);
+            // this.memory.set(data.subarray(cut), this.pstart << 8);
+            let start = (self.pstart as usize) << 8;
+            let end = start + (data.len() - cut);
+            self.memory[start..end].copy_from_slice(&data[cut..]);
+            dbg_log!(LOG::NET, "rcv cut={:#X}", cut);
+        } else {
+            //this.memory.set(data, data_start);
+            let start = data_start as usize;
+            let end = start + data.len();
+            self.memory[start..end].copy_from_slice(&data);
+
+            if data.len() < 60 {
+                let start = start + data.len();
+                let end = start + 60;
+                self.memory[start..end].fill(0);
+            }
+        }
+
+        if next >= self.pstop as usize {
+            next += self.pstart as usize - self.pstop as usize;
+        }
+        let offset = offset as usize;
+        // write packet header
+        self.memory[offset] = ENRSR_RXOK; // status
+        self.memory[offset + 1] = next as u8;
+        self.memory[offset + 2] = total_length as u8;
+        self.memory[offset + 3] = (total_length >> 8) as u8;
+
+        self.curpg = next as u8;
+
+        dbg_log!(LOG::NET, 
+            "rcv offset={:#X} len={:#X} next={:#X}",
+            offset,
+            total_length,
+            next
+        );
+        self.do_interrupt(ENISR_RX);
     }
 
     #[inline]

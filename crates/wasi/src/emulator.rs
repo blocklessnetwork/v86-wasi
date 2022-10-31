@@ -113,6 +113,12 @@ impl InnerEmulator {
                 let ws_thr = WsThread::new(tx);
                 ws_thr.start();
             });
+        
+
+        self.net_term_adapter = Some(NetTermAdapter::new(store.clone(), rs));
+
+        let (tun_tx1, tun_rx1) = channel(64);
+        let (tun_tx2, tun_rx2) = channel(64);
         store
             .setting()
             .tun_addr()
@@ -127,13 +133,11 @@ impl InnerEmulator {
                 std::thread::Builder::new()
                 .name("tun thread".to_string())
                 .spawn(move || {
-                    let tun_thr = TunThread::new(addr, netmask);
+                    let tun_thr = TunThread::new(addr, netmask, tun_tx1, tun_rx2);
                     tun_thr.start();
                 });
             });
-
-        self.net_term_adapter = Some(NetTermAdapter::new(store.clone(), rs));
-        self.net_adapter = Some(NetAdapter::new(store.clone()));
+        self.net_adapter = Some(NetAdapter::new(store.clone(), tun_rx1, tun_tx2));
         self.cpu = Some(CPU::new(&mut inst, store.clone()));
         self.net_term_adapter.as_mut().map(|t| t.init());
         self.net_adapter.as_mut().map(|t| t.init());
@@ -144,6 +148,10 @@ impl InnerEmulator {
 
         self.register_trigger(|store| {
             store.net_term_adp_mut().map(|a| a.try_recv_from_term());
+        });
+
+        self.register_trigger(|store| {
+            store.net_adp_mut().map(|a| a.try_recv_from_tun());
         });
     }
 
@@ -237,6 +245,16 @@ impl Emulator {
     #[inline]
     pub(crate) fn pit_mut(&self) -> Option<&mut PIT> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.pit)
+    }
+
+    #[inline]
+    pub(crate) fn net_adp_mut(&self) -> Option<&mut NetAdapter> {
+        self.inner_mut().net_adapter.as_mut()
+    }
+
+    #[inline]
+    pub(crate) fn net_adp(&self) -> Option<&NetAdapter> {
+        self.inner().net_adapter.as_ref()
     }
 
     #[inline]

@@ -1,14 +1,38 @@
+use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
+
 use crate::{StoreT, bus::BusData, ContextTrait};
 
 
 pub(crate) struct NetAdapter {
     store: StoreT,
+    rx: Option<Receiver<Vec<u8>>>,
+    tx: Sender<Vec<u8>>,
 }
 
 impl NetAdapter {
-    pub fn new(store: StoreT) -> Self {
+    pub fn new(store: StoreT, rx: Receiver<Vec<u8>>, tx: Sender<Vec<u8>>) -> Self {
         Self { 
-            store
+            rx: Some(rx),
+            tx,
+            store,
+        }
+    }
+
+    pub fn try_recv_from_tun(&mut self) {
+        let rm_bool = self.rx.as_mut().map_or(false, |rx| {
+            match rx.try_recv() {
+                Ok(d) => {
+                    self.store.bus_mut().map(|bus| {
+                        bus.send("net0-receive", BusData::Vec(d));
+                    });
+                    false
+                },
+                Err(TryRecvError::Empty) => false,
+                Err(TryRecvError::Disconnected) => true,
+            }
+        });
+        if rm_bool {
+            self.rx.take();
         }
     }
 
@@ -16,15 +40,7 @@ impl NetAdapter {
         self.store.bus_mut().map(|bus| {
             bus.register("net0-send", 
                 |s: &StoreT, data: &BusData| {
-                    match data {
-                        &BusData::Vec(ref v) => {
-                            let dst_mac_addr = &v[0..6];
-                            let src_mac_addr = &v[6..12];
-                            println!("{:#X}:{:#X}:{:#X}:{:#X}:{:#X}:{:#X}", v[0],v[1],v[2],v[3],v[4],v[5]);
-                            println!("{:#X}:{:#X}:{:#X}:{:#X}:{:#X}:{:#X}", v[6],v[7],v[8],v[9],v[10],v[11]);
-                        }
-                        _ => {}
-                    }
+                    s.net_adp_mut().map(|n| n.tx.blocking_send(data.to_vec()));
                 }
             );
         });
