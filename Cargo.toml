@@ -3,4 +3,5 @@
 members = [
     "crates/v86",
     "crates/wasi",
+    "crates/tuntap",
 ]

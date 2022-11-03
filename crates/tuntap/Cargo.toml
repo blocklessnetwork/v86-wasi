@@ -1,0 +1,13 @@
+[package]
+name = "tuntap"
+version = "0.1.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+libc = "0.2"
+thiserror = "1"
+
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+ioctl = { version = "0.6", package = "ioctl-sys" }

@@ -114,11 +114,10 @@ impl InnerEmulator {
                 ws_thr.start();
             });
         
-
         self.net_term_adapter = Some(NetTermAdapter::new(store.clone(), rs));
 
-        let (tun_tx1, tun_rx1) = channel(64);
-        let (tun_tx2, tun_rx2) = channel(64);
+        let (tun_tx1, tun_rx1) = crossbeam_channel::bounded(64);
+        let (tun_tx2, tun_rx2) = crossbeam_channel::bounded(64);
         store
             .setting()
             .tun_addr()
@@ -134,6 +133,7 @@ impl InnerEmulator {
                 .name("tun thread".to_string())
                 .spawn(move || {
                     let tun_thr = TunThread::new(addr, netmask, tun_tx1, tun_rx2);
+                    // let tun_thr = TunThread::new(addr, netmask);
                     tun_thr.start();
                 });
             });

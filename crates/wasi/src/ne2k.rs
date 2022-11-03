@@ -940,7 +940,7 @@ impl Ne2k {
             assert!(data.len() >= 60);
 
             let cut = ((self.pstop as usize) << 8) - data_start as usize;
-            assert!(cut >= 0);
+            assert!(((self.pstop as usize) << 8) >= data_start as usize);
 
             //this.memory.set(data.subarray(0, cut), data_start);
             let start = data_start as usize;

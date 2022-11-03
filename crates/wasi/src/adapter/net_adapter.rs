@@ -1,4 +1,4 @@
-use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
+use crossbeam_channel::{Receiver, Sender, TryRecvError};
 
 use crate::{StoreT, bus::BusData, ContextTrait};
 
@@ -40,7 +40,7 @@ impl NetAdapter {
         self.store.bus_mut().map(|bus| {
             bus.register("net0-send", 
                 |s: &StoreT, data: &BusData| {
-                    s.net_adp_mut().map(|n| n.tx.blocking_send(data.to_vec()));
+                    s.net_adp_mut().map(|n| n.tx.send(data.to_vec()));
                 }
             );
         });
