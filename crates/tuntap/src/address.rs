@@ -142,4 +142,14 @@ impl From<[u8; 6]> for EthAddr {
     fn from(v: [u8; 6]) -> Self {
         EthAddr(v)
     }
+
+}
+
+impl From<&str> for EthAddr {
+
+    fn from(v: &str) -> Self {
+        "192".parse::<Ip4Addr>;
+        
+    }
+    
 }

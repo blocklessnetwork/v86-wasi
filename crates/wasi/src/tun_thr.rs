@@ -2,9 +2,11 @@ use std::{mem, io::{Read, Write}, time::{Duration, Instant}};
 use crossbeam_channel::{Receiver, Sender, RecvTimeoutError};
 
 use tuntap::{Tap, Configuration};
+use wasmtime::Store;
 
 #[allow(unused_imports)]
 use crate::ContextTrait;
+use crate::StoreT;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -66,13 +68,22 @@ impl TunThread {
         }
     }
 
-    pub fn start(mut self) {
+    pub fn start(self) {
         let mut config = Configuration::default();
-        config.address("192.168.0.1")
-            .netmask("255.255.255.0")
+        config.address(&self.address)
+            .netmask(&self.netmask)
             .eth_address(self.mac.into())
             .up();
-        let mut tap = Tap::new(config).unwrap();
+        let tap = Tap::new(config);
+        let mut tap = match tap {
+            Ok(tap) => tap,
+            Err(_) => {
+                eprintln!("tap open with configure fail. please check config, \
+                tab mod must be grant the root privileges, if you use macos \
+                please install tuntap kext.");
+                return;
+            },
+        };
         tap.set_nonblock().unwrap();
         loop {
             let mut buf = vec![0; 1024];
