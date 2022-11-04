@@ -89,8 +89,8 @@ impl TunThread {
         }
     }
 
-
     //arp reply
+    #[allow(unused)]
     fn process_arp(&mut self, data: &Vec<u8>, tap: &mut Tap) {
         let eth_h_len = mem::size_of::<EtherHdr>();
         let s_eth_h = unsafe {
