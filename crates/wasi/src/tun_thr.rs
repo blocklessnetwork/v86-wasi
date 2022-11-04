@@ -1,5 +1,5 @@
-use std::{mem, io::{Read, Write}};
-use crossbeam_channel::{Receiver, Sender};
+use std::{mem, io::{Read, Write}, time::{Duration, Instant}};
+use crossbeam_channel::{Receiver, Sender, RecvTimeoutError};
 
 use tuntap::{Tap, Configuration};
 
@@ -68,15 +68,24 @@ impl TunThread {
 
     pub fn start(mut self) {
         let mut config = Configuration::default();
-        config.address("10.4.126.187")
-            .netmask("255.255.252.0")
+        config.address("192.168.0.1")
+            .netmask("255.255.255.0")
             .eth_address(self.mac.into())
             .up();
         let mut tap = Tap::new(config).unwrap();
-        while true {
-            let buf = self.rx.recv().unwrap();
-            self.process_arp(&buf, &mut tap);
-            tap.write(&buf).unwrap();
+        tap.set_nonblock().unwrap();
+        loop {
+            let mut buf = vec![0; 1024];
+            let l = tap.read(&mut buf);
+            if let Ok(l) = l {
+                self.tx.send(buf[0..l].to_vec()).unwrap();
+            }
+            let now = Instant::now();
+            match self.rx.recv_deadline(now + Duration::from_millis(10)) {
+                Ok(buf) => tap.write(&buf).unwrap(),
+                Err(RecvTimeoutError::Timeout) => continue,
+                Err(RecvTimeoutError::Disconnected) => break,
+            };
         }
     }
 

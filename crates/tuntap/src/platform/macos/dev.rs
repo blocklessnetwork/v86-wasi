@@ -21,6 +21,9 @@ pub struct Tap {
 }
 
 impl Tap {
+    pub fn set_nonblock(&mut self) -> io::Result<()> {
+        self.fd.set_nonblock()
+    }
 
     fn ifaliasreq(&self) -> ifaliasreq {
         unsafe {
