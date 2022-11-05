@@ -173,7 +173,8 @@ impl InnerEmulator {
                     let sleep_time = if t > 1f64 {
                         time::Duration::from_millis(t as u64)
                     } else {
-                        time::Duration::from_micros((t * 1000f64) as u64)
+                        //adjust the sleep time 
+                        time::Duration::from_micros((1000f64) as u64)
                     };
                     std::thread::sleep(sleep_time);
                 }
