@@ -1,6 +1,5 @@
 {
     "cdrom": "/Users/join/Downloads/9pboot.iso",
-    
     "bios_file": "arch/seabios-debug.bin",
     "vga_bios_file": "arch/vgabios-debug.bin",
     "wasm_file": "target/v86.wasm",

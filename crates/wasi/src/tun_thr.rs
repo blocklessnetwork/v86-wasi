@@ -96,7 +96,7 @@ impl TunThread {
                 self.tx.send(buf[0..l].to_vec()).unwrap();
             }
             let now = Instant::now();
-            match self.rx.recv_deadline(now + Duration::from_millis(10)) {
+            match self.rx.recv_deadline(now + Duration::from_millis(1)) {
                 Ok(buf) => tap.write(&buf).unwrap(),
                 Err(RecvTimeoutError::Timeout) => continue,
                 Err(RecvTimeoutError::Disconnected) => break,
