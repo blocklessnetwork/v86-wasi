@@ -1,12 +1,10 @@
 use std::{mem, io::{Read, Write}, time::{Duration, Instant}};
 use crossbeam_channel::{Receiver, Sender, RecvTimeoutError};
 
-use tuntap::{Tap, Configuration};
-use wasmtime::Store;
+use tuntap::{Tap, Configuration, EtherAddr};
 
 #[allow(unused_imports)]
 use crate::ContextTrait;
-use crate::StoreT;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -34,7 +32,7 @@ pub struct TunThread {
     address: String,
     netmask: String,
     vm_eth0_mac: Option<[u8; 6]>,
-    mac: [u8; 6],
+    ether_addr: EtherAddr,
     rx: Receiver<Vec<u8>>,
     tx: Sender<Vec<u8>>,
 }
@@ -54,15 +52,21 @@ impl TunThread {
     pub fn new(
         address: String, 
         netmask: String,
+        ether_addr: Option<String>,
         tx: Sender<Vec<u8>>,
         rx: Receiver<Vec<u8>>,
     ) -> Self {
-        let mac: [u8; 6] = [0x00, 0x22, 0x15, rand::random::<u8>(), rand::random::<u8>(), rand::random::<u8>()];
+        let ether_addr: EtherAddr = ether_addr
+            .as_ref()
+            .map(|addr| addr.as_str().into())
+            .unwrap_or(
+                [0x00, 0x22, 0x15, rand::random::<u8>(), rand::random::<u8>(), rand::random::<u8>()].into()
+            );
         Self {
             vm_eth0_mac: None,
             address,
             netmask,
-            mac,
+            ether_addr,
             tx,
             rx,
         }
@@ -72,7 +76,7 @@ impl TunThread {
         let mut config = Configuration::default();
         config.address(&self.address)
             .netmask(&self.netmask)
-            .eth_address(self.mac.into())
+            .ether_address(self.ether_addr)
             .up();
         let tap = Tap::new(config);
         let mut tap = match tap {
@@ -123,7 +127,7 @@ impl TunThread {
             d_arp_h.arp_tha = s_arp_h.arp_sha;
             d_arp_h.arp_tpa = s_arp_h.arp_spa;
             d_arp_h.arp_spa = s_arp_h.arp_tpa;
-            d_arp_h.arp_sha = self.mac;
+            d_arp_h.arp_sha = self.ether_addr.into();
 
             d_eth_h.ether_dhost = s_eth_h.ether_shost;
             d_eth_h.ether_shost = s_eth_h.ether_dhost;

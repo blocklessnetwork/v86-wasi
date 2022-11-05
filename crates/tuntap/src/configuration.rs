@@ -1,7 +1,7 @@
 use std::net::Ipv4Addr;
 use std::os::unix::io::RawFd;
 
-use crate::address::EthAddr;
+use crate::address::EtherAddr;
 
 use super::address::IntoAddress;
 
@@ -11,7 +11,7 @@ use super::address::IntoAddress;
 pub struct Configuration {
     pub(crate) name: Option<String>,
     pub(crate) address: Option<Ipv4Addr>,
-    pub(crate) eth_address: Option<EthAddr>,
+    pub(crate) ether_address: Option<EtherAddr>,
     pub(crate) destination: Option<Ipv4Addr>,
     pub(crate) broadcast: Option<Ipv4Addr>,
     pub(crate) netmask: Option<Ipv4Addr>,
@@ -58,8 +58,8 @@ impl Configuration {
     }
 
     /// Set the interface to be enabled once created.
-    pub fn eth_address(&mut self, addr: EthAddr) -> &mut Self {
-        self.eth_address = Some(addr);
+    pub fn ether_address(&mut self, addr: EtherAddr) -> &mut Self {
+        self.ether_address = Some(addr);
         self
     }
 

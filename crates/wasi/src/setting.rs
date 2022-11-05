@@ -18,6 +18,7 @@ pub struct Setting {
     pub(crate) vga_bios_file: Option<String>,
     pub(crate) tun_addr: Option<String>,
     pub(crate) tun_netmask: Option<String>,
+    pub(crate) tun_ether_addr: Option<String>,
     pub(crate) vga_memory_size: u32,
     pub(crate) memory_size: u32,
     pub(crate) log_mask: u32,
@@ -40,6 +41,7 @@ impl Setting {
             initrd_file: None,
             bzimage_file: None,
             vga_bios_file: None,
+            tun_ether_addr: None,
             vga_memory_size: 8 * 1024 * 1024,
             memory_size: 128 * 1024 * 1024,
         }
@@ -93,6 +95,8 @@ impl Setting {
             setting.tun_addr = tun_addr;
             let netmask = setting_obj["tun"]["netmask"].as_str().map(|s| s.into());
             setting.tun_netmask = netmask;
+            let ether_address = setting_obj["tun"]["ether_address"].as_str().map(|s| s.into());
+            setting.tun_ether_addr = ether_address;
         }
     }
 
@@ -140,6 +144,11 @@ impl Setting {
     #[inline]
     pub fn tun_netmask(&self) -> Option<&String> {
         self.tun_netmask.as_ref()
+    }
+
+    #[inline]
+    pub fn tun_ether_addr(&self) -> Option<&String> {
+        self.tun_ether_addr.as_ref()
     }
 
     #[inline]

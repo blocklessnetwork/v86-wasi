@@ -113,9 +113,9 @@ impl<'a> IntoAddress for &'a SocketAddr {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct EthAddr([u8; 6]);
+pub struct EtherAddr([u8; 6]);
 
-impl EthAddr {
+impl EtherAddr {
 
     #[inline]
     pub fn as_ptr(&self) -> *const u8 {
@@ -128,7 +128,7 @@ impl EthAddr {
     }
 }
 
-impl AsRef<[u8]> for EthAddr {
+impl AsRef<[u8]> for EtherAddr {
 
     #[inline]
     fn as_ref(&self) -> &[u8] {
@@ -137,21 +137,28 @@ impl AsRef<[u8]> for EthAddr {
 
 }
 
-impl From<[u8; 6]> for EthAddr {
+impl From<[u8; 6]> for EtherAddr {
 
     fn from(v: [u8; 6]) -> Self {
-        EthAddr(v)
+        EtherAddr(v)
     }
 
 }
 
-impl From<&str> for EthAddr {
+impl From<&str> for EtherAddr {
 
     fn from(v: &str) -> Self {
-        let val = Parse::new(v).read_eth_addr().unwrap();
-        EthAddr(val)
+        let val = Parse::new(v).read_ether_addr().unwrap();
+        EtherAddr(val)
     }
-    
+}
+
+impl From<EtherAddr> for [u8; 6] {
+
+    #[inline]
+    fn from(v: EtherAddr) -> Self {
+        v.0
+    }
 }
 
 struct Parse<'a>(&'a [u8]);
@@ -219,7 +226,7 @@ impl<'a> Parse<'a> {
         })
     }
 
-    fn read_eth_addr(&mut self) -> Option<[u8; 6]> {
+    fn read_ether_addr(&mut self) -> Option<[u8; 6]> {
         self.read_atomically(|p| {
             let mut groups = [0; 6];
 
@@ -238,10 +245,10 @@ mod test {
 
     #[test]
     fn test() {
-        let val  = Parse::new("01:02:03:04:5:ff").read_eth_addr();
+        let val  = Parse::new("01:02:03:04:5:ff").read_ether_addr();
         assert_eq!(val, Some([1,2,3,4,5,0xff]));
 
-        let val  = Parse::new("f:02:03:04:5:fe").read_eth_addr();
+        let val  = Parse::new("f:02:03:04:5:fe").read_ether_addr();
         assert_eq!(val, Some([0xf,2,3,4,5,0xfe]));
     }
 }

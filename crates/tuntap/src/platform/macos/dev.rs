@@ -1,17 +1,16 @@
-use std::borrow::Borrow;
 use std::io::{Read, Write};
 
 use libc::{AF_INET, SOCK_DGRAM, sockaddr};
 use std::io;
 
-use crate::address::EthAddr;
+use crate::address::EtherAddr;
 use crate::{platform::posix::Fd, dev::Device, configuration::Configuration};
 use crate::{Result, Error};
 use std::ptr;
 use crate::platform::posix::IntoSockAddr;
 
 
-use super::sys::{ifreq, siocaifaddr_eth, ETH_ADDR_LEN, ifaliasreq};
+use super::sys::{ifreq, siocaifaddr_eth, ETHER_ADDR_LEN, ifaliasreq};
 
 pub struct Tap {
     fd: Fd,
@@ -151,15 +150,15 @@ impl Device for Tap {
         Ok(())
     }
 
-    fn set_eth_address(&mut self, eth: EthAddr) -> Result<()> {
+    fn set_ether_address(&mut self, eth: EtherAddr) -> Result<()> {
         let mut req = self.ifreq();
-        req.ifru.addr.sa_len = ETH_ADDR_LEN as _;
+        req.ifru.addr.sa_len = ETHER_ADDR_LEN as _;
         req.ifru.addr.sa_family = libc::AF_LINK as _;
         unsafe {
             ptr::copy_nonoverlapping(
                 eth.as_ptr(), 
                 req.ifru.addr.sa_data.as_mut_ptr() as _,
-                ETH_ADDR_LEN,
+                ETHER_ADDR_LEN,
             );
             if siocaifaddr_eth(self.ctl.0, &req) < 0 {
                 Err(Error::Io(io::Error::last_os_error()))
@@ -200,8 +199,8 @@ impl Device for Tap {
             self.set_mtu(mtu)?;
         }
 
-        if let Some(eth) = config.eth_address {
-            self.set_eth_address(eth)?;
+        if let Some(eth) = config.ether_address {
+            self.set_ether_address(eth)?;
         }
 
         if let Some(enabled) = config.enabled {

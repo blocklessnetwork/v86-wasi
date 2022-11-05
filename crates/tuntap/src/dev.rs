@@ -1,7 +1,7 @@
 use std::io::{Write, Read};
 use std::net::Ipv4Addr;
 
-use crate::address::EthAddr;
+use crate::address::EtherAddr;
 use crate::configuration::Configuration;
 use crate::Result;
 
@@ -75,7 +75,7 @@ pub trait Device: Read + Write {
     /// Set the MTU.
     fn set_mtu(&mut self, value: i32) -> Result<()>;
 
-    /// Set the eth address.
-    fn set_eth_address(&mut self, eth: EthAddr) -> Result<()>;
+    /// Set the ether address.
+    fn set_ether_address(&mut self, eth: EtherAddr) -> Result<()>;
 
 }

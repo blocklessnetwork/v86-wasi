@@ -3,7 +3,7 @@ use libc::{c_char, sockaddr};
 
 pub const IFNAMSIZ: usize = 16;
 
-pub const ETH_ADDR_LEN: usize = 6;
+pub const ETHER_ADDR_LEN: usize = 6;
 
 #[repr(C)]
 #[derive(Copy, Clone)]

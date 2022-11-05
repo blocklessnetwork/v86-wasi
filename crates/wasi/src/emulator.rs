@@ -129,11 +129,13 @@ impl InnerEmulator {
                     .map(String::clone)
             )
             .map(|(addr, netmask)| {
+                let tun_ether_addess = store.setting()
+                    .tun_ether_addr()
+                    .map(|addr| addr.clone());
                 std::thread::Builder::new()
-                .name("tun thread".to_string())
+                .name("tap thread".to_string())
                 .spawn(move || {
-                    let tun_thr = TunThread::new(addr, netmask, tun_tx1, tun_rx2);
-                    // let tun_thr = TunThread::new(addr, netmask);
+                    let tun_thr = TunThread::new(addr, netmask, tun_ether_addess, tun_tx1, tun_rx2);
                     tun_thr.start();
                 });
             });
