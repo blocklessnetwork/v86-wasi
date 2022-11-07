@@ -10,7 +10,7 @@ use std::ptr;
 use crate::platform::posix::IntoSockAddr;
 
 
-use super::sys::{ifreq, siocaifaddr_eth, ETHER_ADDR_LEN, ifaliasreq};
+use super::sys::{ifreq, siocsifaddr_eth, ETHER_ADDR_LEN, ifaliasreq, ifmtu, siocifmut};
 
 pub struct Tap {
     fd: Fd,
@@ -42,6 +42,18 @@ impl Tap {
             ptr::copy_nonoverlapping(
                 self.name.as_ptr(), 
                 req.ifrn.name.as_mut_ptr() as _, 
+                self.name.len()
+            );
+            req
+        }
+    }
+
+    fn ifmtu(&self) -> ifmtu {
+        unsafe {
+            let mut req: ifmtu = std::mem::zeroed();
+            ptr::copy_nonoverlapping(
+                self.name.as_ptr(), 
+                req.ifran.as_mut_ptr() as _, 
                 self.name.len()
             );
             req
@@ -125,7 +137,7 @@ impl Device for Tap {
         req.broadaddr.sa_family = libc::AF_INET as _;
         req.broadaddr.sa_len = std::mem::size_of::<sockaddr>() as _;
         let rs = unsafe {
-            super::sys::siocaifaddr(self.ctl.0, &req)
+            super::sys::siocsifaddr(self.ctl.0, &req)
         };
         if rs < 0 {
             Err(Error::Io(io::Error::last_os_error()))
@@ -143,7 +155,14 @@ impl Device for Tap {
     }
 
     fn mtu(&self) -> Result<i32> {
-        Err(Error::NotImplemented)
+        let mut imtu = self.ifmtu();
+        unsafe {
+            if siocifmut(self.ctl.0, &mut imtu as *mut _) < 0 {
+                return Err(Error::Io(std::io::Error::last_os_error()));
+            }
+        }
+        let i = i32::from_ne_bytes(imtu.mtu);
+        Ok(i)
     }
 
     fn set_mtu(&mut self, value: i32) -> Result<()> {
@@ -160,7 +179,7 @@ impl Device for Tap {
                 req.ifru.addr.sa_data.as_mut_ptr() as _,
                 ETHER_ADDR_LEN,
             );
-            if siocaifaddr_eth(self.ctl.0, &req) < 0 {
+            if siocsifaddr_eth(self.ctl.0, &req) < 0 {
                 Err(Error::Io(io::Error::last_os_error()))
             } else {
                 Ok(())
@@ -188,7 +207,7 @@ impl Device for Tap {
                 req.mask.sa_len = std::mem::size_of::<sockaddr>() as _;
             });
             let rs = unsafe {
-                super::sys::siocaifaddr(self.ctl.0, &req)
+                super::sys::siocsifaddr(self.ctl.0, &req)
             };
             if rs < 0 {
                 return Err(Error::Io(io::Error::last_os_error()));

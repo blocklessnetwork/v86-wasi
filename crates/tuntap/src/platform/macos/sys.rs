@@ -26,6 +26,14 @@ pub struct ifreq {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
+pub struct ifmtu {
+    pub ifran: [c_char; IFNAMSIZ],
+    pub mtu: [u8;4],
+    pub padding: [u8;12],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
 pub struct ifaliasreq {
     pub ifran: [c_char; IFNAMSIZ],
     pub addr: sockaddr,
@@ -33,6 +41,6 @@ pub struct ifaliasreq {
     pub mask: sockaddr,
 }
 
-ioctl!(write siocaifaddr with 'i', 0x1a; ifaliasreq);
-
-ioctl!(write siocaifaddr_eth with 'i', 0x3c; ifreq);
+ioctl!(write siocsifaddr with 'i', 26; ifaliasreq);
+ioctl!(write siocsifaddr_eth with 'i', 60; ifreq);
+ioctl!(readwrite siocifmut with 'i', 51; ifmtu);
