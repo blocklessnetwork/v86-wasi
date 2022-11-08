@@ -103,11 +103,11 @@ impl Device for Tap {
         &self.name
     }
 
-    fn set_name(&mut self, name: &str) -> Result<()> {
+    fn set_name(&mut self, _name: &str) -> Result<()> {
         Ok(())
     }
 
-    fn enabled(&mut self, value: bool) -> Result<()> {
+    fn enabled(&mut self, _value: bool) -> Result<()> {
         Ok(())
     }
 
@@ -115,7 +115,7 @@ impl Device for Tap {
         Err(Error::NotImplemented)
     }
 
-    fn set_address(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
+    fn set_address(&mut self, _value: std::net::Ipv4Addr) -> Result<()> {
         Ok(())
     }
 
@@ -123,7 +123,7 @@ impl Device for Tap {
         Err(Error::NotImplemented)
     }
 
-    fn set_destination(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
+    fn set_destination(&mut self, _value: std::net::Ipv4Addr) -> Result<()> {
         Err(Error::NotImplemented)
     }
 
