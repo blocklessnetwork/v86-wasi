@@ -35,6 +35,11 @@ The follow is the configure file
         "log_file": "debug.log",
         "log_module": ["E", "BIOS"]
     },
+    "tun": {
+        "address": "192.168.0.1",
+        "netmask": "255.255.255.0",
+        "ether_address": "00:22:15:fe:ae:ba"
+    },
     "muiltiboot_order": ["bin", "cdrom"]
 }
 ```
