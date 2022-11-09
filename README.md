@@ -57,4 +57,8 @@ After run the VM, you can open the "term.html" file for control the VM.
 
 ![](term/Screen.png)
 
+### 4. DIY the linux iso
+
+If you wanna DIY the linux by your self, please see the document "https://github.com/txlabs/v86-linux"
+
 
