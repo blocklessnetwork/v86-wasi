@@ -17,7 +17,6 @@ pub struct Configuration {
     pub(crate) netmask: Option<Ipv4Addr>,
     pub(crate) mtu: Option<i32>,
     pub(crate) enabled: Option<bool>,
-    pub(crate) raw_fd: Option<RawFd>,
 }
 
 impl Configuration {
