@@ -150,7 +150,7 @@ impl Device for Tap {
         Err(Error::NotImplemented)
     }
 
-    fn set_netmask(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
+    fn set_netmask(&mut self, _value: std::net::Ipv4Addr) -> Result<()> {
         Ok(())
     }
 
@@ -165,7 +165,7 @@ impl Device for Tap {
         Ok(i)
     }
 
-    fn set_mtu(&mut self, value: i32) -> Result<()> {
+    fn set_mtu(&mut self, _value: i32) -> Result<()> {
         Ok(())
     }
 
