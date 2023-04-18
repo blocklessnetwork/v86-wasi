@@ -241,6 +241,7 @@ impl<'a> Parse<'a> {
 }
 
 mod test {
+    #![allow(unused_imports)]
     use super::Parse;
 
     #[test]
