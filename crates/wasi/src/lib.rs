@@ -360,9 +360,9 @@ impl ContextTrait for StoreT {
     }
 }
 
-pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
+pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, store: &mut Store<Emulator>, table: Table) {
     linker
-        .define("env", "__indirect_function_table", table)
+        .define(store.as_context_mut(), "env", "__indirect_function_table", table)
         .unwrap();
     linker
         .func_wrap(
@@ -372,7 +372,7 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
                 let mem = match caller.get_export("memory") {
                     Some(Extern::Memory(m)) => m,
                     _ => {
-                        return Err(Trap::new("missing required memory export"));
+                        return Err(anyhow::Error::msg("missing required memory export"));
                     }
                 };
                 let (mem, _ctx) = mem.data_and_store_mut(&mut caller);
@@ -394,7 +394,7 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, table: Table) {
                 let mem = match caller.get_export("memory") {
                     Some(Extern::Memory(m)) => m,
                     _ => {
-                        return Err(Trap::new("missing required memory export"));
+                        return Err(anyhow::Error::msg("missing required memory export"));
                     }
                 };
 

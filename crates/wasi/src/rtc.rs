@@ -133,27 +133,27 @@ impl RTC {
             match index {
                 CMOS_RTC_SECONDS => {
                     let rtc_time = rtc.rtc_time;
-                    rtc.encode_time(Utc.timestamp_millis(rtc_time).second() as _)
+                    rtc.encode_time(Utc.timestamp_millis_opt(rtc_time).unwrap().second() as _)
                 }
                 CMOS_RTC_MINUTES => {
                     let rtc_time = rtc.rtc_time;
-                    rtc.encode_time(Utc.timestamp_millis(rtc_time).minute() as _)
+                    rtc.encode_time(Utc.timestamp_millis_opt(rtc_time).unwrap().minute() as _)
                 }
                 CMOS_RTC_HOURS => {
                     let rtc_time = rtc.rtc_time;
-                    rtc.encode_time(Utc.timestamp_millis(rtc_time).hour() as _)
+                    rtc.encode_time(Utc.timestamp_millis_opt(rtc_time).unwrap().hour() as _)
                 }
                 CMOS_RTC_DAY_MONTH => {
                     let rtc_time = rtc.rtc_time;
-                    rtc.encode_time(Utc.timestamp_millis(rtc_time).day() as _)
+                    rtc.encode_time(Utc.timestamp_millis_opt(rtc_time).unwrap().day() as _)
                 }
                 CMOS_RTC_MONTH => {
                     let rtc_time = rtc.rtc_time;
-                    rtc.encode_time(Utc.timestamp_millis(rtc_time).month() as _)
+                    rtc.encode_time(Utc.timestamp_millis_opt(rtc_time).unwrap().month() as _)
                 }
                 CMOS_RTC_YEAR => {
                     let rtc_time = rtc.rtc_time;
-                    rtc.encode_time((Utc.timestamp_millis(rtc_time).year() % 100) as u8)
+                    rtc.encode_time((Utc.timestamp_millis_opt(rtc_time).unwrap().year() % 100) as u8)
                 }
                 CMOS_STATUS_A => rtc.cmos_a,
                 CMOS_STATUS_B => rtc.cmos_b,
@@ -168,7 +168,7 @@ impl RTC {
                 CMOS_STATUS_D => 0xFF,
                 CMOS_CENTURY => {
                     let rtc_time = rtc.rtc_time;
-                    rtc.encode_time((Utc.timestamp_millis(rtc_time).year() % 100) as u8 | 0u8)
+                    rtc.encode_time((Utc.timestamp_millis_opt(rtc_time).unwrap().year() % 100) as u8 | 0u8)
                 }
                 _ => {
                     let data = rtc.cmos_data[rtc.cmos_index as usize];
@@ -243,9 +243,11 @@ impl RTC {
                     let secs: u32 = rtc.decode_time(secs as _);
                     let minus: u32 = rtc.decode_time(minus as _);
                     let hours: u32 = rtc.decode_time(hours as _);
+                    #[allow(deprecated)]
                     let alarm_date = Utc
                         .ymd(now.year(), now.month(), now.day())
-                        .and_hms(hours, minus, secs);
+                        .and_hms_opt(hours, minus, secs)
+                        .unwrap();
                     let ms_from_now = alarm_date.timestamp_millis() - now.timestamp_millis();
                     dbg_log!(
                         LOG::RTC,

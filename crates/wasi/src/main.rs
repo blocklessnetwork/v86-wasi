@@ -26,7 +26,7 @@ fn main() {
     let module = Module::from_file(&engine, wasm_file).unwrap();
     let mut linker: Linker<Emulator> = Linker::new(&engine);
     let table = create_table(&mut store);
-    add_x86_to_linker(&mut linker, table);
+    add_x86_to_linker(&mut linker, &mut store, table);
     let inst = linker.instantiate(&mut store, &module).unwrap();
     linker.instance(&mut store, "e", inst).unwrap();
     let mem = inst.get_export(&mut store, "memory").unwrap();

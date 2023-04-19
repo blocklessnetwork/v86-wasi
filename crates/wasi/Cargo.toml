@@ -5,7 +5,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-wasmtime = "2"
+wasmtime = "7"
 lazy_static = "1.4.0"
 chrono = "0.4"
 rand = "0.8"
@@ -15,3 +15,4 @@ futures-util = "0.3"
 json = "0.12"
 crossbeam-channel = "0.5.6"
 tuntap = {path = "../tuntap"}
+anyhow = "1.0.70"
