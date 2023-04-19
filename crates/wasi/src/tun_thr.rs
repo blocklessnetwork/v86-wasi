@@ -1,5 +1,5 @@
-use std::{mem, io::{Read, Write}, time::{Duration, Instant}};
-use crossbeam_channel::{Receiver, Sender, RecvTimeoutError};
+use std::{mem, io::{Read, Write}, time::Duration};
+use crossbeam_channel::{Receiver, Sender};
 
 use tuntap::{Tap, Configuration, EtherAddr};
 
@@ -89,17 +89,21 @@ impl TunThread {
             },
         };
         tap.set_nonblock().unwrap();
+        let mut tap_sel = tuntap::Select::new();
+        tap_sel.register(&tap);
         loop {
             let mut buf = vec![0; 1024];
-            let l = tap.read(&mut buf);
-            if let Ok(l) = l {
-                self.tx.send(buf[0..l].to_vec()).unwrap();
+            let rs = tap_sel.poll(Duration::from_micros(10));
+            if rs > 0 {
+                let l = tap.read(&mut buf);
+                if let Ok(l) = l {
+                    self.tx.try_send(buf[0..l].to_vec()).unwrap();
+                }
             }
-            let now = Instant::now();
-            match self.rx.recv_deadline(now + Duration::from_millis(1)) {
+            let rs = self.rx.try_recv();
+            match rs {
                 Ok(buf) => tap.write(&buf).unwrap(),
-                Err(RecvTimeoutError::Timeout) => continue,
-                Err(RecvTimeoutError::Disconnected) => break,
+                Err(_) => break,
             };
         }
     }

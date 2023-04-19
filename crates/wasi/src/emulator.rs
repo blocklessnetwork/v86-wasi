@@ -238,6 +238,7 @@ impl Emulator {
     ) {
         self.inner_mut().init(externs, table, inst, store.clone());
         self.inner_mut().start(store);
+        println!("exit.");
     }
 
     #[inline]
