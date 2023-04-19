@@ -3,7 +3,7 @@ use std::net::Ipv4Addr;
 
 use crate::address::EtherAddr;
 use crate::configuration::Configuration;
-use crate::Result;
+use crate::{Result, Fd};
 
 
 pub trait Device: Read + Write {
@@ -78,4 +78,5 @@ pub trait Device: Read + Write {
     /// Set the ether address.
     fn set_ether_address(&mut self, eth: EtherAddr) -> Result<()>;
 
+    fn fd(&self) -> &Fd; 
 }

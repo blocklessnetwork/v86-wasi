@@ -1,5 +1,4 @@
 use std::net::Ipv4Addr;
-use std::os::unix::io::RawFd;
 
 use crate::address::EtherAddr;
 

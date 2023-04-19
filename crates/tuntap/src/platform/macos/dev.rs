@@ -86,7 +86,7 @@ impl Tap {
             let mut idx = 0;
             for n in 0 ..= 15 {
                 let path = format!("/dev/tap{}", n);
-                rs = libc::open(path.as_ptr() as _, libc::O_RDWR);
+                rs = libc::open(path.as_ptr() as _, libc::O_RDWR|libc::O_NONBLOCK);
                 idx = n;
                 if rs > 0 {
                     break;
@@ -227,6 +227,10 @@ impl Device for Tap {
         }
 
         Ok(())
+    }
+
+    fn fd(&self) -> &Fd {
+        &self.fd
     }
 }
 

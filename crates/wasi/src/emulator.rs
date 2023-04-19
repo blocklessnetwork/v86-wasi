@@ -133,11 +133,11 @@ impl InnerEmulator {
                     .tun_ether_addr()
                     .map(|addr| addr.clone());
                 std::thread::Builder::new()
-                .name("tap thread".to_string())
-                .spawn(move || {
-                    let tun_thr = TunThread::new(addr, netmask, tun_ether_addess, tun_tx1, tun_rx2);
-                    tun_thr.start();
-                });
+                    .name("tap thread".to_string())
+                    .spawn(move || {
+                        let tun_thr = TunThread::new(addr, netmask, tun_ether_addess, tun_tx1, tun_rx2);
+                        tun_thr.start();
+                    });
             });
         self.net_adapter = Some(NetAdapter::new(store.clone(), tun_rx1, tun_tx2));
         self.cpu = Some(CPU::new(&mut inst, store.clone()));
@@ -238,6 +238,7 @@ impl Emulator {
     ) {
         self.inner_mut().init(externs, table, inst, store.clone());
         self.inner_mut().start(store);
+        println!("exit.");
     }
 
     #[inline]
