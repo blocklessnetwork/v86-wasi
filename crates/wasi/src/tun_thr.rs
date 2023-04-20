@@ -93,7 +93,7 @@ impl TunThread {
         tap_sel.register(&tap);
         loop {
             let mut buf = vec![0; 1024];
-            let rs = tap_sel.poll(Duration::from_micros(10));
+            let rs = tap_sel.poll(Duration::from_micros(50));
             if rs > 0 {
                 let l = tap.read(&mut buf);
                 if let Ok(l) = l {
