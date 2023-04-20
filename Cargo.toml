@@ -3,5 +3,9 @@
 members = [
     "crates/v86",
     "crates/wasi",
+    "crates/v86-dll",
     "crates/tuntap",
 ]
+
+[workspace.dependencies]
+v86-wasi = {path = "crates/wasi"}

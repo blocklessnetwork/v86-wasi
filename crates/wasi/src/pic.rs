@@ -62,6 +62,7 @@ impl InnerPIC {
         }
     }
 
+    #[allow(dead_code)]
     #[inline]
     pub fn get_isr(&self) -> u8 {
         self.isr as u8

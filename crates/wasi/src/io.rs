@@ -25,6 +25,7 @@ pub(crate) trait MemAccessTrait<T> {
 
 pub struct MemAccess<T> {
     offset: usize,
+    #[allow(dead_code)]
     len: u32,
     mem: Memory,
     phantom: PhantomData<T>,

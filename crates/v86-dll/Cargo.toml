@@ -1,0 +1,8 @@
+[package]
+name = "v86-dll"
+version = "0.1.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+v86-wasi = {workspace = true}
