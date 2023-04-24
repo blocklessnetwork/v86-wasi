@@ -15,7 +15,7 @@ rand = "0.8"
 tokio = {version = "1", features = ["rt", "net", "time", "io-util", "sync"]}
 tokio-tungstenite = "0.17.2"
 futures-util = "0.3"
-json = "0.12"
+json = {workspace = true}
 crossbeam-channel = "0.5.6"
 tuntap = {workspace = true}
 anyhow = "1.0.70"

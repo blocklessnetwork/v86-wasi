@@ -47,9 +47,7 @@ impl Setting {
         }
     }
 
-    pub fn load_from_file(f: impl AsRef<Path>) -> Self {
-        let data = std::fs::read(f).unwrap();
-        let json_str = std::str::from_utf8(&data).unwrap();
+    pub fn load_from_str(json_str: &str) -> Self {
         let setting_obj = json::parse(json_str).unwrap();
         let mut setting = Self::new();
         setting.cdrom_file = setting_obj["cdrom"].as_str().map(|s| s.into());
@@ -72,6 +70,12 @@ impl Setting {
         Self::load_logger(&mut setting, &setting_obj);
         Self::load_tunnel(&mut setting, &setting_obj);
         setting
+    }
+
+    pub fn load_from_file(f: impl AsRef<Path>) -> Self {
+        let data = std::fs::read(f).unwrap();
+        let json_str = std::str::from_utf8(&data).unwrap();
+        Self::load_from_str(json_str)
     }
 
     fn load_logger(setting: &mut Setting, setting_obj: &JsonValue) {

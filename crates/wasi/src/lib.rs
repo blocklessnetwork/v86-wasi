@@ -9,7 +9,7 @@ const ALL_DEBUG: bool = true;
 type StoreT = Weak<Store<Emulator>>;
 use adapter::NetAdapter;
 use wasmtime::*;
-
+mod run;
 mod io;
 mod bus;
 mod cpu;
@@ -59,6 +59,7 @@ use adapter::NetTermAdapter;
 use floppy::FloppyController;
 pub(crate) use storage::FileBuffer;
 pub use dev::Dev;
+pub use run::run_with_setting;
 
 pub use log::set_log_file_name;
 pub use log::set_log_mask;
