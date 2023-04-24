@@ -1,8 +1,11 @@
 [package]
 name = "tuntap"
 version = "0.1.0"
-publish = false
 edition = "2021"
+authors = ["Join.Gong<joinhack@gmail.com>", "Derek Anderson<derek@txlabs.org>"]
+description = "This crate is the v86 emulator the tun implement."
+license = "MIT/Apache-2.0"
+repository = "https://github.com/blocklessnetwork/v86-wasi"
 
 [dependencies]
 libc = "0.2"
