@@ -2,7 +2,7 @@
 
 members = [
     "crates/wasi",
-    "crates/v86-wasi-dll",
+    "crates/v86-dll",
     "crates/tuntap",
 ]
 
