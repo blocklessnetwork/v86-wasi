@@ -7,5 +7,5 @@ members = [
 ]
 
 [workspace.dependencies]
-v86-wasi = {path = "crates/wasi"}
-tuntap = {path = "crates/tuntap"}
+v86-wasi = {path = "crates/wasi", version = "0.1.0"}
+tuntap = {path = "crates/tuntap", version = "0.1.0"}
