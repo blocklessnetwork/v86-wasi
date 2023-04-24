@@ -1,7 +1,6 @@
 [workspace]
 
 members = [
-    "crates/v86",
     "crates/wasi",
     "crates/v86-wasi-dll",
     "crates/tuntap",
