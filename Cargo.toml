@@ -8,3 +8,4 @@ members = [
 
 [workspace.dependencies]
 v86-wasi = {path = "crates/wasi"}
+tuntap = {path = "crates/tuntap"}
