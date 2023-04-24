@@ -36,9 +36,10 @@ pub struct TunThread {
     rx: Receiver<Vec<u8>>,
     tx: Sender<Vec<u8>>,
 }
-
+#[allow(dead_code)]
 const BORDCAST: [u8; 6] = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
 //This value is htons 0x806
+#[allow(dead_code)]
 const ARP_PROTO: u16 = 0x608;
 const ARP_HDR: u16 = 256;
 const ARP_OPT: u16 = 256;
