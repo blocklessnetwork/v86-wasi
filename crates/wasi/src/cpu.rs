@@ -464,6 +464,18 @@ impl CPU {
     }
 
     #[inline]
+    pub(crate) fn write16(&mut self, addr: u32, value: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.write16(store, addr, value));
+    }
+
+    #[inline]
+    pub(crate) fn write32(&mut self, addr: u32, value: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.write32(store, addr, value));
+    }
+
+    #[inline]
     pub(crate) fn read8(&mut self, addr: u32) -> i32 {
         self.store_mut()
             .map_or(0, |store| self.vm_opers.read8(store, addr))
