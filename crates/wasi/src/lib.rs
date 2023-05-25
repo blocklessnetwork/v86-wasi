@@ -28,6 +28,7 @@ mod ne2k;
 mod vga;
 mod uart;
 mod debug;
+mod virtio;
 mod ws_thr;
 mod floppy;
 mod kernel;

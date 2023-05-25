@@ -1,5 +1,12 @@
 #![allow(unused)]
-use crate::{StoreT, pci::{PCIDevice, GenericPCIDevice, PCIBar}, log::LOG, ContextTrait, Dev, bus::BusData};
+use crate::{
+    StoreT, 
+    pci::{PCIDevice, GenericPCIDevice, PCIBar}, 
+    log::LOG, 
+    ContextTrait, 
+    Dev, 
+    bus::BusData
+};
 
 const NE2K_LOG_VERBOSE: bool = false;
 
