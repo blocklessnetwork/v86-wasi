@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::{StoreT, ContextTrait};
+use crate::{StoreT, ContextTrait, log::LOG};
 use std::collections::HashSet;
 
 const DEBUG: bool = false;
@@ -9,6 +9,19 @@ const VIRTIO_PCI_CAP_NOTIFY_CFG: u8 = 2;
 const VIRTIO_PCI_CAP_ISR_CFG: u8 = 3;
 const VIRTIO_PCI_CAP_DEVICE_CFG: u8 = 4;
 const VIRTIO_PCI_CAP_PCI_CFG: u8 = 5;
+
+const VIRTIO_STATUS_ACKNOWLEDGE: u8 = 1;
+const VIRTIO_STATUS_DRIVER: u8 = 2;
+const VIRTIO_STATUS_DRIVER_OK: u8 = 4;
+const VIRTIO_STATUS_FEATURES_OK: u8 = 8;
+const VIRTIO_STATUS_DEVICE_NEEDS_RESET: u8 = 64;
+const VIRTIO_STATUS_FAILED: u8 = 128;
+
+// ISR bits (isr_status values).
+
+const VIRTIO_ISR_QUEUE: u8 = 1;
+const VIRTIO_ISR_DEVICE_CFG: u8 = 2;
+
 
 // Size (bytes) of the virtq_desc struct per queue size.
 const VIRTIO_PCI_VENDOR_ID: u16 = 0x1AF4;
@@ -180,16 +193,17 @@ pub(crate) struct VirtIOCommonCapabilityOptions {
     features: Vec<u8>,
 }
 
-pub(crate) struct VirtIOptions {
+pub struct VirtIOptions {
     name: String,
     pci_id: u16,
     device_id: u16,
     subsystem_device_id: u16,
     common: VirtIOCommonCapabilityOptions,
     notification: VirtIONotificationCapabilityOptions,
+    on_driver_ok: fn(StoreT)
 }
 
-pub(crate) struct VirtIO {
+pub struct VirtIO {
     store: StoreT,
     pci_id: u16,
     device_id: u16,
@@ -339,6 +353,210 @@ impl VirtIO {
             config_generation: 0,
             options,
         }
+    }
+
+    fn create_common_capability(&self) -> Vec<VirtIOCapabilityInfo> {
+        let mut rs = Vec::new();
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 4,
+            name: "device_feature_select".into(),
+            read: |store| {
+                store.virtio().map_or(0, |vr| vr.device_feature_select)
+            },
+            write: |store, v| {
+                store.virtio_mut().map(|vr| vr.device_feature_select = v);
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 4,
+            name: "device_feature".into(),
+            read: |store| {
+                store.virtio().map_or(0, |vr| vr.device_feature[vr.device_feature_select as usize] as _)
+            },
+            write: |_store, _v| {
+                //read only
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 4,
+            name: "driver_feature_select".into(),
+            read: |store| {
+                store.virtio().map_or(0, |vr| vr.driver_feature_select)
+            },
+            write: |store, v| {
+                store.virtio_mut().map(|vr| vr.driver_feature_select = v);
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 4,
+            name: "driver_feature".into(),
+            read: |store| {
+                store.virtio().map_or(0, |vr| vr.driver_feature[vr.driver_feature_select as usize] as _)
+            },
+            write: |store, v| {
+                store.virtio_mut().map(|vr| {
+                    let supported_feature = vr.device_feature[vr.driver_feature_select as usize];
+                    if (vr.driver_feature_select as usize) < vr.driver_feature.len() {
+                        // Note: only set subset of device_features is set.
+                        // Required in our implementation for is_feature_negotiated().
+                        vr.driver_feature[vr.driver_feature_select as usize] = (v as u32) & supported_feature;
+                    }
+                    // Check that driver features is an inclusive subset of device features.
+                    let invalid_bits = v & !(supported_feature as i32);
+                    vr.features_ok = vr.features_ok && invalid_bits == 0;
+                });
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 2,
+            name: "msix_config".into(),
+            read: |_store| {
+                dbg_log!(LOG::VIRTIO, "No msi-x capability supported.");
+                0xFFFF
+            },
+            write: |_store, _v| {
+                dbg_log!(LOG::VIRTIO, "No msi-x capability supported.");
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 2,
+            name: "num_queues".into(),
+            read: |store| {
+                store.virtio().map_or(0, |vr| vr.queues.len() as _)
+            },
+            write: |_store, _v| {
+            },
+        };
+        rs.push(struct_);
+
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 1,
+            name: "device_status".into(),
+            read: |store| {
+                store.virtio().map_or(0, |vr| vr.device_status)
+            },
+            write: |store, mut data| {
+                store.virtio_mut().map(|vr| {
+                    if data == 0 {
+                        dbg_log!(LOG::VIRTIO, "Reset device<{}>", vr.name);
+                        vr.reset();
+                    } else if data & (VIRTIO_STATUS_FAILED as i32) > 0 {
+                        dbg_log!(LOG::VIRTIO, "Warning: Device<{}> status failed", vr.name);
+                    } else {
+                        let acknowlege = if data & (VIRTIO_STATUS_ACKNOWLEDGE as i32) > 0 {
+                            "ACKNOWLEDGE "
+                        } else {
+                            ""
+                        };
+                        let driver = if data & (VIRTIO_STATUS_DRIVER as i32) > 0 {
+                            "DRIVER "
+                        } else {
+                            ""
+                        };
+                        let driver_ok = if data & (VIRTIO_STATUS_DRIVER_OK as i32) > 0 {
+                            "DRIVER_OK "
+                        } else {
+                            ""
+                        };
+                        let feature_ok = if data & (VIRTIO_STATUS_FEATURES_OK as i32) > 0 {
+                            "FEATURES_OK "
+                        } else {
+                            ""
+                        };
+                        let need_rest = if data & (VIRTIO_STATUS_DEVICE_NEEDS_RESET as i32) > 0 {
+                            "DEVICE_NEEDS_RESET "
+                        } else {
+                            ""
+                        };
+                        dbg_log!(LOG::VIRTIO, 
+                            "Device<{}> status: {acknowlege}{driver}{driver_ok}{feature_ok}{need_rest}",
+                            vr.name
+                        );
+                    }
+
+                    if (data & !(vr.device_status as i32) & (VIRTIO_STATUS_DRIVER_OK as i32)) > 0 &&
+                        (vr.device_status & VIRTIO_STATUS_DEVICE_NEEDS_RESET as i32) > 0 {
+                        // We couldn't notify NEEDS_RESET earlier because DRIVER_OK was not set.
+                        // Now it has been set, notify now.
+                        vr.notify_config_changes();
+                    }
+
+                    // Don't set FEATURES_OK if our device doesn't support requested features.
+                    if !vr.features_ok {
+                        if DEBUG && (data & VIRTIO_STATUS_FEATURES_OK as i32) > 0 {
+                            dbg_log!(LOG::VIRTIO, "Removing FEATURES_OK");
+                        }
+                        data &= (!VIRTIO_STATUS_FEATURES_OK) as i32;
+                    }
+
+                    vr.device_status = data;
+
+                    if (data & !vr.device_status & VIRTIO_STATUS_DRIVER_OK as i32) > 0 {
+                        (vr.options.on_driver_ok)(store.clone());
+                    }
+                });
+            },
+        };
+        rs.push(struct_);
+        todo!()
+    }
+
+    fn notify_config_changes(&mut self) {
+        self.config_has_changed = true;
+
+        if self.device_status & VIRTIO_STATUS_DRIVER_OK as i32 > 0 {
+            self.raise_irq(VIRTIO_ISR_DEVICE_CFG);
+        } else {
+            assert!(false,
+                "VirtIO device<{}> attempted to notify driver before DRIVER_OK",
+                self.name
+            );
+        }
+    }
+
+    fn raise_irq(&mut self, typ: u8) {
+        dbg_log!(LOG::VIRTIO, "Raise irq {typ:x}");
+        self.isr_status |= typ as i32;
+        self.store.pci_mut().map(|pci| {
+            pci.raise_irq(self.pci_id);
+        });
+    }
+
+    fn lower_irq(&mut self) {
+        dbg_log!(LOG::VIRTIO, "Lower irq ");
+        self.isr_status = 0;
+        self.store.pci_mut().map(|pci| {
+            pci.raise_irq(self.pci_id);
+        });
+    }
+
+    pub fn reset(&mut self) {
+        self.device_feature_select = 0;
+        self.driver_feature_select = 0;
+        self.driver_feature.copy_from_slice(&self.device_feature);
+
+        self.features_ok = true;
+        self.device_status = 0;
+
+        self.queue_select = 0;
+
+        self.queues.iter_mut().for_each(|que| que.reset());
+
+        self.config_has_changed = false;
+        self.config_generation = 0;
+
+        self.lower_irq();
     }
 
     pub fn init(&mut self) {

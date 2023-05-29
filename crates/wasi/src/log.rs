@@ -53,6 +53,7 @@ pub enum LOG {
     NET,
     DISK,
     BIOS,
+    VIRTIO,
     SERIAL,
     FLOPPY,
 }

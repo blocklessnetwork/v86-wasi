@@ -27,7 +27,15 @@ use crate::{
     rtc::RTC,
     uart::UART,
     vga::VGAScreen,
-    ContextTrait, Dev, Emulator, StoreT, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, ne2k::Ne2k, ide::{self, IDEDevice}, storage::SyncFileBuffer,
+    ContextTrait, Dev, 
+    Emulator, StoreT, 
+    FLAG_INTERRUPT, 
+    MMAP_BLOCK_SIZE, 
+    TIME_PER_FRAME, 
+    ne2k::Ne2k, 
+    ide::{self, IDEDevice}, 
+    storage::SyncFileBuffer, 
+    virtio::VirtIO,
 };
 use chrono::Duration;
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
@@ -343,6 +351,7 @@ pub struct CPU {
 }
 
 impl CPU {
+
     #[inline]
     pub(crate) fn store_mut(&self) -> Option<&'static mut Store<Emulator>> {
         if self.store.weak_count() == 0 {
@@ -1012,6 +1021,14 @@ impl CPU {
         if fast_boot {
             self.rtc.cmos_write(0x3f, 0x01);
         }
+    }
+
+    pub fn virtio(&self) -> Option<&VirtIO> {
+        None
+    }
+
+    pub fn virtio_mut(&mut self) -> Option<&mut VirtIO> {
+        None
     }
 
     pub fn device_raise_irq(&mut self, i: u8) {

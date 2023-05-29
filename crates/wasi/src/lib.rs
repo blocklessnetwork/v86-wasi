@@ -8,6 +8,7 @@ const ALL_DEBUG: bool = true;
 
 type StoreT = Weak<Store<Emulator>>;
 use adapter::NetAdapter;
+use virtio::VirtIO;
 use wasmtime::*;
 mod run;
 mod io;
@@ -167,6 +168,9 @@ trait ContextTrait {
 
     fn net_adp_mut(&self) -> Option<&mut NetAdapter>;
     fn net_adp(&self) -> Option<&NetAdapter>;
+
+    fn virtio_mut(&self) -> Option<&mut VirtIO>;
+    fn virtio(&self) -> Option<&VirtIO>;
 }
 
 impl ContextTrait for StoreT {
@@ -359,6 +363,14 @@ impl ContextTrait for StoreT {
     #[inline]
     fn net_term_adp(&self) -> Option<&NetTermAdapter> {
         self.emulator().net_term_adp()
+    }
+
+    fn virtio_mut(&self) -> Option<&mut VirtIO> {
+        todo!()
+    }
+
+    fn virtio(&self) -> Option<&VirtIO> {
+        todo!()
     }
 }
 

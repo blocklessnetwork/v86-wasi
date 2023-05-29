@@ -4,6 +4,7 @@ members = [
     "crates/wasi",
     "crates/v86-lib",
     "crates/tuntap",
+    "crates/v86",
 ]
 
 [workspace.dependencies]

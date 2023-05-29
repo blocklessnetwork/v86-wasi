@@ -29,7 +29,13 @@ use crate::{
     adapter::{NetAdapter, NetTermAdapter},
     floppy::FloppyController,
     jit::{JitMsg, JitWorker},
-    ContextTrait, Setting, StoreT, CPU, WASM_TABLE_OFFSET, tun_thr::TunThread,
+    ContextTrait, 
+    Setting, 
+    StoreT, 
+    CPU, 
+    WASM_TABLE_OFFSET, 
+    tun_thr::TunThread, 
+    virtio::VirtIO,
 };
 
 pub(crate) struct InnerEmulator {
@@ -369,6 +375,16 @@ impl Emulator {
     #[inline]
     pub(crate) fn pci(&self) -> Option<&PCI> {
         self.inner_mut().cpu.as_mut().map(|cpu| &cpu.pci)
+    }
+
+    #[inline]
+    pub(crate) fn virtio_mut(&self) -> Option<&mut VirtIO> {
+        self.inner_mut().cpu.as_mut().and_then(|cpu| cpu.virtio_mut())
+    }
+
+    #[inline]
+    pub(crate) fn virtio(&self) -> Option<&VirtIO> {
+        self.inner().cpu.as_ref().and_then(|cpu| cpu.virtio())
     }
 
     #[inline]
