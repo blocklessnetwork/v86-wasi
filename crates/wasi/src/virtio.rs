@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::{StoreT, ContextTrait, log::LOG};
+use crate::{StoreT, ContextTrait, log::LOG, int_log2};
 use std::collections::HashSet;
 
 const DEBUG: bool = false;
@@ -363,8 +363,8 @@ impl VirtIO {
             read: |store| {
                 store.virtio().map_or(0, |vr| vr.device_feature_select)
             },
-            write: |store, v| {
-                store.virtio_mut().map(|vr| vr.device_feature_select = v);
+            write: |store, data| {
+                store.virtio_mut().map(|vr| vr.device_feature_select = data);
             },
         };
         rs.push(struct_);
@@ -387,8 +387,8 @@ impl VirtIO {
             read: |store| {
                 store.virtio().map_or(0, |vr| vr.driver_feature_select)
             },
-            write: |store, v| {
-                store.virtio_mut().map(|vr| vr.driver_feature_select = v);
+            write: |store, data| {
+                store.virtio_mut().map(|vr| vr.driver_feature_select = data);
             },
         };
         rs.push(struct_);
@@ -399,16 +399,16 @@ impl VirtIO {
             read: |store| {
                 store.virtio().map_or(0, |vr| vr.driver_feature[vr.driver_feature_select as usize] as _)
             },
-            write: |store, v| {
+            write: |store, data| {
                 store.virtio_mut().map(|vr| {
                     let supported_feature = vr.device_feature[vr.driver_feature_select as usize];
                     if (vr.driver_feature_select as usize) < vr.driver_feature.len() {
                         // Note: only set subset of device_features is set.
                         // Required in our implementation for is_feature_negotiated().
-                        vr.driver_feature[vr.driver_feature_select as usize] = (v as u32) & supported_feature;
+                        vr.driver_feature[vr.driver_feature_select as usize] = (data as u32) & supported_feature;
                     }
                     // Check that driver features is an inclusive subset of device features.
-                    let invalid_bits = v & !(supported_feature as i32);
+                    let invalid_bits = data & !(supported_feature as i32);
                     vr.features_ok = vr.features_ok && invalid_bits == 0;
                 });
             },
@@ -509,7 +509,215 @@ impl VirtIO {
             },
         };
         rs.push(struct_);
-        todo!()
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 1,
+            name: "config_generation".into(),
+            read: |store| {
+                store.virtio().map_or(0, |vr| vr.config_generation as _)
+            },
+            write: |_store, _| {
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 2,
+            name: "queue_select".into(),
+            read: |store| {
+                store.virtio().map_or(0, |vr| vr.queue_select as _)
+            },
+            write: |store, data| {
+                store.virtio_mut().map(|vr| {
+                    vr.queue_select = data;
+                    // if vr.queue_select < vr.queues.len() as i32 {
+                    //     vr.queues_selected = vr.queues[vr.queue_select as usize] as i32;
+                    // }
+                });
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 2,
+            name: "queue_size".into(),
+            read: |store| {
+                store.virtio().and_then(|vr| vr.queue_selected())
+                    .and_then(|q| Some(q.size as i32)).unwrap_or(0)
+            },
+            write: |store, mut data| {
+                store.virtio_mut().map(|vr| {
+                    if vr.queue_selected().is_none() {
+                        return;
+                    }
+                    if (data & data - 1) > 0 {
+                        dbg_log!(LOG::VIRTIO, 
+                            "Warning: dev<{}> Given queue size was not a power of 2. Rounding up to next power of 2.",
+                            vr.name
+                        );
+                        data = 1 << (int_log2(data - 1) + 1);
+                    }
+                    let size_supported = vr.queue_selected().map_or(0, |q| q.size_supported as i32);
+                    if data > size_supported {
+                        dbg_log!(LOG::VIRTIO, 
+                            "Warning: dev<{}> Trying to set queue size greater than supported. Clamping to supported size.",
+                            vr.name
+                        );
+                        data = size_supported;
+                    }
+                    vr.queue_selected_mut().map(|q| {
+                        q.set_size(data as u32);
+                    });
+                });
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 2,
+            name: "queue_msix_vector".into(),
+            read: |_store| {
+                dbg_log!(LOG::VIRTIO, "No msi-x capability supported.");
+                0xFFFF
+            },
+            write: |_store, _data| {
+                dbg_log!(LOG::VIRTIO, "No msi-x capability supported.");
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 2,
+            name: "queue_enable".into(),
+            read: |store| {
+                store.virtio().and_then(|vr| {
+                    vr.queue_selected().map(|q| {
+                        let enabled = if q.enabled {
+                            1
+                        } else {
+                            0
+                        };
+                        enabled | 0
+                    })
+                }).unwrap_or(0)
+            },
+            write: |store, data| {
+                store.virtio_mut().map(|vr| {
+                    if vr.queue_selected().is_none() {
+                        return;
+                    }
+                    let queue_selected = vr.queue_selected_mut().unwrap();
+                    if data == 1 {
+                        if queue_selected.is_configured() {
+                            queue_selected.enable();
+                        } else {
+                            dbg_log!(LOG::VIRTIO, "Driver bug: tried enabling unconfigured queue");
+                        }
+                    } else if data == 0 {
+                        dbg_log!(LOG::VIRTIO, "Driver bug: tried writing 0 to queue_enable");
+                    }
+                });
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 2,
+            name: "queue_notify_off".into(),
+            read: |store| {
+                store.virtio().and_then(|vr| {
+                    vr.queue_selected()
+                }).map_or(0, |q| q.notify_offset as i32)
+            },
+            write: |_store, _data| {
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 4,
+            name: "queue_desc (low dword)".into(),
+            read: |store| {
+                store.virtio().and_then(|vr| {
+                    vr.queue_selected()
+                }).map_or(0, |q| q.desc_addr as i32)
+            },
+            write: |store, data| {
+                store.virtio_mut().and_then(|vr| {
+                    vr.queue_selected()
+                }).map(|q| q.desc_addr = data as u32);
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 4,
+            name: "queue_desc (high dword)".into(),
+            read: |store| {
+                0
+            },
+            write: |_store, _data| {
+                dbg_log!(LOG::VIRTIO, "Warning: High dword of 64 bit queue_desc ignored");
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 4,
+            name: "queue_avail (low dword)".into(),
+            read: |store| {
+                store.virtio().and_then(|vr| {
+                    vr.queue_selected()
+                }).map_or(0, |q| q.avail_addr as i32)
+            },
+            write: |store, data| {
+                store.virtio().and_then(|vr| {
+                    vr.queue_selected()
+                }).map(|q| q.avail_addr = data as u32);
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 4,
+            name: "queue_avail (high dword)".into(),
+            read: |store| {
+                0
+            },
+            write: |_store, _data| {
+                dbg_log!(LOG::VIRTIO, "Warning: High dword of 64 bit queue_avail ignored");
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 4,
+            name: "queue_used (low dword)".into(),
+            read: |store| {
+                store.virtio().and_then(|vr| {
+                    vr.queue_selected()
+                }).map_or(0, |q| q.used_addr as i32)
+            },
+            write: |store, data| {
+                store.virtio_mut().and_then(|vr| {
+                    vr.queue_selected()
+                }).map(|q| q.used_addr = data as u32);
+            },
+        };
+        rs.push(struct_);
+
+        let struct_ = VirtIOCapabilityInfoStruct {
+            bytes: 4,
+            name: "queue_used (high dword)".into(),
+            read: |store| {
+                0
+            },
+            write: |_store, _data| {
+                dbg_log!(LOG::VIRTIO, "Warning: High dword of 64 bit queue_used ignored");
+            },
+        };
+        rs.push(struct_);
+        rs
     }
 
     fn notify_config_changes(&mut self) {

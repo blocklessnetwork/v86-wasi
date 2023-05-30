@@ -38,6 +38,7 @@ mod adapter;
 mod storage;
 mod setting;
 mod emulator;
+mod utils;
 pub mod consts;
 
 use io::IO;
@@ -53,6 +54,7 @@ use uart::UART;
 pub use cpu::CPU;
 use ide::IDEDevice;
 use vga::VGAScreen;
+pub use utils::*;
 pub use consts::*;
 pub use setting::*;
 pub(crate) use log::LOG;
