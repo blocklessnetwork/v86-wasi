@@ -32,12 +32,21 @@ const VIRTQ_USED_ENTRYSIZE: u32 = 8;
 
 const VIRTIO_F_VERSION_1: u8 = 32;
 
-type NotificationCapabilityFunc = fn(StoreT, usize);
+
+
+pub struct VirtIODeviceSpecificCapabilityOptions {
+    initial_port: u16,
+    struct_: Option<Vec<VirtIOCapabilityInfoStruct>>
+}
 
 pub struct VirtIONotificationCapabilityOptions {
     initial_port: u16,
     single_handler: bool,
-    handles: Vec<NotificationCapabilityFunc>,
+    handlers: Vec<StructWrite>,
+}
+
+pub struct VirtIOISRCapabilityOptions {
+    initial_port: u16,
 }
 
 pub struct VirtQueue {
@@ -165,11 +174,14 @@ impl VirtQueue {
     }
 }
 
+type StructWrite = fn(StoreT, i32);
+type StructRead = fn(StoreT) -> i32;
+
 struct VirtIOCapabilityInfoStruct {
     bytes: u8,
     name: String,
-    read: fn(StoreT) -> i32,
-    write: fn(StoreT, i32),
+    read: StructRead,
+    write: StructWrite,
 }
 
 pub(crate) struct VirtIOCapabilityInfo {
@@ -191,16 +203,19 @@ pub(crate) struct VirtIOCommonCapabilityOptions {
     initial_port: u16,
     queues: Vec<VirtQueueOptions>,
     features: Vec<u8>,
+    on_driver_ok: fn(StoreT)
 }
 
 pub struct VirtIOptions {
     name: String,
     pci_id: u16,
     device_id: u16,
+    single_handler: bool,
     subsystem_device_id: u16,
     common: VirtIOCommonCapabilityOptions,
+    isr_status: VirtIOISRCapabilityOptions,
     notification: VirtIONotificationCapabilityOptions,
-    on_driver_ok: fn(StoreT)
+    device_specific: Option<VirtIODeviceSpecificCapabilityOptions>,
 }
 
 pub struct VirtIO {
@@ -265,13 +280,13 @@ impl VirtIO {
                     } else {
                         q.notify_offset as usize
                     };
-                    let nth = options.notification.handles.iter().nth(effective_offset);
+                    let nth = options.notification.handlers.iter().nth(effective_offset);
                     assert!(nth.is_some(), 
                         "VirtIO device<{name}> every queue's notifier must exist");
                     effective_offset
                 })
                 .collect::<HashSet<_>>();
-            options.notification.handles.iter().enumerate().for_each(|(i, h)| {
+            options.notification.handlers.iter().enumerate().for_each(|(i, h)| {
                 assert!(offsets.contains(&i),
                     "VirtIO device<{name}> no defined notify handler should be unused");
             });
@@ -354,8 +369,71 @@ impl VirtIO {
             options,
         }
     }
+    
+    fn create_isr_capability(&self) -> VirtIOCapabilityInfo {
+        VirtIOCapabilityInfo {
+            type_: VIRTIO_PCI_CAP_ISR_CFG,
+            bar: 2,
+            port: self.options.isr_status.initial_port,
+            use_mmio: false,
+            offset: 0,
+            extra: vec![],
+            struct_: vec![VirtIOCapabilityInfoStruct {
+                bytes: 1,
+                name: "isr_status".into(),
+                read: |store| {
+                    store.virtio().map_or(0, |vr| {
+                        let isr_status = vr.isr_status;
+                        vr.lower_irq();
+                        isr_status
+                    })
+                },
+                write: |_store, _v| {
+                    //read only
+                },
+            }]
+        }
+    }
 
-    fn create_common_capability(&self) -> Vec<VirtIOCapabilityInfo> {
+    fn create_notification_capability(&self) -> VirtIOCapabilityInfo {
+        let mut notify_off_multiplier: u32;
+        if self.options.single_handler {
+            assert!(self.options.notification.handlers.len() == 1,
+                "VirtIO device<{}> too many notify handlers specified: expected single handler",
+                self.name
+            );
+            notify_off_multiplier = 0;
+        } else {
+            notify_off_multiplier = 2;
+        }
+        let notify_struct = self.options.notification.handlers
+            .iter()
+            .enumerate()
+            .map(|(i, handler)| {
+                VirtIOCapabilityInfoStruct {
+                    bytes: 2,
+                    name: format!("notify{i}"),
+                    read: |_| 0xFFFF,
+                    write: *handler,
+                }
+            }).collect::<Vec<_>>();
+        VirtIOCapabilityInfo {
+            type_: VIRTIO_PCI_CAP_NOTIFY_CFG,
+            bar: 1,
+            port: self.options.notification.initial_port,
+            use_mmio: false,
+            offset: 0,
+            extra: vec![
+                (notify_off_multiplier & 0xFF) as u8,
+                ((notify_off_multiplier >> 8) & 0xFF) as u8,
+                ((notify_off_multiplier >> 16) & 0xFF) as u8,
+                (notify_off_multiplier >> 24) as u8,
+            ],
+            struct_: notify_struct
+        }
+    }
+
+    fn create_common_capability(&self) -> VirtIOCapabilityInfo {
         let mut rs = Vec::new();
         let struct_ = VirtIOCapabilityInfoStruct {
             bytes: 4,
@@ -503,7 +581,7 @@ impl VirtIO {
                     vr.device_status = data;
 
                     if (data & !vr.device_status & VIRTIO_STATUS_DRIVER_OK as i32) > 0 {
-                        (vr.options.on_driver_ok)(store.clone());
+                        (vr.options.common.on_driver_ok)(store.clone());
                     }
                 });
             },
@@ -717,7 +795,15 @@ impl VirtIO {
             },
         };
         rs.push(struct_);
-        rs
+        VirtIOCapabilityInfo {
+            type_: VIRTIO_PCI_CAP_COMMON_CFG,
+            bar: 0,
+            port: self.options.common.initial_port,
+            use_mmio: false,
+            offset: 0,
+            extra: Vec::new(),
+            struct_: rs
+        }
     }
 
     fn notify_config_changes(&mut self) {
