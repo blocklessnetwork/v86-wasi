@@ -1141,7 +1141,7 @@ impl VirtIO {
         let pci_dev = GenericPCIDevice::new(
             self.pci_id,
             pci_space,
-            vec![Some(PCIBar::new(32))],
+            pci_bars,
             &self.name,
         );
         self.store.pci_mut().map(|pci| {
