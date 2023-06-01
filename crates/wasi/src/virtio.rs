@@ -29,15 +29,27 @@ const VIRTIO_ISR_QUEUE: u8 = 1;
 const VIRTIO_ISR_DEVICE_CFG: u8 = 2;
 
 
-
+// Size (bytes) of the virtq_desc struct per queue size.
+const VIRTQ_DESC_ENTRYSIZE: u32 = 16;
+// Size (bytes) of the virtq_avail struct ignoring ring entries.
+const VIRTQ_AVAIL_BASESIZE: u32 = 6;
 // Size (bytes) of the virtq_avail struct per queue size.
 const VIRTQ_AVAIL_ENTRYSIZE: u32 = 2;
 // Size (bytes) of the virtq_desc struct per queue size.
 const VIRTQ_USED_ENTRYSIZE: u32 = 8;
+// Mask for wrapping the idx field of the virtq_used struct so that the value
+// naturally overflows after 65535 (idx is a word).
+const VIRTQ_IDX_MASK: u32 = 0xFFFF;
 
 const VIRTIO_F_VERSION_1: u8 = 32;
 
-
+struct DescTable {
+    addr_low: i32,
+    addr_high: i32,
+    len: i32,
+    flags: i32,
+    next: i32,
+}
 
 pub struct VirtIODeviceSpecificCapabilityOptions {
     initial_port: u16,
@@ -88,9 +100,108 @@ impl VirtQueue {
             mask
         }
     }
+
     fn init(&mut self) {
         self.reset();
     }
+
+    fn get_descriptor(&self, table_address: u32, i: u32) -> DescTable {
+        let addr_low = self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.read32s(table_address + i * VIRTQ_DESC_ENTRYSIZE)
+        });
+        let addr_high = self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.read32s(table_address + i * VIRTQ_DESC_ENTRYSIZE + 4)
+        });
+        let len = self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.read32s(table_address + i * VIRTQ_DESC_ENTRYSIZE + 8)
+        });
+        let flags = self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.read16(table_address + i * VIRTQ_DESC_ENTRYSIZE + 12)
+        });
+        let next = self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.read16(table_address + i * VIRTQ_DESC_ENTRYSIZE + 14)
+        });
+        DescTable {
+            addr_low,
+            addr_high,
+            len,
+            flags,
+            next
+        }
+    }
+
+    fn avail_get_flags(&self) -> i32 {
+        let addr = self.avail_addr;
+        self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.read16(addr)
+        })
+    }
+
+    fn avail_get_idx(&self) -> i32 {
+        let addr = self.avail_addr + 2;
+        self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.read16(addr)
+        })
+    }
+
+    fn avail_get_entry(&self, i: u32) -> i32 {
+        let addr = self.avail_addr + 4 + VIRTQ_AVAIL_ENTRYSIZE * i;
+        self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.read16(addr)
+        })
+    }
+
+    fn avail_get_used_event(&self) -> i32 {
+        let addr = self.avail_addr + 4 + VIRTQ_AVAIL_ENTRYSIZE * self.size;
+        self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.read16(addr)
+        })
+    }
+
+    fn used_get_flags(&self) -> i32 {
+        let addr = self.used_addr;
+        self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.read16(addr)
+        })
+    }
+
+    fn used_set_flags(&mut self, value: i32) {
+        let addr = self.used_addr;
+        self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.write16(addr, value)
+        })
+    }
+
+    fn used_get_idx(&self) -> i32 {
+        let addr = self.used_addr + 2;
+        self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.read16(addr)
+        })
+    }
+
+    fn used_set_idx(&mut self, value: i32) {
+        let addr = self.used_addr + 2;
+        self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.write16(addr, value)
+        })
+    }
+
+    fn used_set_entry(&mut self, i: u32, desc_idx: i32, length_written: i32) {
+        let desc_idx_addr = self.used_addr + 4 + VIRTQ_USED_ENTRYSIZE * i;
+        let length_written_addr = self.used_addr + 8 + VIRTQ_USED_ENTRYSIZE * i;
+        self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.write32(desc_idx_addr, desc_idx);
+            cpu.write32(length_written_addr, length_written);
+        })
+    }
+
+    fn used_set_avail_event(&mut self, value: i32) {
+        let addr = self.used_addr + 4 + VIRTQ_USED_ENTRYSIZE * self.size;
+        self.store.cpu_mut().map_or(0, |cpu| {
+            cpu.write16(addr, value)
+        })
+    }
+    
 
     fn reset(&mut self) {
         self.enabled = false;
@@ -116,6 +227,11 @@ impl VirtQueue {
 
     fn is_configured(&self) -> bool {
         return self.desc_addr > 0 && self.avail_addr > 0 && self.used_addr > 0;
+    }
+
+    fn has_request(&self) -> bool {
+        assert!(self.avail_addr > 0, "VirtQueue addresses must be configured before use");
+        return (self.avail_get_idx() & self.mask) != self.avail_last_idx;
     }
 
     fn count_requests(&self) -> u32 {
@@ -1149,4 +1265,24 @@ impl VirtIO {
         });
         self.reset();
     }
+
+    fn needs_reset(&mut self) {
+        dbg_log!(LOG::VIRTIO, 
+            "Device<{}> experienced error - requires reset",
+            self.name
+        );
+        self.device_status |= VIRTIO_STATUS_DEVICE_NEEDS_RESET as i32;
+
+        if self.device_status & (VIRTIO_STATUS_DRIVER_OK as i32) > 0 {
+            self.notify_config_changes();
+        }
+    }
+}
+
+
+
+struct VirtQueueBufferChain {
+    store: StoreT,
+    head_idx: usize,
+
 }
