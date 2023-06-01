@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::{StoreT, ContextTrait, log::LOG, int_log2, pci::PCIBar, Dev, io::IO};
+use crate::{StoreT, ContextTrait, log::LOG, int_log2, pci::{PCIBar, GenericPCIDevice}, Dev, io::IO};
 use std::collections::{HashSet, HashMap};
 
 const DEBUG: bool = false;
@@ -232,19 +232,20 @@ struct AddrRW {
 pub struct VirtIO {
     store: StoreT,
     pci_id: u16,
+    name: String,
     device_id: u16,
+    isr_status: i32,
+    queue_select: i32,
     device_feature_select: i32,
     driver_feature_select: i32,
     device_feature: [u32; 4],
     driver_feature: [u32; 4],
-    isr_status: i32,
     features_ok: bool,
     device_status: i32,
     config_has_changed: bool,
     config_generation: i32,
-    queue_select: i32,
-    name: String,
-    pci_space: Vec<u8>,
+    pci_space: Option<Vec<u8>>,
+    pci_bars: Option<Vec<PCIBar>>,
     queues: Vec<VirtQueue>,
     options: VirtIOptions,
     addr_rw: HashMap<u32, AddrRW>
@@ -372,13 +373,14 @@ impl VirtIO {
             pci_id: options.pci_id,
             device_id: options.device_id,
             queues,
-            pci_space,
             isr_status: 0,
             features_ok: true,
             device_status: 0,
-            config_has_changed: false,
             config_generation: 0,
             addr_rw: HashMap::new(),
+            config_has_changed: false,
+            pci_space: Some(pci_space),
+            pci_bars: None,
             options,
         }
     }
@@ -448,7 +450,7 @@ impl VirtIO {
     fn create_device_specific_capability(&self, options: VirtIODeviceSpecificCapabilityOptions) -> VirtIOCapabilityInfo {
         VirtIOCapabilityInfo {
             type_: VIRTIO_PCI_CAP_DEVICE_CFG,
-            bar: 0,
+            bar: 3,
             port: options.initial_port,
             use_mmio: false,
             offset: 0,
@@ -879,12 +881,13 @@ impl VirtIO {
 
     fn init_capabilities(&mut self, capabilities: Vec<VirtIOCapabilityInfo>) {
         // Next available offset for capabilities linked list.
-        self.pci_space[0x34] = 0x40;
-        let mut cap_next: i32 = self.pci_space[0x34] as _;
+        let pci_space = self.pci_space.as_mut().unwrap();
+        pci_space[0x34] = 0x40;
+        let mut cap_next: i32 = pci_space[0x34] as _;
         // Current offset.
         let mut cap_ptr = cap_next;
 
-        let mut pci_bars_map: HashMap<u8, PCIBar> = HashMap::new(); 
+        let mut pci_bars: Vec<PCIBar> = Vec::new(); 
         for cap in capabilities.iter() {
             let cap_len = VIRTIO_PCI_CAP_LENGTH as i32 + cap.extra.len() as i32;
             cap_ptr = cap_next;
@@ -911,30 +914,30 @@ impl VirtIO {
                 "VirtIO device<{}> capability port should be aligned to pci bar size",
                 self.name
             );
-            pci_bars_map.insert(cap.bar, PCIBar::new(bar_size));
+            pci_bars[cap.bar as usize] =  PCIBar::new(bar_size);
             let cap_ptr = cap_ptr as usize;
-            self.pci_space[cap_ptr] = VIRTIO_PCI_CAP_VENDOR;
-            self.pci_space[cap_ptr + 1] = cap_next as u8;
-            self.pci_space[cap_ptr + 2] = cap_len as u8;
-            self.pci_space[cap_ptr + 3] = cap.type_ as u8;
-            self.pci_space[cap_ptr + 4] = cap.bar;
+            pci_space[cap_ptr] = VIRTIO_PCI_CAP_VENDOR;
+            pci_space[cap_ptr + 1] = cap_next as u8;
+            pci_space[cap_ptr + 2] = cap_len as u8;
+            pci_space[cap_ptr + 3] = cap.type_ as u8;
+            pci_space[cap_ptr + 4] = cap.bar;
 
-            self.pci_space[cap_ptr + 5] = 0; // Padding.
-            self.pci_space[cap_ptr + 6] = 0; // Padding.
-            self.pci_space[cap_ptr + 7] = 0; // Padding.
+            pci_space[cap_ptr + 5] = 0; // Padding.
+            pci_space[cap_ptr + 6] = 0; // Padding.
+            pci_space[cap_ptr + 7] = 0; // Padding.
 
-            self.pci_space[cap_ptr + 8] = (cap.offset & 0xFF) as u8;
-            self.pci_space[cap_ptr + 9] = ((cap.offset >> 8) & 0xFF) as u8;
-            self.pci_space[cap_ptr + 10] = ((cap.offset >> 16) & 0xFF) as u8;
-            self.pci_space[cap_ptr + 11] = (cap.offset >> 24) as u8;
+            pci_space[cap_ptr + 8] = (cap.offset & 0xFF) as u8;
+            pci_space[cap_ptr + 9] = ((cap.offset >> 8) & 0xFF) as u8;
+            pci_space[cap_ptr + 10] = ((cap.offset >> 16) & 0xFF) as u8;
+            pci_space[cap_ptr + 11] = (cap.offset >> 24) as u8;
 
-            self.pci_space[cap_ptr + 12] = (bar_size & 0xFF) as u8;
-            self.pci_space[cap_ptr + 13] = ((bar_size >> 8) & 0xFF) as u8;
-            self.pci_space[cap_ptr + 14] = ((bar_size >> 16) & 0xFF) as u8;
-            self.pci_space[cap_ptr + 15] = (bar_size >> 24) as u8;
+            pci_space[cap_ptr + 12] = (bar_size & 0xFF) as u8;
+            pci_space[cap_ptr + 13] = ((bar_size >> 8) & 0xFF) as u8;
+            pci_space[cap_ptr + 14] = ((bar_size >> 16) & 0xFF) as u8;
+            pci_space[cap_ptr + 15] = (bar_size >> 24) as u8;
 
             cap.extra.iter().enumerate().for_each(|(i, extra_byte)| {
-                self.pci_space[cap_ptr + 16 + i] = *extra_byte;
+                pci_space[cap_ptr + 16 + i] = *extra_byte;
             });
 
 
@@ -944,10 +947,10 @@ impl VirtIO {
             } else {
                 1
             };
-            self.pci_space[bar_offset] = ((cap.port & 0xFE) | mmio) as u8;
-            self.pci_space[bar_offset + 1] = ((cap.port >> 8) & 0xFF) as u8;
-            self.pci_space[bar_offset + 2] = ((cap.port >> 16) & 0xFF) as u8;
-            self.pci_space[bar_offset + 3] = ((cap.port >> 24) & 0xFF) as u8;
+            pci_space[bar_offset] = ((cap.port & 0xFE) | mmio) as u8;
+            pci_space[bar_offset + 1] = ((cap.port >> 8) & 0xFF) as u8;
+            pci_space[bar_offset + 2] = ((cap.port >> 16) & 0xFF) as u8;
+            pci_space[bar_offset + 3] = ((cap.port >> 24) & 0xFF) as u8;
             let mut port = cap.port as u32 + cap.offset;
             for field in cap.struct_.iter() {
                 let read = field.read;
@@ -1068,34 +1071,36 @@ impl VirtIO {
             "VirtIO device<{}> can't fit all capabilities into 256byte configspace",
             self.name
         );
-        self.pci_space[cap_next] = VIRTIO_PCI_CAP_VENDOR;
-        self.pci_space[cap_next + 1] = 0; // cap next (null terminator)
-        self.pci_space[cap_next + 2] = cap_len as u8;
-        self.pci_space[cap_next + 3] = VIRTIO_PCI_CAP_PCI_CFG; // cap type
-        self.pci_space[cap_next + 4] = 0; // bar (written by device)
-        self.pci_space[cap_next + 5] = 0; // Padding.
-        self.pci_space[cap_next + 6] = 0; // Padding.
-        self.pci_space[cap_next + 7] = 0; // Padding.
+        pci_space[cap_next] = VIRTIO_PCI_CAP_VENDOR;
+        pci_space[cap_next + 1] = 0; // cap next (null terminator)
+        pci_space[cap_next + 2] = cap_len as u8;
+        pci_space[cap_next + 3] = VIRTIO_PCI_CAP_PCI_CFG; // cap type
+        pci_space[cap_next + 4] = 0; // bar (written by device)
+        pci_space[cap_next + 5] = 0; // Padding.
+        pci_space[cap_next + 6] = 0; // Padding.
+        pci_space[cap_next + 7] = 0; // Padding.
     
         // Remaining fields are configured by driver when needed.
     
         // offset
-        self.pci_space[cap_next + 8] = 0;
-        self.pci_space[cap_next + 9] = 0;
-        self.pci_space[cap_next + 10] = 0;
-        self.pci_space[cap_next + 11] = 0;
+        pci_space[cap_next + 8] = 0;
+        pci_space[cap_next + 9] = 0;
+        pci_space[cap_next + 10] = 0;
+        pci_space[cap_next + 11] = 0;
     
         // bar size
-        self.pci_space[cap_next + 12] = 0;
-        self.pci_space[cap_next + 13] = 0;
-        self.pci_space[cap_next + 14] = 0;
-        self.pci_space[cap_next + 15] = 0;
+        pci_space[cap_next + 12] = 0;
+        pci_space[cap_next + 13] = 0;
+        pci_space[cap_next + 14] = 0;
+        pci_space[cap_next + 15] = 0;
     
         // cfg_data
-        self.pci_space[cap_next + 16] = 0;
-        self.pci_space[cap_next + 17] = 0;
-        self.pci_space[cap_next + 18] = 0;
-        self.pci_space[cap_next + 19] = 0;
+        pci_space[cap_next + 16] = 0;
+        pci_space[cap_next + 17] = 0;
+        pci_space[cap_next + 18] = 0;
+        pci_space[cap_next + 19] = 0;
+
+        self.pci_bars = Some(pci_bars)
     }
 
     fn shim_read8_on_16(&self, addr: u32) -> u8 {
@@ -1125,7 +1130,23 @@ impl VirtIO {
         device_specific.map(|options| {
             capabilities.push(self.create_device_specific_capability(options));
         });
-
+        self.init_capabilities(capabilities);
+        let pci_space = self.pci_space.take().unwrap();
+        let pci_bars = self.pci_bars.take()
+            .map(|v| 
+                v.into_iter()
+                    .map(|b| Some(b))
+                    .collect::<Vec<_>>()
+            ).unwrap();
+        let pci_dev = GenericPCIDevice::new(
+            self.pci_id,
+            pci_space,
+            vec![Some(PCIBar::new(32))],
+            &self.name,
+        );
+        self.store.pci_mut().map(|pci| {
+            pci.register_device(pci_dev);
+        });
         self.reset();
     }
 }
