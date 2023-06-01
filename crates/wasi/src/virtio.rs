@@ -948,7 +948,7 @@ impl VirtIO {
             self.pci_space[bar_offset + 1] = ((cap.port >> 8) & 0xFF) as u8;
             self.pci_space[bar_offset + 2] = ((cap.port >> 16) & 0xFF) as u8;
             self.pci_space[bar_offset + 3] = ((cap.port >> 24) & 0xFF) as u8;
-            let port = cap.port as u32 + cap.offset;
+            let mut port = cap.port as u32 + cap.offset;
             for field in cap.struct_.iter() {
                 let read = field.read;
                 let write = field.write;
@@ -1057,9 +1057,45 @@ impl VirtIO {
                         },
                     }
                 }
+                port += field.bytes as u32;
             }
         }
 
+        let cap_len = (VIRTIO_PCI_CAP_LENGTH + 4) as usize;
+        let cap_next = cap_next as usize;
+        assert!(
+            cap_next + cap_len <= 256,
+            "VirtIO device<{}> can't fit all capabilities into 256byte configspace",
+            self.name
+        );
+        self.pci_space[cap_next] = VIRTIO_PCI_CAP_VENDOR;
+        self.pci_space[cap_next + 1] = 0; // cap next (null terminator)
+        self.pci_space[cap_next + 2] = cap_len as u8;
+        self.pci_space[cap_next + 3] = VIRTIO_PCI_CAP_PCI_CFG; // cap type
+        self.pci_space[cap_next + 4] = 0; // bar (written by device)
+        self.pci_space[cap_next + 5] = 0; // Padding.
+        self.pci_space[cap_next + 6] = 0; // Padding.
+        self.pci_space[cap_next + 7] = 0; // Padding.
+    
+        // Remaining fields are configured by driver when needed.
+    
+        // offset
+        self.pci_space[cap_next + 8] = 0;
+        self.pci_space[cap_next + 9] = 0;
+        self.pci_space[cap_next + 10] = 0;
+        self.pci_space[cap_next + 11] = 0;
+    
+        // bar size
+        self.pci_space[cap_next + 12] = 0;
+        self.pci_space[cap_next + 13] = 0;
+        self.pci_space[cap_next + 14] = 0;
+        self.pci_space[cap_next + 15] = 0;
+    
+        // cfg_data
+        self.pci_space[cap_next + 16] = 0;
+        self.pci_space[cap_next + 17] = 0;
+        self.pci_space[cap_next + 18] = 0;
+        self.pci_space[cap_next + 19] = 0;
     }
 
     fn shim_read8_on_16(&self, addr: u32) -> u8 {
