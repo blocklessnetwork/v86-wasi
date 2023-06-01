@@ -68,53 +68,6 @@ pub use run::run_with_setting;
 pub use log::set_log_file_name;
 pub use log::set_log_mask;
 
-macro_rules! copy_impl {
-    ($name: ident, $type: ty, $l: literal) => {
-        pub fn $name(src: &[u8], dst: &mut [$type]) {
-            let mut bs = [0u8; $l];
-            for i in 0..dst.len() {
-                let start = i * $l;
-                let end = start + $l;
-                bs.copy_from_slice(&src[start..end]);
-                let t: $type = <$type>::from_le_bytes(bs);
-                dst[i] = t;
-            }
-        }
-    };
-}
-
-macro_rules! read_impl {
-    ($name: ident, $type: ty, $l: literal) => {
-        pub fn $name(src: &[u8], idx: usize) -> $type {
-            let mut bs = [0u8; $l];
-            bs.copy_from_slice(&src[idx * $l..(idx * $l + $l)]);
-            <$type>::from_le_bytes(bs)
-        }
-    };
-}
-
-macro_rules! write_impl {
-    ($name: ident, $type: ty, $l: literal) => {
-        pub fn $name(src: &mut [u8], idx: usize, v: $type) {
-            let bs = v.to_le_bytes();
-            let dst = &mut src[idx * $l..(idx * $l + $l)];
-            dst.copy_from_slice(&bs);
-        }
-    };
-}
-
-pub(crate) mod utils {
-    copy_impl!(copy_to_i32s, i32, 4);
-
-    read_impl!(read_i32, i32, 4);
-    read_impl!(read_u32, u32, 4);
-    read_impl!(read_u16, u16, 2);
-    read_impl!(read_i16, i16, 2);
-    write_impl!(write_i32, i32, 4);
-    write_impl!(write_u32, u32, 4);
-    write_impl!(write_u16, u16, 2);
-    write_impl!(write_i16, i16, 2);
-}
 
 trait ContextTrait {
     fn cpu_mut(&self) -> Option<&mut CPU>;
