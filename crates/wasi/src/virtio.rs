@@ -167,9 +167,9 @@ impl VirtQueue {
 
     fn used_set_flags(&mut self, value: i32) {
         let addr = self.used_addr;
-        self.store.cpu_mut().map_or(0, |cpu| {
-            cpu.write16(addr, value)
-        })
+        self.store.cpu_mut().map(|cpu| {
+            cpu.write16(addr, value);
+        });
     }
 
     fn used_get_idx(&self) -> i32 {
@@ -181,25 +181,25 @@ impl VirtQueue {
 
     fn used_set_idx(&mut self, value: i32) {
         let addr = self.used_addr + 2;
-        self.store.cpu_mut().map_or(0, |cpu| {
+        self.store.cpu_mut().map(|cpu| {
             cpu.write16(addr, value)
-        })
+        });
     }
 
     fn used_set_entry(&mut self, i: u32, desc_idx: i32, length_written: i32) {
         let desc_idx_addr = self.used_addr + 4 + VIRTQ_USED_ENTRYSIZE * i;
         let length_written_addr = self.used_addr + 8 + VIRTQ_USED_ENTRYSIZE * i;
-        self.store.cpu_mut().map_or(0, |cpu| {
+        self.store.cpu_mut().map(|cpu| {
             cpu.write32(desc_idx_addr, desc_idx);
             cpu.write32(length_written_addr, length_written);
-        })
+        });
     }
 
     fn used_set_avail_event(&mut self, value: i32) {
         let addr = self.used_addr + 4 + VIRTQ_USED_ENTRYSIZE * self.size;
-        self.store.cpu_mut().map_or(0, |cpu| {
+        self.store.cpu_mut().map(|cpu| {
             cpu.write16(addr, value)
-        })
+        });
     }
     
 
@@ -231,68 +231,14 @@ impl VirtQueue {
 
     fn has_request(&self) -> bool {
         assert!(self.avail_addr > 0, "VirtQueue addresses must be configured before use");
-        return (self.avail_get_idx() & self.mask) != self.avail_last_idx;
+        return (self.avail_get_idx() as u32 & self.mask) != self.avail_last_idx;
     }
 
     fn count_requests(&self) -> u32 {
         assert!(self.avail_addr > 0, "VirtQueue addresses must be configured before use");
-        return (self.avail_get_idx() - self.avail_last_idx) & self.mask;
+        return (self.avail_get_idx() as u32 - self.avail_last_idx) & self.mask;
     }
 
-    fn avail_get_idx(&self) -> u32 {
-        self.store.cpu_mut().map(|cpu| {
-            cpu.read16(self.avail_addr + 2)
-        }).unwrap() as _
-    }
-
-    fn avail_get_entry(&self, i: u32) -> u32 {
-        self.store.cpu_mut().map(|cpu| {
-            cpu.read16(self.avail_addr + 4 + VIRTQ_AVAIL_ENTRYSIZE * i)
-        }).unwrap() as _
-    }
-
-    fn avail_get_used_event(&self) -> u32 {
-        self.store.cpu_mut().map(|cpu| {
-            cpu.read16(self.avail_addr + 4 + VIRTQ_AVAIL_ENTRYSIZE * self.size)
-        }).unwrap() as _
-    }
-
-    fn used_get_flags(&self) -> u32  {
-        self.store.cpu_mut().map(|cpu| {
-            cpu.read16(self.used_addr)
-        }).unwrap() as _
-    }
-
-    fn used_set_flags(&self, value: i32)  {
-        self.store.cpu_mut().map(|cpu| {
-            cpu.write16(self.used_addr, value);
-        });
-    }
-
-    fn used_get_idx(&self) -> u32 {
-        self.store.cpu_mut().map(|cpu| {
-            cpu.read16(self.used_addr + 2)
-        }).unwrap() as _
-    }
-
-    fn used_set_idx(&self, value: i32)  {
-        self.store.cpu_mut().map(|cpu| {
-            cpu.write16(self.used_addr + 2, value);
-        });
-    }
-    
-    fn used_set_entry(&self, i: u32, desc_idx: i32, length_written: i32)  {
-        self.store.cpu_mut().map(|cpu| {
-            cpu.write32(self.used_addr + 4 + VIRTQ_USED_ENTRYSIZE* i, desc_idx);
-            cpu.write32(self.used_addr + 8 + VIRTQ_USED_ENTRYSIZE* i, length_written);
-        });
-    }
-
-    fn used_set_avail_event(&self, value: i32) {
-        self.store.cpu_mut().map(|cpu| {
-            cpu.write16(self.used_addr + 4 + VIRTQ_USED_ENTRYSIZE * self.size, value);
-        });
-    }
 }
 
 type StructWrite = fn(StoreT, i32);
