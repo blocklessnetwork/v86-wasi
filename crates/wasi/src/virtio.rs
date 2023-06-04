@@ -1286,11 +1286,11 @@ impl VirtQueueBufferChain {
         let mut desc_idx = self.head_idx;
         let mut chain_length = 0;
         let mut chain_max = self.queue().size;
-        let writable_region = false;
+        let mut writable_region = false;
         let has_indirect_feature = self.store.virtio()
             .map_or(false, |vr| vr.is_feature_negotiated(VIRTIO_F_RING_INDIRECT_DESC as usize));
         dbg_log!(LOG::VIRTIO, "<<< Descriptor chain start");
-        while true {
+        loop {
             let desc = self.queue().get_descriptor(table_address, desc_idx as u32);
             dbg_log!(LOG::VIRTIO, "descriptor: idx={} addr={:08X}:{:08X} len={:08X} flags={:04X} next={:04X}",
                 desc_idx,
@@ -1312,7 +1312,32 @@ impl VirtQueueBufferChain {
                 dbg_log!(LOG::VIRTIO, "start indirect");
                 continue;
             }
+            let desc_len = desc.len;
+            let desc_flags = desc.flags;
+            if desc.flags & VIRTQ_DESC_F_WRITE as i32 > 0 {
+                writable_region = true;
+                self.write_buffers.push(desc);
+                self.length_writable += desc_len as u32;
+            } else {
+                if writable_region {
+                    dbg_log!(LOG::VIRTIO, "Driver bug: readonly buffer after writeonly buffer within chain");
+                    break;
+                }
+                self.read_buffers.push(desc);
+                self.length_readable += desc_len as u32;
+            }
+            chain_length += 1;
+            if chain_length > chain_max {
+                dbg_log!(LOG::VIRTIO, "Driver bug: descriptor chain cycle detected");
+                break;
+            }
 
+            if desc_flags & VIRTQ_DESC_F_NEXT as i32 > 0 {
+                desc_idx = desc_len as usize;
+            } else {
+                break;
+            }
         }
+        dbg_log!(LOG::VIRTIO, "Descriptor chain end >>>");
     }
 }
