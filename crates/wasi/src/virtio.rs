@@ -28,6 +28,14 @@ const VIRTIO_STATUS_FAILED: u8 = 128;
 const VIRTIO_ISR_QUEUE: u8 = 1;
 const VIRTIO_ISR_DEVICE_CFG: u8 = 2;
 
+const VIRTIO_F_RING_INDIRECT_DESC: u8 = 28;
+
+const VIRTQ_DESC_F_NEXT: u8 = 1;
+const VIRTQ_DESC_F_WRITE: u8 = 2;
+const VIRTQ_DESC_F_INDIRECT: u8 = 4;
+const VIRTQ_AVAIL_F_NO_INTERRUPT: u8 = 1;
+const VIRTQ_USED_F_NO_NOTIFY: u8 = 1;
+
 
 // Size (bytes) of the virtq_desc struct per queue size.
 const VIRTQ_DESC_ENTRYSIZE: u32 = 16;
@@ -68,6 +76,7 @@ pub struct VirtIOISRCapabilityOptions {
 
 pub struct VirtQueue {
     store: StoreT,
+    idx: usize,
     size: u32,
     mask: u32,
     enabled: bool,
@@ -81,7 +90,7 @@ pub struct VirtQueue {
 }
 
 impl VirtQueue {
-    fn new(store: StoreT, options: &VirtQueueOptions) -> Self {
+    fn new(store: StoreT, idx: usize, options: &VirtQueueOptions) -> Self {
         let size = options.size_supported;
         let size_supported = options.size_supported;
         let mask = size - 1;
@@ -89,6 +98,7 @@ impl VirtQueue {
         Self {
             store,
             size,
+            idx,
             size_supported,
             enabled: false,
             notify_offset,
@@ -315,12 +325,26 @@ pub struct VirtIO {
 
 impl VirtIO {
 
+    pub fn queue_nth(&self, idx: usize) -> Option<&VirtQueue> {
+        self.queues.iter().nth(idx)
+    }
+
+    pub fn queue_nth_mut(&mut self, idx: usize) -> Option<&mut VirtQueue> {
+        self.queues.iter_mut().nth(idx)
+    }
+
     pub fn queue_selected_mut(&mut self) -> Option<&mut VirtQueue> {
         self.queues.iter_mut().nth(self.queue_select as _)
     }
 
     pub fn queue_selected(&self) -> Option<&VirtQueue> {
         self.queues.iter().nth(self.queue_select as _)
+    }
+
+    fn is_feature_negotiated(&self, feature: usize) -> bool {
+        // Feature bits are grouped in 32 bits.
+        // Note: earlier we chose not to set invalid features into driver_feature.
+        (self.driver_feature[feature >> 5] & (1 << (feature & 0x1F))) > 0
     }
 
     pub fn new(store: StoreT, options: VirtIOptions) -> Self {
@@ -342,7 +366,8 @@ impl VirtIO {
 
         let queues = options.common.queues
             .iter()
-            .map(|opt| VirtQueue::new(store.clone(), opt)) 
+            .enumerate()
+            .map(|(i, opt)| VirtQueue::new(store.clone(), i, opt)) 
             .collect::<Vec<_>>();
         let queue_select = 0;
 
@@ -1227,8 +1252,67 @@ impl VirtIO {
 
 
 
-struct VirtQueueBufferChain {
+pub struct VirtQueueBufferChain {
     store: StoreT,
     head_idx: usize,
+    queue_idx: usize,
+    read_buffers: Vec<DescTable>,
+    write_buffers: Vec<DescTable>,
+    read_buffer_idx: u32,
+    read_buffer_offset: u32,
+    length_readable: u32,
+    write_buffer_idx: u32,
+    write_buffer_offset: u32,
+    length_written: u32,
+    length_writable: u32,
+}
 
+impl VirtQueueBufferChain {
+
+    fn queue(&self) -> &VirtQueue {
+        self.store.virtio()
+            .and_then(|vr| vr.queue_nth(self.queue_idx))
+            .unwrap()
+    }
+
+    fn queue_mut(&mut self) -> &mut VirtQueue {
+        self.store.virtio_mut()
+            .and_then(|vr| vr.queue_nth_mut(self.queue_idx))
+            .unwrap()
+    }
+
+    pub fn init(&mut self) {
+        let mut table_address = self.queue().desc_addr;
+        let mut desc_idx = self.head_idx;
+        let mut chain_length = 0;
+        let mut chain_max = self.queue().size;
+        let writable_region = false;
+        let has_indirect_feature = self.store.virtio()
+            .map_or(false, |vr| vr.is_feature_negotiated(VIRTIO_F_RING_INDIRECT_DESC as usize));
+        dbg_log!(LOG::VIRTIO, "<<< Descriptor chain start");
+        while true {
+            let desc = self.queue().get_descriptor(table_address, desc_idx as u32);
+            dbg_log!(LOG::VIRTIO, "descriptor: idx={} addr={:08X}:{:08X} len={:08X} flags={:04X} next={:04X}",
+                desc_idx,
+                desc.addr_high,
+                desc.addr_low,
+                desc.len,
+                desc.flags,
+                desc.next
+            );
+            if has_indirect_feature && (desc.flags & VIRTQ_DESC_F_INDIRECT as i32) > 0 {
+                if DEBUG && (desc.flags & VIRTQ_DESC_F_NEXT as i32) > 0 {
+                    dbg_log!(LOG::VIRTIO, "Driver bug: has set VIRTQ_DESC_F_NEXT flag in an indirect table descriptor");
+                }
+
+                table_address = desc.addr_low as u32;
+                desc_idx = 0;
+                chain_length = 0;
+                chain_max = (desc.len / VIRTQ_DESC_ENTRYSIZE as i32) as u32;
+                dbg_log!(LOG::VIRTIO, "start indirect");
+                continue;
+            }
+
+        }
+    }
 }
