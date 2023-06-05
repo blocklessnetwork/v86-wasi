@@ -1258,11 +1258,11 @@ pub struct VirtQueueBufferChain {
     queue_idx: usize,
     read_buffers: Vec<DescTable>,
     write_buffers: Vec<DescTable>,
-    read_buffer_idx: u32,
-    read_buffer_offset: u32,
+    read_buffer_idx: usize,
+    read_buffer_offset: usize,
     length_readable: u32,
-    write_buffer_idx: u32,
-    write_buffer_offset: u32,
+    write_buffer_idx: usize,
+    write_buffer_offset: usize,
     length_written: u32,
     length_writable: u32,
 }
@@ -1340,4 +1340,74 @@ impl VirtQueueBufferChain {
         }
         dbg_log!(LOG::VIRTIO, "Descriptor chain end >>>");
     }
+
+    fn get_next_blob(&mut self, mut dest_buffer: Vec<u8>) -> u32 {
+        let mut dest_offset = 0;
+        let mut remaining = dest_buffer.len();
+
+        while remaining > 0 {
+            if self.read_buffer_idx as usize == self.read_buffers.len() {
+                //dbg_log!("Device<" + t + "> Read more than device-readable buffers has", LOG_VIRTIO);
+                break;
+            }
+
+            let buf = self.read_buffers.get(self.read_buffer_idx).unwrap();
+            let read_address = buf.addr_low as usize + self.read_buffer_offset as usize;
+            let mut read_length = buf.len as usize - self.read_buffer_offset as usize;
+
+            if read_length > remaining {
+                read_length = remaining;
+                self.read_buffer_offset += remaining ;
+            }
+            else {
+                self.read_buffer_idx += 1;
+                self.read_buffer_offset = 0;
+            }
+
+            self.store.cpu_mut().map(|cpu| {
+                let dest = &mut dest_buffer[dest_offset..read_length];
+                cpu.mem8_read_slice(read_address, dest);
+            });
+            dest_offset += read_length;
+            remaining -= read_length;
+        }
+        dest_offset as u32
+    }
+
+    fn set_next_blob(&mut self, src_buffer: Vec<u8>) -> u32 {
+        let mut src_offset = 0;
+        let mut remaining = src_buffer.len();
+
+        while remaining > 0 {
+            if self.write_buffer_idx == self.write_buffers.len() {
+                //dbg_log("Device<" + this.virtio.name + "> Write more than device-writable capacity", LOG_VIRTIO);
+                break;
+            }
+
+            let buf = self.write_buffers.get(self.write_buffer_idx).unwrap();
+            let write_address = buf.addr_low as usize + self.write_buffer_offset;
+            let mut write_length = buf.len as usize - self.write_buffer_offset;
+
+            if write_length > remaining {
+                write_length = remaining;
+                self.write_buffer_offset += remaining;
+            } else {
+                self.write_buffer_idx += 1;
+                self.write_buffer_offset = 0;
+            }
+
+            let src_end = src_offset + write_length;
+            self.store.cpu_mut().map(|cpu| {
+                let dest = &src_buffer[src_offset..src_end];
+                cpu.mem8_write_slice(write_address, dest);
+            });
+
+            src_offset += write_length;
+            remaining -= write_length;
+        }
+
+        self.length_written += src_offset as u32;
+        src_offset as u32
+    }
+
 }
