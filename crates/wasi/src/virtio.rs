@@ -872,7 +872,7 @@ impl VirtIO {
         let struct_ = VirtIOCapabilityInfoStruct {
             bytes: 4,
             name: "queue_avail (high dword)".into(),
-            read: |store| {
+            read: |_store| {
                 0
             },
             write: |_store, _data| {
@@ -900,7 +900,7 @@ impl VirtIO {
         let struct_ = VirtIOCapabilityInfoStruct {
             bytes: 4,
             name: "queue_used (high dword)".into(),
-            read: |store| {
+            read: |_store| {
                 0
             },
             write: |_store, _data| {
@@ -1250,8 +1250,6 @@ impl VirtIO {
     }
 }
 
-
-
 pub struct VirtQueueBufferChain {
     store: StoreT,
     head_idx: usize,
@@ -1347,7 +1345,12 @@ impl VirtQueueBufferChain {
 
         while remaining > 0 {
             if self.read_buffer_idx as usize == self.read_buffers.len() {
-                //dbg_log!("Device<" + t + "> Read more than device-readable buffers has", LOG_VIRTIO);
+                self.store.virtio().map(|vr| {
+                    dbg_log!(LOG::VIRTIO, 
+                        "Device{} Read more than device-readable buffers has",
+                        vr.name,
+                    );
+                });
                 break;
             }
 
@@ -1380,7 +1383,13 @@ impl VirtQueueBufferChain {
 
         while remaining > 0 {
             if self.write_buffer_idx == self.write_buffers.len() {
-                //dbg_log("Device<" + this.virtio.name + "> Write more than device-writable capacity", LOG_VIRTIO);
+                self.store.virtio().map(|vr| {
+                    dbg_log!(LOG::VIRTIO, 
+                        "Device{} Write more than device-writable capacity",
+                        vr.name,
+                    );
+                });
+                
                 break;
             }
 

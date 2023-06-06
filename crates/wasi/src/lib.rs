@@ -36,6 +36,7 @@ mod kernel;
 mod tun_thr;
 mod adapter;
 mod storage;
+mod filesystem;
 mod setting;
 mod emulator;
 mod utils;
