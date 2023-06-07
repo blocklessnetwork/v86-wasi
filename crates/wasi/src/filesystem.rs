@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::{self, Duration};
 
 use crate::StoreT;
 
@@ -75,7 +76,7 @@ impl FSLockRegion {
 struct QID {
     type_: u8, 
     version: u8, 
-    path: i32, 
+    path: u64, 
 }
 
 type ForeignIdType = i64;
@@ -84,12 +85,12 @@ type MountIdType = i64;
 struct Inode {
     uid: u32,
     gid: u32,
-    fid: u32,
+    fid: u64,
     size: u32,
-    ctime: u32,
+    ctime: u64,
     status: i8,
-    atime: u32,
-    mtime: u32,
+    atime: u64,
+    mtime: u64,
     major: u32,
     minor: u32,
     symlink: String,
@@ -104,7 +105,7 @@ struct Inode {
 }
 
 impl Inode {
-    fn new(qidnumber: i32) -> Self {
+    fn new(qidnumber: u64) -> Self {
         Self {
             direntries: HashMap::new(),
             status: 0,
@@ -142,32 +143,37 @@ struct FS {
     store: StoreT,
     inodes: Vec<Inode>,
     mounts: Vec<FSMountInfo>,
+    qidcounter: Qidcounter,
+}
+
+struct Qidcounter {
+    last_qidnumber: u64,
 }
 
 
 impl FS {
-    fn is_forwarder(&self, inode: &Inode) -> bool {
+    fn is_forwarder(inode: &Inode) -> bool {
         return inode.status == STATUS_FORWARDING;
     }
 
-    fn follow_fs(&self, inode: &Inode) -> &FS {
-        let mount = self.mounts.get(inode.mount_id as usize);
+    fn follow_fs(&mut self, inode: &Inode) -> &mut FS {
+        let mount = self.mounts.get_mut(inode.mount_id as usize);
         assert!(mount.is_some(), 
             "Filesystem follow_fs: inode<id={}> should point to valid mounted FS",
             inode.fid
         );
         let mount = mount.unwrap();
-        assert!(self.is_forwarder(inode),
+        assert!(Self::is_forwarder(inode),
             "Filesystem follow_fs: inode should be a forwarding inode");
 
-        &mount.fs
+        &mut mount.fs
     }
 
-    fn GetInode(&self, idx: usize) -> &Inode {
+    fn GetInode(&mut self, idx: usize) -> &Inode {
         assert!(idx >= 0 && idx < self.inodes.len(), "Filesystem GetInode: out of range idx:{idx}");
 
         let inode = self.inodes.get(idx).unwrap();
-        if self.is_forwarder(inode) {
+        if Self::is_forwarder(inode) {
             return self.follow_fs(inode).GetInode(inode.foreign_id as usize);
         }
 
@@ -176,7 +182,7 @@ impl FS {
 
     fn is_directory(&self, idx: usize) -> bool {
         let inode = self.inodes.get(idx).unwrap();
-        if self.is_forwarder(inode) {
+        if Self::is_forwarder(inode) {
             return self.follow_fs(inode).is_directory(inode.foreign_id as usize);
         }
         return (inode.mode & S_IFMT) == S_IFDIR;
@@ -184,7 +190,7 @@ impl FS {
 
     fn is_empty(&self, idx: usize) -> bool {
         let inode = self.inodes.get(idx).unwrap();
-        if self.is_forwarder(inode) {
+        if Self::is_forwarder(inode) {
             return self.follow_fs(inode).is_directory(inode.foreign_id as usize);
         }
         for name in inode.direntries.keys() {
@@ -198,7 +204,7 @@ impl FS {
     fn get_children(&self, idx: usize) -> Vec<String> {
         assert!(self.is_directory(idx), "Filesystem: cannot get children of non-directory inode");
         let inode = self.inodes.get(idx).unwrap();
-        if self.is_forwarder(inode) {
+        if Self::is_forwarder(inode) {
             return self.follow_fs(inode).get_children(inode.foreign_id as usize);
         }
         inode.direntries.keys().filter_map(|name| {
@@ -208,5 +214,81 @@ impl FS {
                 None
             }
         }).collect::<Vec<_>>()
+    }
+
+    fn should_be_linked(inode: &Inode) -> bool {
+        // Note: Non-root forwarder inode could still have a non-forwarder parent, so don't use
+        // parent inode to check.
+        return !Self::is_forwarder(inode) || inode.foreign_id == 0;
+    }
+
+    fn get_parent(&mut self, idx: usize) -> i64 {
+        assert!(self.is_directory(idx), "Filesystem: cannot get parent of non-directory inode");
+
+        let inode = self.inodes.get(idx).unwrap();
+        if Self::should_be_linked(inode) {
+            *inode.direntries.get("..").unwrap()
+        } else {
+            let foreign_dirid = self.follow_fs(inode).get_parent(inode.foreign_id as usize);
+            assert!(foreign_dirid != -1, "Filesystem: should not have invalid parent ids");
+            self.get_forwarder(inode.mount_id, foreign_dirid)  as i64
+        }
+    }
+
+    fn create_inode(&mut self) -> Inode {
+        //console.log("CreateInode", Error().stack);
+        let dur: Duration = time::SystemTime::now()
+            .duration_since(time::SystemTime::UNIX_EPOCH)
+            .unwrap();
+        let now = dur.as_millis() as u64;
+        self.qidcounter.last_qidnumber += 1;
+        let mut inode = Inode::new(self.qidcounter.last_qidnumber);
+        inode.mtime = now;
+        inode.ctime = now;
+        inode.atime = now;
+        return inode;
+    }
+
+    fn create_forwarder(&mut self, mount_id: MountIdType, foreign_id: ForeignIdType) -> u64 {
+        let mut inode = self.create_inode();
+
+        let idx = self.inodes.len();
+        
+        inode.fid = idx as u64;
+        self.inodes.push(inode);
+
+        self.set_forwarder(idx, mount_id, foreign_id);
+        return idx as u64;
+    }
+
+    fn get_forwarder(&mut self, mount_id: MountIdType, foreign_id: ForeignIdType) -> u64 {
+        let mount = self.mounts.get(mount_id as usize);
+        assert!(foreign_id >= 0, "Filesystem get_forwarder: invalid foreign_id: {foreign_id}");
+        assert!(mount.is_some(), "Filesystem get_forwarder: invalid mount number: {mount_id}");
+        let mount = mount.unwrap();
+        let result = mount.backtrack.get(&foreign_id);
+
+        if result.is_none() {
+            // Create if not already exists.
+            return self.create_forwarder(mount_id, foreign_id);
+        }
+        *result.unwrap() as u64
+    }
+
+    fn set_forwarder(&self, idx: usize, mount_id: MountIdType, foreign_id: ForeignIdType) {
+        let inode = self.inodes.get(idx).unwrap();
+
+        assert!(inode.nlinks == 0,
+            "Filesystem: attempted to convert an inode into forwarder before unlinking the inode");
+        todo!()
+        // if self.is_forwarder(inode) {
+        //     self.mounts[inode.mount_id as usize].backtrack.delete(inode.foreign_id);
+        // }
+
+        // inode.status = STATUS_FORWARDING;
+        // inode.mount_id = mount_id;
+        // inode.foreign_id = foreign_id;
+
+        // self.mounts[mount_id].backtrack.set(foreign_id, idx);
     }
 }
