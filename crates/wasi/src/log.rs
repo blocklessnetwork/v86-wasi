@@ -78,6 +78,7 @@ impl LOG {
             "BIOS" => LOG::BIOS,
             "SERIAL" => LOG::SERIAL,
             "FLOPPY" => LOG::FLOPPY,
+            "VIRTIO" => LOG::VIRTIO,
             _ => LOG::E,
         }
     }
@@ -101,6 +102,7 @@ impl LOG {
             Self::WS => LOG_WS,
             Self::FLOPPY => LOG_FLOPPY,
             Self::SERIAL => LOG_SERIAL,
+            Self::VIRTIO => LOG_VIRTIO,
         }
     }
 
@@ -129,6 +131,7 @@ impl Display for LOG {
             Self::BIOS => f.write_str("BIOS"),
             Self::SERIAL => f.write_str("SERIAL"),
             Self::FLOPPY => f.write_str("FLOPPY"),
+            Self::VIRTIO => f.write_str("VIRTIO"),
         }
     }
 }

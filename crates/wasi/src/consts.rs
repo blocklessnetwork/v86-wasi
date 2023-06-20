@@ -77,3 +77,4 @@ pub const LOG_DISK: u32 = 0x1<<12;
 pub const LOG_BIOS: u32 = 0x1<<13;
 pub const LOG_SERIAL: u32 = 0x1<<14;
 pub const LOG_FLOPPY: u32 = 0x1<<15;
+pub const LOG_VIRTIO: u32 = 0x1<<16;
