@@ -22,6 +22,9 @@ const LOCK_TYPE_RDLCK: u8 = 0;
 const LOCK_TYPE_WRLCK: u8 = 1;
 const LOCK_TYPE_UNLCK: u8 = 2;
 
+const EPERM: i8 = 1;
+const ENOTEMPTY: i8 = 39;  /* Directory not empty */
+
 struct FSLockRegion {
     type_: u8,
     start: u32,
@@ -150,6 +153,18 @@ struct FS {
 
 struct Qidcounter {
     last_qidnumber: u64,
+}
+
+struct PathInfo {
+    id: i64,
+    parentid: i64,
+    name: String,
+    forward_path: Option<String>,
+}
+
+struct RecursiveInfo {
+    parentid: i64,
+    name: String,
 }
 
 impl FS {
@@ -416,12 +431,118 @@ impl FS {
             forward_path
         };
     }
+
+    fn get_recursive_list(&mut self, dirid: i64, list: &mut Vec<RecursiveInfo>) {
+        let inode = &self.inodes[dirid as usize];
+        if Self::is_forwarder(inode) { 
+            let foreign_fs = self.follow_fs(inode);
+            let foreign_dirid = inode.foreign_id;
+            let mount_id = inode.mount_id;
+
+            let foreign_start = list.len();
+            foreign_fs.get_recursive_list(foreign_dirid, list);
+            for i in foreign_start..list.len() {
+                list[i].parentid = self.get_forwarder(mount_id, list[i].parentid) as _;
+            }
+            return;
+        }
+        inode.direntries.iter().for_each(|(name, id)| {
+            if name != "." && name != ".." {
+                list.push(RecursiveInfo { parentid: dirid, name: name.to_string() });
+                if self.is_directory(*id as usize) {
+                    self.get_recursive_list(*id, list);
+                }
+            }
+        });
+    }
+
+    fn unlink_from_dir(&mut self, parentid: i64, name: &str) {
+        let idx = self.search(parentid, name);
+        let inode: &mut Inode = &mut self.inodes[idx as _];
+        let parent_inode: &mut Inode = &mut self.inodes[parentid as _];
+    
+        assert!(!Self::is_forwarder(parent_inode), "Filesystem: Can't unlink from forwarders");
+        assert!(self.is_directory(parentid as _), "Filesystem: Can't unlink from non-directories");
+    
+        let exists = parent_inode.direntries.remove(name);
+        if exists.is_none()  {
+            assert!(false, "Filesystem: Can't unlink non-existent file: {name}");
+            return;
+        }
+    
+        inode.nlinks -= 1;
+    
+        if self.is_directory(idx as _) {
+            assert!(
+                inode.direntries.get("..").map(|d| *d == parentid).unwrap_or(false),
+                "Filesystem: Found directory with bad parent id"
+            );
+    
+            inode.direntries.remove("..");
+            parent_inode.nlinks -= 1;
+        }
+    
+        assert!(inode.nlinks >= 0,
+            "Filesystem: Found negative nlinks value of {}",
+            inode.nlinks);
+    }
+
+    fn unlink(&mut self, parentid: i64, name: &str) -> i8 {
+        if name == "." || name == ".." {
+            // Also guarantees that root cannot be deleted.
+            return -EPERM;
+        }
+        let idx = self.search(parentid, name);
+        let inode = &self.inodes[idx as _];
+        let parent_inode = &self.inodes[parentid as _];
+        //message.Debug("Unlink " + inode.name);
+    
+        // forward if necessary
+        if Self::is_forwarder(parent_inode) {
+            assert!(Self::is_forwarder(inode), 
+                "Children of forwarders should be forwarders"
+            );
+    
+            let foreign_parentid = parent_inode.foreign_id;
+            return self.follow_fs_mut(parentid as _).unlink(foreign_parentid, name);
+    
+            // Keep the forwarder dangling - file is still accessible.
+        }
+    
+        if self.is_directory(idx as _) && !self.is_empty(idx as _) {
+            return -ENOTEMPTY;
+        }
+    
+        self.unlink_from_dir(parentid, name);
+    
+        if inode.nlinks == 0 {
+            // don't delete the content. The file is still accessible
+            inode.status = STATUS_UNLINKED;
+            // self.notify_listeners(idx, "delet");
+        }
+        return 0;
+    }
+
+
+    fn recursive_delete(&mut self, path: &str) {
+        let mut to_delete = Vec::new();
+        let ids = self.search_path(path);
+        if ids.id == -1 {
+            return;
+        } 
+    
+        self.get_recursive_list(ids.id, &mut to_delete);
+
+        to_delete.iter().rev().for_each(|r| {
+            let ret = self.unlink(r.parentid, &r.name);
+            assert!(ret == 0, 
+                "Filesystem RecursiveDelete failed at parent={} name='{}' with error code: {}",
+                r.parentid,
+                r.name,
+                -ret,
+            );
+        });
+    }
     
 }
 
-struct PathInfo {
-    id: i64,
-    parentid: i64,
-    name: String,
-    forward_path: Option<String>,
-}
