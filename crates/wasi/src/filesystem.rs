@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::time::{self, Duration};
 
 use crate::StoreT;
@@ -141,6 +141,8 @@ struct FSMountInfo {
 
 struct FS {
     store: StoreT,
+    used_size: usize,
+    total_size: usize,
     inodes: Vec<Inode>,
     mounts: Vec<FSMountInfo>,
     qidcounter: Qidcounter,
@@ -150,13 +152,26 @@ struct Qidcounter {
     last_qidnumber: u64,
 }
 
-
 impl FS {
     fn is_forwarder(inode: &Inode) -> bool {
         return inode.status == STATUS_FORWARDING;
     }
 
-    fn follow_fs(&mut self, inode: &Inode) -> &mut FS {
+    fn follow_fs(&self, inode: &Inode) -> &FS {
+        let mount = self.mounts.get(inode.mount_id as usize);
+        assert!(mount.is_some(), 
+            "Filesystem follow_fs: inode<id={}> should point to valid mounted FS",
+            inode.fid
+        );
+        let mount = mount.unwrap();
+        assert!(Self::is_forwarder(inode),
+            "Filesystem follow_fs: inode should be a forwarding inode");
+
+        &mount.fs
+    }
+
+    fn follow_fs_mut(&mut self, idx: usize) -> &mut FS {
+        let inode = self.inodes.get(idx).unwrap();
         let mount = self.mounts.get_mut(inode.mount_id as usize);
         assert!(mount.is_some(), 
             "Filesystem follow_fs: inode<id={}> should point to valid mounted FS",
@@ -169,12 +184,12 @@ impl FS {
         &mut mount.fs
     }
 
-    fn GetInode(&mut self, idx: usize) -> &Inode {
+    fn get_inode(&self, idx: usize) -> &Inode {
         assert!(idx >= 0 && idx < self.inodes.len(), "Filesystem GetInode: out of range idx:{idx}");
 
         let inode = self.inodes.get(idx).unwrap();
         if Self::is_forwarder(inode) {
-            return self.follow_fs(inode).GetInode(inode.foreign_id as usize);
+            return self.follow_fs(inode).get_inode(inode.foreign_id as usize);
         }
 
         return inode;
@@ -229,9 +244,11 @@ impl FS {
         if Self::should_be_linked(inode) {
             *inode.direntries.get("..").unwrap()
         } else {
-            let foreign_dirid = self.follow_fs(inode).get_parent(inode.foreign_id as usize);
+            let foreign_id = inode.foreign_id;
+            let mount_id = inode.mount_id;
+            let foreign_dirid = self.follow_fs_mut(idx).get_parent(foreign_id as usize);
             assert!(foreign_dirid != -1, "Filesystem: should not have invalid parent ids");
-            self.get_forwarder(inode.mount_id, foreign_dirid)  as i64
+            self.get_forwarder(mount_id, foreign_dirid)  as i64
         }
     }
 
@@ -275,20 +292,136 @@ impl FS {
         *result.unwrap() as u64
     }
 
-    fn set_forwarder(&self, idx: usize, mount_id: MountIdType, foreign_id: ForeignIdType) {
-        let inode = self.inodes.get(idx).unwrap();
+    fn set_forwarder(&mut self, idx: usize, mount_id: MountIdType, foreign_id: ForeignIdType) {
+        let inode = self.inodes.get_mut(idx).unwrap();
 
         assert!(inode.nlinks == 0,
             "Filesystem: attempted to convert an inode into forwarder before unlinking the inode");
-        todo!()
-        // if self.is_forwarder(inode) {
-        //     self.mounts[inode.mount_id as usize].backtrack.delete(inode.foreign_id);
-        // }
+        if Self::is_forwarder(inode) {
+            self.mounts[inode.mount_id as usize].backtrack.remove(&inode.foreign_id);
+        }
 
-        // inode.status = STATUS_FORWARDING;
-        // inode.mount_id = mount_id;
-        // inode.foreign_id = foreign_id;
+        inode.status = STATUS_FORWARDING;
+        inode.mount_id = mount_id;
+        inode.foreign_id = foreign_id;
 
-        // self.mounts[mount_id].backtrack.set(foreign_id, idx);
+        self.mounts.get_mut(mount_id as usize).map(|m: &mut FSMountInfo| {
+            m.backtrack.insert(foreign_id, idx);
+        });
     }
+
+    fn search(&mut self, parentid: i64, name: &str) -> i64 {
+        let parent_inode = self.inodes.get(parentid as usize).unwrap();
+        if Self::is_forwarder(parent_inode) {
+            let foreign_parentid = parent_inode.foreign_id;
+            let p_mount_id = parent_inode.mount_id;
+            let foreign_id = self.follow_fs_mut(parentid as usize).search(foreign_parentid, name);
+            if foreign_id == -1 {
+                return -1;
+            }
+            return self.get_forwarder(p_mount_id, foreign_id) as _;
+        }
+    
+        let childid = parent_inode.direntries.get(name);
+        childid.map(|i| *i).unwrap_or(-1)
+    }
+
+    fn count_used_inodes(&self) -> usize {
+        let mut count = self.inodes.len();
+        self.mounts.iter().for_each(|m| {
+            count += m.fs.count_used_inodes();
+            count -=  m.backtrack.len();
+        });
+        return count;
+    }
+
+    fn count_free_inodes(&self) -> usize {
+        let mut count = 1024 * 1024;
+        self.mounts.iter().for_each(|m| {
+            count += m.fs.count_free_inodes();
+        });
+        return count;
+    }
+
+
+    fn get_total_size(&self) -> usize {
+        let mut count = self.used_size;
+        self.mounts.iter().for_each(|m| {
+            count += m.fs.get_total_size();
+        });
+        return count;
+    }
+
+    fn get_space(&self) -> usize {
+        let mut count = self.total_size;
+        self.mounts.iter().for_each(|m| {
+            count += m.fs.get_space();
+        });
+        return count;
+    }
+    
+
+    fn search_path(&mut self, path: &str) -> PathInfo {
+        let path = path.replace("//", "/");
+        let mut walk: VecDeque<&str> = path.split("/").collect();
+        if walk.len() > 0 && walk[walk.len() - 1].len() == 0 {
+            walk.pop_back();
+        }
+        if walk.len() > 0 && walk[0].len() == 0 {
+            walk.pop_front();
+        }
+        let n = walk.len();
+        let mut parentid = -1;
+        let mut id = 0;
+        let mut forward_path = None;
+        for i in 0..n {
+            parentid = id;
+            id = self.search(parentid, walk[i]);
+            if forward_path.is_none() && Self::is_forwarder(&self.inodes[parentid as usize]) {
+                let mut s = String::new();
+                //join the walk[i..] to string
+                let walk_iter = walk.iter().skip(i);
+                let n = walk_iter.len();
+                for (i, item) in walk_iter.enumerate() {
+                    s.push_str(item);
+                    if i < n - 1 {
+                        s.push('/');
+                    }
+                }
+                forward_path = Some(format!("/{}", s));
+            }
+            if id == -1 {
+                if i < n-1 { 
+                     // one name of the path cannot be found
+                    return PathInfo{
+                        id: -1, 
+                        parentid: -1, 
+                        name: walk[i].to_string(), 
+                        forward_path 
+                    };
+                }
+                // the last element in the path does not exist, but the parent
+                return PathInfo {
+                    id: -1, 
+                    parentid: parentid, 
+                    name: walk[i].to_string(), 
+                    forward_path
+                }; 
+            }
+        }
+        return PathInfo{
+            id: id, 
+            parentid: parentid, 
+            name: walk[walk.len() - 1].to_string(), 
+            forward_path
+        };
+    }
+    
+}
+
+struct PathInfo {
+    id: i64,
+    parentid: i64,
+    name: String,
+    forward_path: Option<String>,
 }
