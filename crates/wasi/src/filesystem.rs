@@ -523,6 +523,10 @@ impl FS {
         return 0;
     }
 
+    #[inline(always)]
+    fn is_a_root(&self, idx: usize) -> bool{
+        self.get_inode(idx).fid == 0
+    }
 
     fn recursive_delete(&mut self, path: &str) {
         let mut to_delete = Vec::new();
