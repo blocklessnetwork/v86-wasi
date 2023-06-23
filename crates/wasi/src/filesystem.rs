@@ -2,6 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use std::time::{self, Duration};
 
 use crate::StoreT;
+use crate::log::LOG;
 
 const STATUS_INVALID: i8 = -0x1;
 const STATUS_OK: i8 = 0x0;
@@ -785,6 +786,58 @@ impl FS {
         x.mode = S_IFLNK;
         self.push_inode(x, parentid as i64, filename);
         return (self.inodes.len() - 1) as u64;
+    }
+
+    fn link(&mut self, parentid: i64, targetid: i64, name: &str) -> i8 {
+        if self.is_directory(targetid as _) {
+            return -EPERM;
+        }
+        let parentid = parentid as usize;
+        let targetid = targetid as usize;
+        // let parent_inode = self.inodes[parentid];
+        // let inode = this.inodes[targetid];
+
+        let (parent_foreign_id, 
+                parent_is_forwarder, 
+                parent_mount_id,
+        ) = self.inodes.get(parentid)
+            .map(|parent_inode| {
+                (parent_inode.foreign_id, 
+                    Self::is_forwarder(parent_inode),
+                    parent_inode.mount_id
+                )
+            })
+            .unwrap();
+        
+        let (inode_foreign_id, 
+                inode_is_forwarder, 
+                inode_mount_id,
+        ) = self.inodes.get(targetid)
+            .map(|inode| {
+                (inode.foreign_id, 
+                    Self::is_forwarder(inode),
+                    inode.mount_id
+                )
+            })
+            .unwrap();
+        
+
+        if parent_is_forwarder {
+            if !inode_is_forwarder || inode_mount_id != parent_mount_id {
+                dbg_log!(LOG::P9, 
+                    "XXX: Attempted to hardlink a file into a child filesystem - skipped");
+                return -EPERM;
+            }
+            return self.follow_fs_mut(parentid).link(parent_foreign_id, inode_foreign_id, name);
+        }
+
+        if inode_is_forwarder {
+            dbg_log!(LOG::P9, "XXX: Attempted to hardlink file across filesystems - skipped");
+            return -EPERM;
+        }
+
+        self.link_under_dir(parentid as _, targetid as _, name);
+        return 0;
     }
 
     

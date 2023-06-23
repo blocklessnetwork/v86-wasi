@@ -41,6 +41,7 @@ pub fn set_log_mask(m: u32) {
 pub enum LOG {
     E,
     IO,
+    P9,
     WS,
     CPU,
     PIC,
@@ -65,6 +66,7 @@ impl LOG {
         match s.to_ascii_uppercase().as_str() {
             "IO" => LOG::IO,
             "WS" => LOG::WS,
+            "P9" => LOG::P9,
             "CPU" => LOG::CPU,
             "PIC" => LOG::PIC,
             "PCI" => LOG::PCI,
@@ -88,6 +90,7 @@ impl LOG {
         match *self {
             Self::E => LOG_E,
             Self::IO => LOG_IO,
+            Self::P9 => LOG_P9,
             Self::CPU => LOG_CPU,
             Self::PIC => LOG_PIC,
             Self::PCI => LOG_PCI,
@@ -117,6 +120,7 @@ impl Display for LOG {
         match *self {
             Self::IO => f.write_str("IO"),
             Self::E => f.write_str("  "),
+            Self::P9 => f.write_str("P9"),
             Self::CPU => f.write_str("CPU"),
             Self::PIC => f.write_str("PIC"),
             Self::PIT => f.write_str("PIT"),
