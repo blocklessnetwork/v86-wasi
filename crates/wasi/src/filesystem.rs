@@ -762,6 +762,11 @@ impl FS {
         }
     }
 
+    fn delete_forwarder<'a>(&'a mut self, inode: &'a Inode) {
+        assert!(Self::is_forwarder(inode), "Filesystem delete_forwarder: expected forwarder");
+        self.mounts[inode.mount_id as usize].backtrack.remove(&inode.foreign_id);
+    }
+
     fn create_symlink(&mut self, filename: &str, parentid: i64, symlink: &str) -> u64 {
         let parentid = parentid as usize;
         let parent_inode = &self.inodes[parentid];
@@ -781,4 +786,6 @@ impl FS {
         self.push_inode(x, parentid as i64, filename);
         return (self.inodes.len() - 1) as u64;
     }
+
+    
 }
