@@ -25,6 +25,7 @@ const LOCK_TYPE_UNLCK: u8 = 2;
 const EPERM: i8 = 1;
 const ENOTEMPTY: i8 = 39;  /* Directory not empty */
 
+#[derive(Clone)]
 struct FSLockRegion {
     type_: u8,
     start: u32,
@@ -103,6 +104,7 @@ struct Inode {
     nlinks: u32,
     sha256sum: String,
     mount_id: MountIdType,
+    locks: Vec<FSLockRegion>,
     foreign_id: ForeignIdType,
     direntries: HashMap<String, i64>,
 }
@@ -128,11 +130,12 @@ impl Inode {
                 version: 0 ,
                 path: qidnumber 
             },
-            caps: Vec::new(),
             nlinks: 0,
-            sha256sum: String::new(),
             mount_id: -1,
             foreign_id: -1,
+            caps: Vec::new(),
+            locks: Vec::new(),
+            sha256sum: String::new(),
         }
     }
 }
@@ -435,56 +438,75 @@ impl FS {
     fn get_recursive_list(&mut self, dirid: i64, list: &mut Vec<RecursiveInfo>) {
         let inode = &self.inodes[dirid as usize];
         if Self::is_forwarder(inode) { 
-            let foreign_fs = self.follow_fs(inode);
-            let foreign_dirid = inode.foreign_id;
+            let foreign_id = inode.foreign_id;
             let mount_id = inode.mount_id;
+            let foreign_fs = self.follow_fs_mut(dirid as usize);
 
             let foreign_start = list.len();
-            foreign_fs.get_recursive_list(foreign_dirid, list);
+            foreign_fs.get_recursive_list(foreign_id, list);
             for i in foreign_start..list.len() {
                 list[i].parentid = self.get_forwarder(mount_id, list[i].parentid) as _;
             }
             return;
         }
-        inode.direntries.iter().for_each(|(name, id)| {
+        let ids = inode.direntries.iter().filter_map(|(name, id)| {
             if name != "." && name != ".." {
                 list.push(RecursiveInfo { parentid: dirid, name: name.to_string() });
                 if self.is_directory(*id as usize) {
-                    self.get_recursive_list(*id, list);
+                    let id = *id;
+                    return Some(id);
                 }
             }
+            return None;
+        }).collect::<Vec<_>>();
+        ids.into_iter().for_each(|id| {
+            self.get_recursive_list(id, list);
         });
     }
 
     fn unlink_from_dir(&mut self, parentid: i64, name: &str) {
         let idx = self.search(parentid, name);
-        let inode: &mut Inode = &mut self.inodes[idx as _];
-        let parent_inode: &mut Inode = &mut self.inodes[parentid as _];
+        let parentid = parentid as usize;
+        let idx = idx as usize;
+        // let inode: &mut Inode = &mut self.inodes[idx];
+        // let parent_inode: &mut Inode = &mut self.inodes[parentid];
+        self.inodes.get(parentid).map(|p| {
+            assert!(!Self::is_forwarder(p), "Filesystem: Can't unlink from forwarders");
+        });
     
-        assert!(!Self::is_forwarder(parent_inode), "Filesystem: Can't unlink from forwarders");
-        assert!(self.is_directory(parentid as _), "Filesystem: Can't unlink from non-directories");
-    
-        let exists = parent_inode.direntries.remove(name);
+        assert!(self.is_directory(parentid), "Filesystem: Can't unlink from non-directories");
+        
+        let exists = self.inodes.get_mut(parentid)
+            .map(|parent_inode| parent_inode.direntries.remove(name))
+            .unwrap();
         if exists.is_none()  {
             assert!(false, "Filesystem: Can't unlink non-existent file: {name}");
             return;
         }
+        
+        self.inodes.get_mut(idx).map(|inode| inode.nlinks -= 1);
+        
     
-        inode.nlinks -= 1;
-    
-        if self.is_directory(idx as _) {
-            assert!(
-                inode.direntries.get("..").map(|d| *d == parentid).unwrap_or(false),
-                "Filesystem: Found directory with bad parent id"
-            );
-    
-            inode.direntries.remove("..");
-            parent_inode.nlinks -= 1;
+        if self.is_directory(idx) {
+            self.inodes.get_mut(idx).map(|inode| {
+                assert!(
+                    inode.direntries.get("..").map(|d| *d == parentid as i64).unwrap_or(false),
+                    "Filesystem: Found directory with bad parent id"
+                );
+        
+                inode.direntries.remove("..");
+            });
+            
+            self.inodes.get_mut(parentid).map(|parent_inode| {
+                parent_inode.nlinks -= 1;
+            });
         }
-    
-        assert!(inode.nlinks >= 0,
-            "Filesystem: Found negative nlinks value of {}",
-            inode.nlinks);
+        
+        self.inodes.get(idx).map(|inode| {
+            assert!(inode.nlinks >= 0,
+                "Filesystem: Found negative nlinks value of {}",
+                inode.nlinks);
+        });
     }
 
     fn unlink(&mut self, parentid: i64, name: &str) -> i8 {
@@ -492,32 +514,41 @@ impl FS {
             // Also guarantees that root cannot be deleted.
             return -EPERM;
         }
-        let idx = self.search(parentid, name);
-        let inode = &self.inodes[idx as _];
-        let parent_inode = &self.inodes[parentid as _];
+        let idx = self.search(parentid, name) as usize;
+        let parentid = parentid as usize;
+        // let inode = &mut self.inodes[idx];
+        //let parent_inode = &self.inodes[parentid];
         //message.Debug("Unlink " + inode.name);
     
         // forward if necessary
-        if Self::is_forwarder(parent_inode) {
-            assert!(Self::is_forwarder(inode), 
+        let (parent_forwarder, parent_foreign_id) = self.inodes.get(parentid)
+            .map(|parent_inode| {
+                (Self::is_forwarder(parent_inode), parent_inode.foreign_id)
+            }).unwrap();
+
+        let (inode_forwarder, inode_nlinks) = self.inodes.get(idx).map(|inode| {
+            (Self::is_forwarder(inode), inode.nlinks)
+        }).unwrap();
+        if parent_forwarder {
+            assert!(inode_forwarder, 
                 "Children of forwarders should be forwarders"
             );
     
-            let foreign_parentid = parent_inode.foreign_id;
-            return self.follow_fs_mut(parentid as _).unlink(foreign_parentid, name);
+            let foreign_parentid = parent_foreign_id;
+            return self.follow_fs_mut(parentid).unlink(foreign_parentid, name);
     
             // Keep the forwarder dangling - file is still accessible.
         }
     
-        if self.is_directory(idx as _) && !self.is_empty(idx as _) {
+        if self.is_directory(idx) && !self.is_empty(idx) {
             return -ENOTEMPTY;
         }
     
-        self.unlink_from_dir(parentid, name);
+        self.unlink_from_dir(parentid as _, name);
     
-        if inode.nlinks == 0 {
+        if inode_nlinks == 0 {
             // don't delete the content. The file is still accessible
-            inode.status = STATUS_UNLINKED;
+            self.inodes.get_mut(idx).map(|inode| inode.status = STATUS_UNLINKED);
             // self.notify_listeners(idx, "delet");
         }
         return 0;
@@ -526,6 +557,22 @@ impl FS {
     #[inline(always)]
     fn is_a_root(&self, idx: usize) -> bool{
         self.get_inode(idx).fid == 0
+    }
+
+    fn get_lock(&self, id: i64, request: FSLockRegion) -> Option<FSLockRegion> {
+        let inode = &self.inodes[id as usize];
+
+        if Self::is_forwarder(inode) {
+            let foreign_id = inode.foreign_id;
+            return self.follow_fs(inode).get_lock(foreign_id, request);
+        }
+
+        for region in inode.locks.iter() {
+            if request.conflicts_with(region) {
+                return Some((*region).clone());
+            }
+        }
+       return None;
     }
 
     fn recursive_delete(&mut self, path: &str) {
