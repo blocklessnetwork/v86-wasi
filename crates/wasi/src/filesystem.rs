@@ -954,7 +954,7 @@ impl FS {
         return idx;
     }
 
-    fn create_directory(&mut self, name: &str, parentid: i64) -> usize {
+    fn create_directory(&mut self, name: &str, parentid: i64) -> i64 {
         let (parent_forwarder, 
             parent_foreign_id,
             parent_mount_id) = self.inodes.get(parentid as usize).map(|parent_inode| {
@@ -965,7 +965,7 @@ impl FS {
             }).unwrap();
         if parentid >= 0 && parent_forwarder {
             let foreign_id = self.follow_fs_mut(parentid as usize).create_directory(name, parent_foreign_id);
-            return self.create_forwarder(parent_mount_id, foreign_id as _) as usize;
+            return self.create_forwarder(parent_mount_id, foreign_id as _) as i64;
         }
         let mut x = self.create_inode();
         x.mode = 0x01FF | S_IFDIR;
@@ -979,26 +979,35 @@ impl FS {
         x.qid.type_ = (S_IFDIR >> 8) as u8;
         self.push_inode(x, parentid, name);
         // this.NotifyListeners(this.inodes.length-1, 'newdir');
-        return self.inodes.len() - 1;
+        return (self.inodes.len() - 1) as i64;
     }
     
-    // FS.prototype.CreateFile = function(filename, parentid) {
-    //     const parent_inode = this.inodes[parentid];
-    //     if(this.is_forwarder(parent_inode))
-    //     {
-    //         const foreign_parentid = parent_inode.foreign_id;
-    //         const foreign_id = this.follow_fs(parent_inode).CreateFile(filename, foreign_parentid);
-    //         return this.create_forwarder(parent_inode.mount_id, foreign_id);
-    //     }
-    //     var x = this.CreateInode();
-    //     x.uid = this.inodes[parentid].uid;
-    //     x.gid = this.inodes[parentid].gid;
-    //     x.qid.type = S_IFREG >> 8;
-    //     x.mode = (this.inodes[parentid].mode & 0x1B6) | S_IFREG;
-    //     this.PushInode(x, parentid, filename);
-    //     this.NotifyListeners(this.inodes.length-1, 'newfile');
-    //     return this.inodes.length-1;
-    // };
+    fn create_file(&mut self, filename: &str, parentid: i64) -> i64 {
+        let (parent_forwarder, 
+            parent_foreign_id,
+            parent_mount_id) = self.inodes.get(parentid as usize).map(|parent_inode| {
+                let forwarder = Self::is_forwarder(parent_inode);
+                let foreign_id = parent_inode.foreign_id;
+                let mount_id = parent_inode.mount_id;
+                (forwarder, foreign_id, mount_id)
+            }).unwrap();
+        if parent_forwarder {
+            let foreign_id = self.follow_fs_mut(parentid as usize)
+                .create_file(filename, parent_foreign_id);
+            return self.create_forwarder(parent_mount_id, foreign_id) as i64;
+        }
+        let mut x = self.create_inode();
+        self.inodes.get(parentid as usize).map(|parent_node| {
+            x.uid = parent_node.uid;
+            x.gid = parent_node.gid;
+            x.qid.type_ = (S_IFREG >> 8) as u8;
+            x.mode = (parent_node.mode & 0x1B6) | S_IFREG;
+        });
+        
+        self.push_inode(x, parentid, filename);
+        // this.NotifyListeners(this.inodes.length-1, 'newfile');
+        return (self.inodes.len() - 1) as i64;
+    }
     
 }
 
