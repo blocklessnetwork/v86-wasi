@@ -76,20 +76,22 @@ impl FSLockRegion {
     }
 }
 
+#[derive(Clone)]
 struct QID {
     type_: u8,
     version: u8,
-    path: u64,
+    path: i64,
 }
 
 type ForeignIdType = i64;
 type MountIdType = i64;
 
+#[derive(Clone)]
 struct Inode {
     uid: u32,
     gid: u32,
     fid: u64,
-    size: u32,
+    size: u64,
     ctime: u64,
     status: i8,
     atime: u64,
@@ -108,8 +110,20 @@ struct Inode {
     direntries: HashMap<String, i64>,
 }
 
+pub struct FsNode {
+    name: String,
+    size: u64,
+    mtime: u64,
+    mode: u16,
+    uid: u32,
+    gid: u32,
+    target: String,
+    sha256sum: String,
+    children: Vec<FsNode>,
+}
+
 impl Inode {
-    fn new(qidnumber: u64) -> Self {
+    fn new(qidnumber: i64) -> Self {
         Self {
             direntries: HashMap::new(),
             status: 0,
@@ -151,10 +165,11 @@ struct FS {
     inodes: Vec<Inode>,
     mounts: Vec<FSMountInfo>,
     qidcounter: Qidcounter,
+    inodedata: HashMap<i64, Vec<u8>>,
 }
 
 struct Qidcounter {
-    last_qidnumber: u64,
+    last_qidnumber: i64,
 }
 
 struct PathInfo {
@@ -820,8 +835,6 @@ impl FS {
                 )
             })
             .unwrap();
-        
-
         if parent_is_forwarder {
             if !inode_is_forwarder || inode_mount_id != parent_mount_id {
                 dbg_log!(LOG::P9, 
@@ -840,5 +853,106 @@ impl FS {
         return 0;
     }
 
+    fn load_recursive(&mut self, data: &FsNode, parentid: i64) {
+        let mut inode = self.create_inode();
+
+        let name = &data.name;
+        inode.size = data.size;
+        inode.mtime = data.mtime;
+        inode.ctime = inode.mtime;
+        inode.atime = inode.mtime;
+        inode.mode = data.mode;
+        inode.uid = data.uid;
+        inode.gid = data.gid;
+
+        let ifmt = inode.mode & S_IFMT;
+
+        if ifmt == S_IFDIR {
+            self.push_inode(inode, parentid, &name);
+            let parentid = self.inodes.len() - 1;
+            self.load_dir(parentid as _, &data.children);
+        } else if ifmt == S_IFREG {
+            inode.status = STATUS_ON_STORAGE;
+            inode.sha256sum = data.sha256sum.clone();
+            assert!(inode.sha256sum.len() > 0);
+            self.push_inode(inode, parentid, name);
+        } else if ifmt == S_IFLNK {
+            inode.symlink = data.target.clone();
+            self.push_inode(inode, parentid, name);
+        } else if ifmt == S_IFSOCK {
+            // socket: ignore
+        } else {
+            dbg_log!(LOG::E, "Unexpected ifmt: {ifmt:x} ({name})");
+        }
+    }
+
+    fn load_dir(&mut self, parentid: i64, children: &Vec<FsNode>) {
+        children.iter().for_each(|c| self.load_recursive(c, parentid));
+    }
+
+    fn divert(&mut self, parentid: i64, filename: &str) -> usize {
+        let old_idx = self.search(parentid, filename);
+        let old_inode = self.inodes.get(old_idx as usize).map(|old_inode| {
+            old_inode.clone() 
+        }).unwrap();
+        assert!(self.is_directory(old_idx as usize) || old_inode.nlinks <= 1,
+            "Filesystem: can't divert hardlinked file '{filename}' with nlinks={}",
+            old_inode.nlinks);
+        
+        let old_inode_forward = Self::is_forwarder(&old_inode);
+        let old_inode_should_be_linked = Self::should_be_linked(&old_inode);
+        let old_inode_mount_id = old_inode.foreign_id;
+        let mut new_inode = old_inode;
+
+        let idx = self.inodes.len();
+        new_inode.fid = idx as _;
+        self.inodes.push(new_inode);
+        
+
+        // Relink references
+        if old_inode_forward {
+            self.mounts[old_inode_mount_id as usize]
+                .backtrack.insert(old_inode_mount_id, idx);
+        }
+        if old_inode_should_be_linked {
+            self.unlink_from_dir(parentid, filename);
+            self.link_under_dir(parentid, idx as _, filename);
+        }
+
+        // Update children
+        if self.is_directory(old_idx as _) && !old_inode_forward {
+            let rs = self.inodes.get(idx).map(|new_inode| {
+                new_inode.direntries.iter().filter_map(|(name, child_id)| {
+                    let child_id = *child_id as usize;
+                    if name == "." || name == ".." {
+                        return None;
+                    }
+                    Some((self.is_directory(child_id), child_id))
+                }).collect::<Vec<_>>()
+            });
+            rs.map(|rs| {
+                rs.iter().for_each(|(is_directory, child_id)| {
+                    if  *is_directory {
+                        self.inodes[*child_id]
+                            .direntries
+                        .insert("..".to_string(), idx as i64);
+                    }  
+                });
+            });
+        }
+
+        // Relocate local data if any.
+        self.inodedata
+            .remove(&old_idx)
+            .map(|d| self.inodedata.insert(idx as i64, d));
+
+        self.inodes.get_mut(old_idx as usize).map(|old_inode| {
+            // Retire old reference information.
+            old_inode.direntries = HashMap::new();
+            old_inode.nlinks = 0;
+        });
+        return idx;
+    }
     
 }
+
