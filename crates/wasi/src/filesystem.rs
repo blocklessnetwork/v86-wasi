@@ -222,18 +222,34 @@ impl FS {
         &mut mount.fs
     }
 
-    fn get_inode(&self, idx: usize) -> &Inode {
+    fn get_inode(&self, idx: usize) -> Option<&Inode> {
         assert!(
             idx >= 0 && idx < self.inodes.len(),
             "Filesystem GetInode: out of range idx:{idx}"
         );
 
-        let inode = self.inodes.get(idx).unwrap();
-        if Self::is_forwarder(inode) {
-            return self.follow_fs(inode).get_inode(inode.foreign_id as usize);
-        }
+        self.inodes.get(idx).and_then(|inode| {
+            if Self::is_forwarder(inode) {
+                self.follow_fs(inode).get_inode(inode.foreign_id as usize)
+            } else {
+                Some(inode)
+            }
+        })
+    }
 
-        return inode;
+    fn get_inode_mut(&self, idx: usize) -> Option<&mut Inode> {
+        assert!(
+            idx >= 0 && idx < self.inodes.len(),
+            "Filesystem GetInode: out of range idx:{idx}"
+        );
+
+        self.inodes.get_mut(idx).and_then(|inode| {
+            if Self::is_forwarder(inode) {
+                self.follow_fs_mut(idx).get_inode_mut(inode.foreign_id as usize)
+            } else {
+                Some(inode)
+            }
+        })
     }
 
     fn is_directory(&self, idx: usize) -> bool {
@@ -636,7 +652,7 @@ impl FS {
 
     #[inline(always)]
     fn is_a_root(&self, idx: usize) -> bool {
-        self.get_inode(idx).fid == 0
+        self.get_inode(idx).unwrap().fid == 0
     }
 
     fn get_lock(&self, id: i64, request: FSLockRegion) -> Option<FSLockRegion> {
@@ -779,7 +795,8 @@ impl FS {
     }
 
     fn delete_forwarder<'a>(&'a mut self, inode: &'a Inode) {
-        assert!(Self::is_forwarder(inode), "Filesystem delete_forwarder: expected forwarder");
+        assert!(Self::is_forwarder(inode), 
+            "Filesystem delete_forwarder: expected forwarder");
         self.mounts[inode.mount_id as usize].backtrack.remove(&inode.foreign_id);
     }
 
@@ -1019,7 +1036,6 @@ impl FS {
                 //this.storage.uncache(this.inodes[idx].sha256sum);
             }
         });
-        
     }
 
     fn create_binary_file(&mut self, filename: &str, parentid: i64, buffer: Vec<u8>) -> i64 {
@@ -1046,6 +1062,58 @@ impl FS {
         return id;
     }
 
+    fn prepare_caps(&mut self, id: i64) -> usize {
+        match self.get_inode(id as usize).and_then(|inode| {
+            if inode.caps.len() > 0 {
+                Some(inode.caps.len())
+            } else {
+                None
+            }
+        }) {
+            Some(n) => return n,
+            None => {},
+        };
+        
+        let mut caps = vec![0u8; 20];
+        // format is little endian
+        // note: getxattr returns -EINVAL if using revision 1 format.
+        // note: getxattr presents revision 3 as revision 2 when revision 3 is not needed.
+        // magic_etc (revision=0x02: 20 bytes)
+        caps[0]  = 0x00;
+        caps[1]  = 0x00;
+        caps[2]  = 0x00;
+        caps[3]  = 0x02;
+    
+        // lower
+        // permitted (first 32 capabilities)
+        caps[4]  = 0xFF;
+        caps[5]  = 0xFF;
+        caps[6]  = 0xFF;
+        caps[7]  = 0xFF;
+        // inheritable (first 32 capabilities)
+        caps[8]  = 0xFF;
+        caps[9]  = 0xFF;
+        caps[10] = 0xFF;
+        caps[11] = 0xFF;
+    
+        // higher
+        // permitted (last 6 capabilities)
+        caps[12] = 0x3F;
+        caps[13] = 0x00;
+        caps[14] = 0x00;
+        caps[15] = 0x00;
+        // inheritable (last 6 capabilities)
+        caps[16] = 0x3F;
+        caps[17] = 0x00;
+        caps[18] = 0x00;
+        caps[19] = 0x00;
+        self.get_inode_mut(id as usize)
+            .and_then(|inode| {
+                inode.caps = caps;
+                Some(inode.caps.len())
+            }
+        ).unwrap()
+    }
     
 }
 
