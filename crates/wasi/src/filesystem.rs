@@ -1008,6 +1008,45 @@ impl FS {
         // this.NotifyListeners(this.inodes.length-1, 'newfile');
         return (self.inodes.len() - 1) as i64;
     }
+
+    fn set_data(&mut self, idx: i64, buffer: Vec<u8>) {
+    // Current scheme: Save all modified buffers into local inodedata.
+        self.inodedata.insert(idx, buffer);
+        self.inodes.get_mut(idx as usize).map(|inode| {
+            if inode.status == STATUS_ON_STORAGE {
+                inode.status = STATUS_OK;
+                todo!()
+                //this.storage.uncache(this.inodes[idx].sha256sum);
+            }
+        });
+        
+    }
+
+    fn create_binary_file(&mut self, filename: &str, parentid: i64, buffer: Vec<u8>) -> i64 {
+        let (parent_forwarder, 
+            parent_foreign_id,
+            parent_mount_id) = self.inodes.get(parentid as usize).map(|parent_inode| {
+                let forwarder = Self::is_forwarder(parent_inode);
+                let foreign_id = parent_inode.foreign_id;
+                let mount_id = parent_inode.mount_id;
+                (forwarder, foreign_id, mount_id)
+            }).unwrap();
+        if parent_forwarder {
+            let foreign_id = self.follow_fs_mut(parentid as _)
+                .create_binary_file(filename, parent_foreign_id, buffer);
+            return self.create_forwarder(parent_mount_id, foreign_id) as i64;
+        }
+        let id = self.create_file(filename, parentid);
+
+        
+        let buf_len = buffer.len();
+        self.set_data(id, buffer);
+        self.inodes.get_mut(id as usize).map(|x| {
+            x.size = buf_len as u64;
+        });
+        return id;
+    }
+
     
 }
 
