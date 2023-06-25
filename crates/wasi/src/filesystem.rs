@@ -1037,7 +1037,6 @@ impl FS {
             return self.create_forwarder(parent_mount_id, foreign_id) as i64;
         }
         let id = self.create_file(filename, parentid);
-
         
         let buf_len = buffer.len();
         self.set_data(id, buffer);
