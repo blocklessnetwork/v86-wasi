@@ -1,3 +1,4 @@
+#![allow(unused, dead_code)]
 use std::collections::{HashMap, VecDeque};
 use std::time::{self, Duration};
 
@@ -237,19 +238,26 @@ impl FS {
         })
     }
 
-    fn get_inode_mut(&self, idx: usize) -> Option<&mut Inode> {
+    fn inode_mut<F>(&mut self, idx: usize, mut f: F)
+    where
+        F: FnOnce(&mut Inode)
+    {
         assert!(
             idx >= 0 && idx < self.inodes.len(),
             "Filesystem GetInode: out of range idx:{idx}"
         );
-
-        self.inodes.get_mut(idx).and_then(|inode| {
-            if Self::is_forwarder(inode) {
-                self.follow_fs_mut(idx).get_inode_mut(inode.foreign_id as usize)
-            } else {
-                Some(inode)
-            }
-        })
+        let (foreign_id, is_forwarder, inode) = self.inodes
+            .get_mut(idx)
+            .map(|inode| {
+                let foreign_id = inode.foreign_id;
+                let is_forwarder = Self::is_forwarder(inode);
+                (foreign_id, is_forwarder, inode)
+            }).unwrap();
+        if is_forwarder {
+            self.follow_fs_mut(idx).inode_mut(foreign_id as usize, f);
+        } else {
+            f(inode)
+        }
     }
 
     fn is_directory(&self, idx: usize) -> bool {
@@ -1107,12 +1115,11 @@ impl FS {
         caps[17] = 0x00;
         caps[18] = 0x00;
         caps[19] = 0x00;
-        self.get_inode_mut(id as usize)
-            .and_then(|inode| {
-                inode.caps = caps;
-                Some(inode.caps.len())
-            }
-        ).unwrap()
+        let l = caps.len();
+        self.inode_mut(id as usize, |inode| {
+            inode.caps = caps;
+        });
+        l 
     }
     
 }
