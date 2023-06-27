@@ -1,5 +1,13 @@
 #![allow(dead_code)]
-use crate::{StoreT, ContextTrait, log::LOG, int_log2, pci::{PCIBar, GenericPCIDevice}, Dev, io::IO};
+use crate::{
+    StoreT, 
+    ContextTrait, 
+    log::LOG, 
+    int_log2, 
+    pci::{PCIBar, GenericPCIDevice}, 
+    Dev, 
+    io::IO
+};
 use std::collections::{HashSet, HashMap};
 
 const DEBUG: bool = false;
@@ -23,12 +31,17 @@ const VIRTIO_STATUS_FEATURES_OK: u8 = 8;
 const VIRTIO_STATUS_DEVICE_NEEDS_RESET: u8 = 64;
 const VIRTIO_STATUS_FAILED: u8 = 128;
 
+
+
 // ISR bits (isr_status values).
 
 const VIRTIO_ISR_QUEUE: u8 = 1;
 const VIRTIO_ISR_DEVICE_CFG: u8 = 2;
 
+// Feature bits (bit positions).
 const VIRTIO_F_RING_INDIRECT_DESC: u8 = 28;
+const VIRTIO_F_RING_EVENT_IDX: u8 = 29;
+const VIRTIO_F_VERSION_1: u8 = 32;
 
 const VIRTQ_DESC_F_NEXT: u8 = 1;
 const VIRTQ_DESC_F_WRITE: u8 = 2;
@@ -49,8 +62,6 @@ const VIRTQ_USED_ENTRYSIZE: u32 = 8;
 // naturally overflows after 65535 (idx is a word).
 const VIRTQ_IDX_MASK: u32 = 0xFFFF;
 
-const VIRTIO_F_VERSION_1: u8 = 32;
-
 struct DescTable {
     addr_low: i32,
     addr_high: i32,
@@ -65,9 +76,9 @@ pub struct VirtIODeviceSpecificCapabilityOptions {
 }
 
 pub struct VirtIONotificationCapabilityOptions {
-    initial_port: u16,
-    single_handler: bool,
-    handlers: Vec<StructWrite>,
+    pub initial_port: u16,
+    pub single_handler: bool,
+    pub handlers: Vec<StructWrite>,
 }
 
 pub struct VirtIOISRCapabilityOptions {
@@ -211,7 +222,6 @@ impl VirtQueue {
             cpu.write16(addr, value)
         });
     }
-    
 
     fn reset(&mut self) {
         self.enabled = false;
@@ -239,7 +249,7 @@ impl VirtQueue {
         return self.desc_addr > 0 && self.avail_addr > 0 && self.used_addr > 0;
     }
 
-    fn has_request(&self) -> bool {
+    pub fn has_request(&self) -> bool {
         assert!(self.avail_addr > 0, "VirtQueue addresses must be configured before use");
         return (self.avail_get_idx() as u32 & self.mask) != self.avail_last_idx;
     }
@@ -249,50 +259,127 @@ impl VirtQueue {
         return (self.avail_get_idx() as u32 - self.avail_last_idx) & self.mask;
     }
 
+    pub fn pop_request(&mut self) -> VirtQueueBufferChain {
+        assert!(self.avail_addr > 0, "VirtQueue addresses must be configured before use");
+        assert!(self.has_request(), "VirtQueue must not pop nonexistent request");
+        let desc_idx = self.avail_get_entry(self.avail_last_idx);
+        dbg_log!(LOG::VIRTIO, 
+            "Pop request: avail_last_idx={} desc_idx={desc_idx}", 
+            self.avail_last_idx);
+        let bufchain = VirtQueueBufferChain::new(self.store.clone(), self.idx, desc_idx as _);
+        self.avail_last_idx = self.avail_last_idx + 1 & self.mask;
+        bufchain
+    }
+
+    fn push_reply(&mut self, bufchain: VirtQueueBufferChain) {
+        assert!(self.used_addr > 0, 
+            "VirtQueue addresses must be configured before use");
+        assert!(self.num_staged_replies < self.size, 
+            "VirtQueue replies must not exceed queue size");
+
+        let used_idx = self.used_get_idx() as u32 + self.num_staged_replies & self.mask;
+        dbg_log!(LOG::VIRTIO, 
+            "Push reply: used_idx={used_idx} desc_idx={}", 
+            bufchain.head_idx);
+
+        self.used_set_entry(used_idx, bufchain.head_idx as i32, bufchain.length_written as i32);
+        self.num_staged_replies += 1;
+    }
+
+    fn flush_replies(&mut self) {
+        assert!(self.used_addr > 0, 
+            "VirtQueue addresses must be configured before use");
+
+        if self.num_staged_replies == 0 {
+            dbg_log!(LOG::VIRTIO, "flush_replies: Nothing to flush");
+            return;
+        }
+
+        dbg_log!(LOG::VIRTIO, "Flushing {} replies", self.num_staged_replies);
+        let old_idx = self.used_get_idx();
+        let new_idx = old_idx + (self.num_staged_replies & VIRTQ_IDX_MASK) as i32;
+        self.used_set_idx(new_idx);
+
+        self.num_staged_replies = 0;
+        let is_feature_negotiated = self
+            .store
+            .virtio()
+            .map_or(false, |vrtio| vrtio.is_feature_negotiated(VIRTIO_F_RING_EVENT_IDX as _));
+        if is_feature_negotiated {
+            let used_event = self.avail_get_used_event();
+
+            // Fire irq when idx values associated with the pushed reply buffers
+            // has reached or gone past used_event.
+            let mut has_passed = old_idx <= used_event && used_event < new_idx;
+
+            // Has overflowed? Assumes num_staged_replies > 0.
+            if new_idx <= old_idx {
+                has_passed = used_event < new_idx || old_idx <= used_event;
+            }
+
+            // Commented out: Workaround for sometimes loading from the filesystem hangs and the emulator stays idle
+            //if(has_passed)
+            {
+                self.store.virtio_mut().map(|virtio| virtio.raise_irq(VIRTIO_ISR_QUEUE));
+            }
+        } else {
+            if !self.avail_get_flags() & (VIRTQ_AVAIL_F_NO_INTERRUPT as i32) > 0 {
+                self.store.virtio_mut().map(|virtio| virtio.raise_irq(VIRTIO_ISR_QUEUE));
+            }
+        }
+    }
+
+    pub fn notify_me_after(&mut self, num_skipped_requests: i32) {
+        assert!(num_skipped_requests >= 0, "Must skip a non-negative number of requests");
+
+        // The 16 bit idx field wraps around after 2^16.
+        let avail_event = self.avail_get_idx() + num_skipped_requests & 0xFFFF;
+        self.used_set_avail_event(avail_event);
+    }
+
 }
 
-type StructWrite = fn(StoreT, i32);
-type StructRead = fn(StoreT) -> i32;
+pub type StructWrite = fn(StoreT, i32);
+pub type StructRead = fn(StoreT) -> i32;
 
-struct VirtIOCapabilityInfoStruct {
-    bytes: u8,
-    name: String,
-    read: StructRead,
-    write: StructWrite,
+pub struct VirtIOCapabilityInfoStruct {
+    pub bytes: u8,
+    pub name: String,
+    pub read: StructRead,
+    pub write: StructWrite,
 }
 
 pub(crate) struct VirtIOCapabilityInfo {
-    type_: u8,
-    bar: u8,
-    port: u16,
-    use_mmio: bool,
-    offset: u32,
-    extra: Vec<u8>,
-    struct_: Vec<VirtIOCapabilityInfoStruct>,
+    pub type_: u8,
+    pub bar: u8,
+    pub port: u16,
+    pub use_mmio: bool,
+    pub offset: u32,
+    pub extra: Vec<u8>,
+    pub struct_: Vec<VirtIOCapabilityInfoStruct>,
 }
 
-pub(crate) struct VirtQueueOptions {
-    size_supported: u32,
-    notify_offset: u32,
+pub struct VirtQueueOptions {
+    pub size_supported: u32,
+    pub notify_offset: u32,
 }
 
-pub(crate) struct VirtIOCommonCapabilityOptions {
-    initial_port: u16,
-    queues: Vec<VirtQueueOptions>,
-    features: Vec<u8>,
-    on_driver_ok: fn(StoreT)
+pub struct VirtIOCommonCapabilityOptions {
+    pub initial_port: u16,
+    pub queues: Vec<VirtQueueOptions>,
+    pub features: Vec<u8>,
+    pub on_driver_ok: fn(StoreT)
 }
 
 pub struct VirtIOptions {
-    name: String,
-    pci_id: u16,
-    device_id: u16,
-    single_handler: bool,
-    subsystem_device_id: u16,
-    common: VirtIOCommonCapabilityOptions,
-    isr_status: VirtIOISRCapabilityOptions,
-    notification: VirtIONotificationCapabilityOptions,
-    device_specific: Option<VirtIODeviceSpecificCapabilityOptions>,
+    pub name: String,
+    pub pci_id: u16,
+    pub device_id: u16,
+    pub subsystem_device_id: u16,
+    pub common: VirtIOCommonCapabilityOptions,
+    pub isr_status: VirtIOISRCapabilityOptions,
+    pub notification: VirtIONotificationCapabilityOptions,
+    pub device_specific: Option<VirtIODeviceSpecificCapabilityOptions>,
 }
 
 #[derive(Clone, Copy)]
@@ -498,7 +585,7 @@ impl VirtIO {
     }
 
     fn create_notification_capability(&self) -> VirtIOCapabilityInfo {
-        let notify_off_multiplier = if self.options.single_handler {
+        let notify_off_multiplier = if self.options.notification.single_handler {
             assert!(self.options.notification.handlers.len() == 1,
                 "VirtIO device<{}> too many notify handlers specified: expected single handler",
                 self.name
@@ -630,7 +717,6 @@ impl VirtIO {
         };
         rs.push(struct_);
 
-
         let struct_ = VirtIOCapabilityInfoStruct {
             bytes: 1,
             name: "device_status".into(),
@@ -721,9 +807,6 @@ impl VirtIO {
             write: |store, data| {
                 store.virtio_mut().map(|vr| {
                     vr.queue_select = data;
-                    // if vr.queue_select < vr.queues.len() as i32 {
-                    //     vr.queues_selected = vr.queues[vr.queue_select as usize] as i32;
-                    // }
                 });
             },
         };
@@ -1258,7 +1341,7 @@ pub struct VirtQueueBufferChain {
     write_buffers: Vec<DescTable>,
     read_buffer_idx: usize,
     read_buffer_offset: usize,
-    length_readable: u32,
+    pub(crate) length_readable: u32,
     write_buffer_idx: usize,
     write_buffer_offset: usize,
     length_written: u32,
@@ -1266,6 +1349,22 @@ pub struct VirtQueueBufferChain {
 }
 
 impl VirtQueueBufferChain {
+    fn new(store: StoreT, idx: usize, head_idx: usize) -> Self {
+        Self {
+            store,
+            head_idx,
+            queue_idx: idx,
+            read_buffers: Vec::new(),
+            write_buffers: Vec::new(),
+            read_buffer_idx: 0,
+            read_buffer_offset: 0,
+            length_readable: 0,
+            write_buffer_idx: 0,
+            write_buffer_offset: 0,
+            length_written: 0,
+            length_writable: 0,
+        }
+    }
 
     fn queue(&self) -> &VirtQueue {
         self.store.virtio()
@@ -1339,7 +1438,7 @@ impl VirtQueueBufferChain {
         dbg_log!(LOG::VIRTIO, "Descriptor chain end >>>");
     }
 
-    fn get_next_blob(&mut self, mut dest_buffer: Vec<u8>) -> u32 {
+    pub fn get_next_blob(&mut self, dest_buffer: &mut Vec<u8>) -> u32 {
         let mut dest_offset = 0;
         let mut remaining = dest_buffer.len();
 

@@ -9,6 +9,7 @@ const ALL_DEBUG: bool = true;
 type StoreT = Weak<Store<Emulator>>;
 use adapter::NetAdapter;
 use virtio::VirtIO;
+use virtio9p::Virtio9p;
 use wasmtime::*;
 mod run;
 mod io;
@@ -36,6 +37,7 @@ mod kernel;
 mod tun_thr;
 mod adapter;
 mod storage;
+mod virtio9p;
 mod filesystem;
 mod setting;
 mod emulator;
@@ -127,6 +129,9 @@ trait ContextTrait {
 
     fn virtio_mut(&self) -> Option<&mut VirtIO>;
     fn virtio(&self) -> Option<&VirtIO>;
+
+    fn virtio9p_mut(&self) -> Option<&mut Virtio9p>;
+    fn virtio9p(&self) -> Option<&Virtio9p>;
 }
 
 impl ContextTrait for StoreT {
@@ -321,12 +326,24 @@ impl ContextTrait for StoreT {
         self.emulator().net_term_adp()
     }
 
+    #[inline]
     fn virtio_mut(&self) -> Option<&mut VirtIO> {
-        todo!()
+        self.emulator_mut().virtio_mut()
     }
 
+    #[inline]
     fn virtio(&self) -> Option<&VirtIO> {
-        todo!()
+        self.emulator().virtio()
+    }
+
+    #[inline]
+    fn virtio9p_mut(&self) -> Option<&mut Virtio9p> {
+        self.emulator_mut().virtio9p_mut()
+    }
+
+    #[inline]
+    fn virtio9p(&self) -> Option<&Virtio9p> {
+        self.emulator().virtio9p()
     }
 }
 

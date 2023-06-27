@@ -2,8 +2,8 @@
 use std::collections::{HashMap, VecDeque};
 use std::time::{self, Duration};
 
-use crate::StoreT;
 use crate::log::LOG;
+use crate::StoreT;
 
 const STATUS_INVALID: i8 = -0x1;
 const STATUS_OK: i8 = 0x0;
@@ -240,19 +240,21 @@ impl FS {
 
     fn inode_mut<F>(&mut self, idx: usize, mut f: F)
     where
-        F: FnOnce(&mut Inode)
+        F: FnOnce(&mut Inode),
     {
         assert!(
             idx >= 0 && idx < self.inodes.len(),
             "Filesystem GetInode: out of range idx:{idx}"
         );
-        let (foreign_id, is_forwarder, inode) = self.inodes
+        let (foreign_id, is_forwarder, inode) = self
+            .inodes
             .get_mut(idx)
             .map(|inode| {
                 let foreign_id = inode.foreign_id;
                 let is_forwarder = Self::is_forwarder(inode);
                 (foreign_id, is_forwarder, inode)
-            }).unwrap();
+            })
+            .unwrap();
         if is_forwarder {
             self.follow_fs_mut(idx).inode_mut(foreign_id as usize, f);
         } else {
@@ -803,9 +805,13 @@ impl FS {
     }
 
     fn delete_forwarder<'a>(&'a mut self, inode: &'a Inode) {
-        assert!(Self::is_forwarder(inode), 
-            "Filesystem delete_forwarder: expected forwarder");
-        self.mounts[inode.mount_id as usize].backtrack.remove(&inode.foreign_id);
+        assert!(
+            Self::is_forwarder(inode),
+            "Filesystem delete_forwarder: expected forwarder"
+        );
+        self.mounts[inode.mount_id as usize]
+            .backtrack
+            .remove(&inode.foreign_id);
     }
 
     fn create_symlink(&mut self, filename: &str, parentid: i64, symlink: &str) -> u64 {
@@ -814,8 +820,9 @@ impl FS {
         if Self::is_forwarder(parent_inode) {
             let foreign_parentid = parent_inode.foreign_id;
             let mount_id = parent_inode.mount_id;
-            let foreign_id = self.follow_fs_mut(parentid)
-                .create_symlink(filename, foreign_parentid, symlink);
+            let foreign_id =
+                self.follow_fs_mut(parentid)
+                    .create_symlink(filename, foreign_parentid, symlink);
             return self.create_forwarder(mount_id, foreign_id as _);
         }
         let mut x = self.create_inode();
@@ -837,40 +844,41 @@ impl FS {
         // let parent_inode = self.inodes[parentid];
         // let inode = this.inodes[targetid];
 
-        let (parent_foreign_id, 
-                parent_is_forwarder, 
-                parent_mount_id,
-        ) = self.inodes.get(parentid)
+        let (parent_foreign_id, parent_is_forwarder, parent_mount_id) = self
+            .inodes
+            .get(parentid)
             .map(|parent_inode| {
-                (parent_inode.foreign_id, 
+                (
+                    parent_inode.foreign_id,
                     Self::is_forwarder(parent_inode),
-                    parent_inode.mount_id
+                    parent_inode.mount_id,
                 )
             })
             .unwrap();
-        
-        let (inode_foreign_id, 
-                inode_is_forwarder, 
-                inode_mount_id,
-        ) = self.inodes.get(targetid)
-            .map(|inode| {
-                (inode.foreign_id, 
-                    Self::is_forwarder(inode),
-                    inode.mount_id
-                )
-            })
+
+        let (inode_foreign_id, inode_is_forwarder, inode_mount_id) = self
+            .inodes
+            .get(targetid)
+            .map(|inode| (inode.foreign_id, Self::is_forwarder(inode), inode.mount_id))
             .unwrap();
         if parent_is_forwarder {
             if !inode_is_forwarder || inode_mount_id != parent_mount_id {
-                dbg_log!(LOG::P9, 
-                    "XXX: Attempted to hardlink a file into a child filesystem - skipped");
+                dbg_log!(
+                    LOG::P9,
+                    "XXX: Attempted to hardlink a file into a child filesystem - skipped"
+                );
                 return -EPERM;
             }
-            return self.follow_fs_mut(parentid).link(parent_foreign_id, inode_foreign_id, name);
+            return self
+                .follow_fs_mut(parentid)
+                .link(parent_foreign_id, inode_foreign_id, name);
         }
 
         if inode_is_forwarder {
-            dbg_log!(LOG::P9, "XXX: Attempted to hardlink file across filesystems - skipped");
+            dbg_log!(
+                LOG::P9,
+                "XXX: Attempted to hardlink file across filesystems - skipped"
+            );
             return -EPERM;
         }
 
@@ -912,18 +920,24 @@ impl FS {
     }
 
     fn load_dir(&mut self, parentid: i64, children: &Vec<FsNode>) {
-        children.iter().for_each(|c| self.load_recursive(c, parentid));
+        children
+            .iter()
+            .for_each(|c| self.load_recursive(c, parentid));
     }
 
     fn divert(&mut self, parentid: i64, filename: &str) -> usize {
         let old_idx = self.search(parentid, filename);
-        let old_inode = self.inodes.get(old_idx as usize).map(|old_inode| {
-            old_inode.clone() 
-        }).unwrap();
-        assert!(self.is_directory(old_idx as usize) || old_inode.nlinks <= 1,
+        let old_inode = self
+            .inodes
+            .get(old_idx as usize)
+            .map(|old_inode| old_inode.clone())
+            .unwrap();
+        assert!(
+            self.is_directory(old_idx as usize) || old_inode.nlinks <= 1,
             "Filesystem: can't divert hardlinked file '{filename}' with nlinks={}",
-            old_inode.nlinks);
-        
+            old_inode.nlinks
+        );
+
         let old_inode_forward = Self::is_forwarder(&old_inode);
         let old_inode_should_be_linked = Self::should_be_linked(&old_inode);
         let old_inode_mount_id = old_inode.foreign_id;
@@ -932,12 +946,12 @@ impl FS {
         let idx = self.inodes.len();
         new_inode.fid = idx as _;
         self.inodes.push(new_inode);
-        
 
         // Relink references
         if old_inode_forward {
             self.mounts[old_inode_mount_id as usize]
-                .backtrack.insert(old_inode_mount_id, idx);
+                .backtrack
+                .insert(old_inode_mount_id, idx);
         }
         if old_inode_should_be_linked {
             self.unlink_from_dir(parentid, filename);
@@ -947,21 +961,25 @@ impl FS {
         // Update children
         if self.is_directory(old_idx as _) && !old_inode_forward {
             let rs = self.inodes.get(idx).map(|new_inode| {
-                new_inode.direntries.iter().filter_map(|(name, child_id)| {
-                    let child_id = *child_id as usize;
-                    if name == "." || name == ".." {
-                        return None;
-                    }
-                    Some((self.is_directory(child_id), child_id))
-                }).collect::<Vec<_>>()
+                new_inode
+                    .direntries
+                    .iter()
+                    .filter_map(|(name, child_id)| {
+                        let child_id = *child_id as usize;
+                        if name == "." || name == ".." {
+                            return None;
+                        }
+                        Some((self.is_directory(child_id), child_id))
+                    })
+                    .collect::<Vec<_>>()
             });
             rs.map(|rs| {
                 rs.iter().for_each(|(is_directory, child_id)| {
-                    if  *is_directory {
+                    if *is_directory {
                         self.inodes[*child_id]
                             .direntries
-                        .insert("..".to_string(), idx as i64);
-                    }  
+                            .insert("..".to_string(), idx as i64);
+                    }
                 });
             });
         }
@@ -980,16 +998,20 @@ impl FS {
     }
 
     fn create_directory(&mut self, name: &str, parentid: i64) -> i64 {
-        let (parent_forwarder, 
-            parent_foreign_id,
-            parent_mount_id) = self.inodes.get(parentid as usize).map(|parent_inode| {
+        let (parent_forwarder, parent_foreign_id, parent_mount_id) = self
+            .inodes
+            .get(parentid as usize)
+            .map(|parent_inode| {
                 let forwarder = Self::is_forwarder(parent_inode);
                 let foreign_id = parent_inode.foreign_id;
                 let mount_id = parent_inode.mount_id;
                 (forwarder, foreign_id, mount_id)
-            }).unwrap();
+            })
+            .unwrap();
         if parentid >= 0 && parent_forwarder {
-            let foreign_id = self.follow_fs_mut(parentid as usize).create_directory(name, parent_foreign_id);
+            let foreign_id = self
+                .follow_fs_mut(parentid as usize)
+                .create_directory(name, parent_foreign_id);
             return self.create_forwarder(parent_mount_id, foreign_id as _) as i64;
         }
         let mut x = self.create_inode();
@@ -1006,18 +1028,21 @@ impl FS {
         // this.NotifyListeners(this.inodes.length-1, 'newdir');
         return (self.inodes.len() - 1) as i64;
     }
-    
+
     fn create_file(&mut self, filename: &str, parentid: i64) -> i64 {
-        let (parent_forwarder, 
-            parent_foreign_id,
-            parent_mount_id) = self.inodes.get(parentid as usize).map(|parent_inode| {
+        let (parent_forwarder, parent_foreign_id, parent_mount_id) = self
+            .inodes
+            .get(parentid as usize)
+            .map(|parent_inode| {
                 let forwarder = Self::is_forwarder(parent_inode);
                 let foreign_id = parent_inode.foreign_id;
                 let mount_id = parent_inode.mount_id;
                 (forwarder, foreign_id, mount_id)
-            }).unwrap();
+            })
+            .unwrap();
         if parent_forwarder {
-            let foreign_id = self.follow_fs_mut(parentid as usize)
+            let foreign_id = self
+                .follow_fs_mut(parentid as usize)
                 .create_file(filename, parent_foreign_id);
             return self.create_forwarder(parent_mount_id, foreign_id) as i64;
         }
@@ -1028,14 +1053,14 @@ impl FS {
             x.qid.type_ = (S_IFREG >> 8) as u8;
             x.mode = (parent_node.mode & 0x1B6) | S_IFREG;
         });
-        
+
         self.push_inode(x, parentid, filename);
         // this.NotifyListeners(this.inodes.length-1, 'newfile');
         return (self.inodes.len() - 1) as i64;
     }
 
     fn set_data(&mut self, idx: i64, buffer: Vec<u8>) {
-    // Current scheme: Save all modified buffers into local inodedata.
+        // Current scheme: Save all modified buffers into local inodedata.
         self.inodedata.insert(idx, buffer);
         self.inodes.get_mut(idx as usize).map(|inode| {
             if inode.status == STATUS_ON_STORAGE {
@@ -1047,21 +1072,26 @@ impl FS {
     }
 
     fn create_binary_file(&mut self, filename: &str, parentid: i64, buffer: Vec<u8>) -> i64 {
-        let (parent_forwarder, 
-            parent_foreign_id,
-            parent_mount_id) = self.inodes.get(parentid as usize).map(|parent_inode| {
+        let (parent_forwarder, parent_foreign_id, parent_mount_id) = self
+            .inodes
+            .get(parentid as usize)
+            .map(|parent_inode| {
                 let forwarder = Self::is_forwarder(parent_inode);
                 let foreign_id = parent_inode.foreign_id;
                 let mount_id = parent_inode.mount_id;
                 (forwarder, foreign_id, mount_id)
-            }).unwrap();
+            })
+            .unwrap();
         if parent_forwarder {
-            let foreign_id = self.follow_fs_mut(parentid as _)
-                .create_binary_file(filename, parent_foreign_id, buffer);
+            let foreign_id = self.follow_fs_mut(parentid as _).create_binary_file(
+                filename,
+                parent_foreign_id,
+                buffer,
+            );
             return self.create_forwarder(parent_mount_id, foreign_id) as i64;
         }
         let id = self.create_file(filename, parentid);
-        
+
         let buf_len = buffer.len();
         self.set_data(id, buffer);
         self.inodes.get_mut(id as usize).map(|x| {
@@ -1079,31 +1109,31 @@ impl FS {
             }
         }) {
             Some(n) => return n,
-            None => {},
+            None => {}
         };
-        
+
         let mut caps = vec![0u8; 20];
         // format is little endian
         // note: getxattr returns -EINVAL if using revision 1 format.
         // note: getxattr presents revision 3 as revision 2 when revision 3 is not needed.
         // magic_etc (revision=0x02: 20 bytes)
-        caps[0]  = 0x00;
-        caps[1]  = 0x00;
-        caps[2]  = 0x00;
-        caps[3]  = 0x02;
-    
+        caps[0] = 0x00;
+        caps[1] = 0x00;
+        caps[2] = 0x00;
+        caps[3] = 0x02;
+
         // lower
         // permitted (first 32 capabilities)
-        caps[4]  = 0xFF;
-        caps[5]  = 0xFF;
-        caps[6]  = 0xFF;
-        caps[7]  = 0xFF;
+        caps[4] = 0xFF;
+        caps[5] = 0xFF;
+        caps[6] = 0xFF;
+        caps[7] = 0xFF;
         // inheritable (first 32 capabilities)
-        caps[8]  = 0xFF;
-        caps[9]  = 0xFF;
+        caps[8] = 0xFF;
+        caps[9] = 0xFF;
         caps[10] = 0xFF;
         caps[11] = 0xFF;
-    
+
         // higher
         // permitted (last 6 capabilities)
         caps[12] = 0x3F;
@@ -1119,8 +1149,6 @@ impl FS {
         self.inode_mut(id as usize, |inode| {
             inode.caps = caps;
         });
-        l 
+        l
     }
-    
 }
-

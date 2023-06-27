@@ -4,7 +4,7 @@ use std::rc::Rc;
 use crate::{
     bus::BUS, debug::Debug, dma::DMA, floppy::FloppyController, io::IO, pci::PCI, pic::PIC,
     pit::PIT, ps2::PS2, rtc::RTC, uart::UART, vga::VGAScreen, ContextTrait,
-    Emulator, StoreT, CPU, ne2k::Ne2k, ide::IDEDevice, virtio::VirtIO,
+    Emulator, StoreT, CPU, ne2k::Ne2k, ide::IDEDevice, virtio::VirtIO, virtio9p::Virtio9p,
 };
 
 #[derive(Clone)]
@@ -255,6 +255,22 @@ impl Dev {
     pub(crate) fn virtio(&self) -> Option<&VirtIO> {
         match *self {
             Dev::Emulator(ref e) => e.virtio(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn virtio9p_mut(&self) -> Option<&mut Virtio9p> {
+        match *self {
+            Dev::Emulator(ref e) => e.virtio9p_mut(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn virtio_9p(&self) -> Option<&Virtio9p> {
+        match *self {
+            Dev::Emulator(ref e) => e.virtio9p(),
             _ => None,
         }
     }

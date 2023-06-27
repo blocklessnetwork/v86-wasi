@@ -35,7 +35,7 @@ use crate::{
     CPU, 
     WASM_TABLE_OFFSET, 
     tun_thr::TunThread, 
-    virtio::VirtIO,
+    virtio::VirtIO, virtio9p::Virtio9p,
 };
 
 pub(crate) struct InnerEmulator {
@@ -385,6 +385,16 @@ impl Emulator {
     #[inline]
     pub(crate) fn virtio(&self) -> Option<&VirtIO> {
         self.inner().cpu.as_ref().and_then(|cpu| cpu.virtio())
+    }
+    
+    #[inline]
+    pub(crate) fn virtio9p(&self) -> Option<&Virtio9p> {
+        self.inner().cpu.as_ref().and_then(|cpu| cpu.virtio9p())
+    }
+
+    #[inline]
+    pub(crate) fn virtio9p_mut(&self) -> Option<&mut Virtio9p> {
+        self.inner_mut().cpu.as_mut().and_then(|cpu| cpu.virtio9p_mut())
     }
 
     #[inline]

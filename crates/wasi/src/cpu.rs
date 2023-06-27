@@ -35,7 +35,7 @@ use crate::{
     ne2k::Ne2k, 
     ide::{self, IDEDevice}, 
     storage::SyncFileBuffer, 
-    virtio::VirtIO,
+    virtio::VirtIO, virtio9p::Virtio9p,
 };
 use chrono::Duration;
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
@@ -1021,6 +1021,14 @@ impl CPU {
         if fast_boot {
             self.rtc.cmos_write(0x3f, 0x01);
         }
+    }
+
+    pub fn virtio9p(&self) -> Option<&Virtio9p> {
+        None
+    }
+
+    pub fn virtio9p_mut(&self) -> Option<&mut Virtio9p> {
+        None
     }
 
     pub fn virtio(&self) -> Option<&VirtIO> {
