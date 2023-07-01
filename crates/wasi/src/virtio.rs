@@ -71,8 +71,8 @@ struct DescTable {
 }
 
 pub struct VirtIODeviceSpecificCapabilityOptions {
-    initial_port: u16,
-    struct_: Vec<VirtIOCapabilityInfoStruct>,
+    pub initial_port: u16,
+    pub struct_: Vec<VirtIOCapabilityInfoStruct>,
 }
 
 pub struct VirtIONotificationCapabilityOptions {
@@ -82,7 +82,7 @@ pub struct VirtIONotificationCapabilityOptions {
 }
 
 pub struct VirtIOISRCapabilityOptions {
-    initial_port: u16,
+    pub initial_port: u16,
 }
 
 pub struct VirtQueue {

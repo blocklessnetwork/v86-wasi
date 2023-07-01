@@ -1,8 +1,16 @@
+#![allow(dead_code)]
 use crate::{StoreT, 
     virtio::{
         VirtIO, 
         VirtIOptions, 
-        VirtIONotificationCapabilityOptions, VirtQueue, VirtQueueBufferChain
+        VirtIONotificationCapabilityOptions, 
+        VirtQueue, 
+        VirtQueueBufferChain, 
+        VirtIOCommonCapabilityOptions, 
+        VirtQueueOptions, 
+        VirtIOISRCapabilityOptions, 
+        VirtIODeviceSpecificCapabilityOptions, 
+        VirtIOCapabilityInfoStruct
     },
     ContextTrait
 };
@@ -12,6 +20,12 @@ const Virtio9pVersion: &str = "9P2000.L";
 const BLOCKSIZE: u32 = 8192;
 const MSIZE: u32 = 8192;
 
+const VIRTIO_9P_F_MOUNT_TAG: u8 = 0;
+const VIRTIO_9P_MAX_TAGLEN: u8 = 254;
+
+const VIRTIO_F_RING_INDIRECT_DESC: u8 = 28;
+const VIRTIO_F_RING_EVENT_IDX: u8 = 29;
+const VIRTIO_F_VERSION_1: u8 = 32;
 
 pub struct Virtio9p {
     store: StoreT,
@@ -23,6 +37,25 @@ pub struct Virtio9p {
     virtio: Option<VirtIO>,
     reply_buffer: Vec<u8>,
     reply_buffer_size: u32,
+}
+
+macro_rules! struct_push {
+    ($struct:ident, $i:literal) => {
+        $struct.push(VirtIOCapabilityInfoStruct {
+            bytes: 1,
+            name: format!("mount tag name {}", $i),
+            read: |store: StoreT| -> i32 {
+                store.virtio9p().map_or(0, |v9p| {
+                    if $i < v9p.configspace_tagname.len() {
+                        v9p.configspace_tagname[$i] as _
+                    } else {
+                        0
+                    }
+                })
+            },
+            write: |_, _| {},
+        });
+    };
 }
 
 impl Virtio9p {
@@ -72,24 +105,74 @@ impl Virtio9p {
                 });
             }],
         };
+        let common = VirtIOCommonCapabilityOptions {
+            initial_port: 0xA800,
+            queues: vec![VirtQueueOptions{ 
+                size_supported: 32, 
+                notify_offset: 0 
+            }],
+            features: vec![
+                VIRTIO_9P_F_MOUNT_TAG,
+                VIRTIO_F_VERSION_1,
+                VIRTIO_F_RING_EVENT_IDX,
+                VIRTIO_F_RING_INDIRECT_DESC,
+            ],
+            on_driver_ok: |_store| {},
+        };
+        let mut device_specific_struct = vec![VirtIOCapabilityInfoStruct { 
+            bytes: 2, 
+            name: "mount tag length".to_string(), 
+            read: |store: StoreT| {
+                store
+                    .virtio9p()
+                    .map_or(0, |v9p| v9p.configspace_taglen as _)
+            }, 
+            write: |_store, _v| {}, 
+        }];
+        struct_push!(device_specific_struct, 0);
+        struct_push!(device_specific_struct, 1);
+        struct_push!(device_specific_struct, 2);
+        struct_push!(device_specific_struct, 3);
+        struct_push!(device_specific_struct, 4);
+        struct_push!(device_specific_struct, 5);
+        (6..254)
+            .into_iter()
+            .for_each(|i| {
+                device_specific_struct.push(
+                    VirtIOCapabilityInfoStruct {
+                        bytes: 1,
+                        name: format!("mount tag name {i}"),
+                        read: |_store| -> i32 {
+                            0
+                        },
+                        write: |_, _| {},
+                    }
+                );
+            });
+        let device_specific = VirtIODeviceSpecificCapabilityOptions {
+            initial_port: 0xA600,
+            struct_: device_specific_struct,
+        };
         let options = VirtIOptions {
             name: "virtio-9p".to_string(),
             pci_id: 0x06 << 3,
             device_id: 0x1049,
             subsystem_device_id: 9,
             notification,
-            common: todo!(),
-            isr_status: todo!(),
-            device_specific: todo!(),
+            common,
+            isr_status: VirtIOISRCapabilityOptions {
+                initial_port: 0xA700,
+            },
+            device_specific: Some(device_specific),
         };
         let virtio = VirtIO::new(self.store.clone(), options);
+        self.virtio = Some(virtio);
     }
 
     fn receive_request(&mut self, mut bufchain: VirtQueueBufferChain) {
         let mut buf = vec![0u8; bufchain.length_readable as usize];
         bufchain.get_next_blob(&mut buf);
         
-
     }
 
 }
