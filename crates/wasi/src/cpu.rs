@@ -498,11 +498,13 @@ impl CPU {
             .map_or(0, |store| self.vm_opers.read16(store, addr))
     }
 
+    #[inline]
     pub(crate) fn read32s(&mut self, addr: u32) -> i32 {
         self.store_mut()
             .map_or(0, |store| self.vm_opers.read32s(store, addr))
     }
 
+    #[inline]
     fn read_slice(&mut self, val: &mut [u8], offset: usize) {
         self.store_mut()
             .map(|store| self.memory.read(store, offset, val).unwrap());
@@ -1025,32 +1027,39 @@ impl CPU {
         }
     }
 
+    #[inline]
     pub fn virtio9p(&self) -> Option<&Virtio9p> {
         self.virtio9p.as_ref()
     }
 
+    #[inline]
     pub fn virtio9p_mut(&mut self) -> Option<&mut Virtio9p> {
         self.virtio9p.as_mut()
     }
 
+    #[inline]
     pub fn virtio(&self) -> Option<&VirtIO> {
         self.virtio9p.as_ref().and_then(|v9p| v9p.virtio())
     }
 
+    #[inline]
     pub fn virtio_mut(&mut self) -> Option<&mut VirtIO> {
         self.virtio9p.as_mut().and_then(|v9p| v9p.virtio_mut())
     }
 
+    #[inline]
     pub fn device_raise_irq(&mut self, i: u8) {
         self.pic.set_irq(i);
         //TODO
     }
 
+    #[inline]
     pub fn device_lower_irq(&mut self, i: u8) {
         self.pic.clear_irq(i);
         //TODO:
     }
 
+    #[inline]
     pub fn reboot_internal(&mut self) {
         self.reset_cpu();
         self.fw_value = Rc::new(Vec::new());
