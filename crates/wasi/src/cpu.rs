@@ -348,6 +348,7 @@ pub struct CPU {
     pub(crate) fdc: FloppyController,
     pub(crate) ide: Option<IDEDevice>,
     pub(crate) cdrom: Option<IDEDevice>,
+    pub(crate) virtio9p: Option<Virtio9p>,
 }
 
 impl CPU {
@@ -389,6 +390,7 @@ impl CPU {
             idle: true,
             a20_byte: 0,
             fw_pointer: 0,
+            virtio9p: None,
             tick_counter: 0,
             store: store.clone(),
             mmap_fn: MMapFn::new(),
@@ -1024,19 +1026,19 @@ impl CPU {
     }
 
     pub fn virtio9p(&self) -> Option<&Virtio9p> {
-        None
+        self.virtio9p.as_ref()
     }
 
-    pub fn virtio9p_mut(&self) -> Option<&mut Virtio9p> {
-        None
+    pub fn virtio9p_mut(&mut self) -> Option<&mut Virtio9p> {
+        self.virtio9p.as_mut()
     }
 
     pub fn virtio(&self) -> Option<&VirtIO> {
-        None
+        self.virtio9p.as_ref().and_then(|v9p| v9p.virtio())
     }
 
     pub fn virtio_mut(&mut self) -> Option<&mut VirtIO> {
-        None
+        self.virtio9p.as_mut().and_then(|v9p| v9p.virtio_mut())
     }
 
     pub fn device_raise_irq(&mut self, i: u8) {
