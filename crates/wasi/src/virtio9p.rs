@@ -15,8 +15,8 @@ use crate::{StoreT,
     ContextTrait
 };
 
-const ConfigSpaceName: [u8; 6] = [0x68, 0x6F, 0x73, 0x74, 0x39, 0x70];
-const Virtio9pVersion: &str = "9P2000.L";
+const CONFIGSPACENAME: [u8; 6] = [0x68, 0x6F, 0x73, 0x74, 0x39, 0x70];
+const VIRTIO9PVERSION: &str = "9P2000.L";
 const BLOCKSIZE: u32 = 8192;
 const MSIZE: u32 = 8192;
 
@@ -62,9 +62,9 @@ impl Virtio9p {
     fn new(store: StoreT) ->  Virtio9p {
         Virtio9p {
             store,
-            configspace_tagname: ConfigSpaceName,
-            configspace_taglen: ConfigSpaceName.len() as _,
-            version: Virtio9pVersion,
+            configspace_tagname: CONFIGSPACENAME,
+            configspace_taglen: CONFIGSPACENAME.len() as _,
+            version: VIRTIO9PVERSION,
             blocksize: BLOCKSIZE,
             msize: BLOCKSIZE,
             virtio: None,
