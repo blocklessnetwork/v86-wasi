@@ -71,18 +71,18 @@ struct DescTable {
 }
 
 pub struct VirtIODeviceSpecificCapabilityOptions {
-    pub initial_port: u16,
+    pub initial_port: u32,
     pub struct_: Vec<VirtIOCapabilityInfoStruct>,
 }
 
 pub struct VirtIONotificationCapabilityOptions {
-    pub initial_port: u16,
+    pub initial_port: u32,
     pub single_handler: bool,
     pub handlers: Vec<StructWrite>,
 }
 
 pub struct VirtIOISRCapabilityOptions {
-    pub initial_port: u16,
+    pub initial_port: u32,
 }
 
 pub struct VirtQueue {
@@ -352,7 +352,7 @@ pub struct VirtIOCapabilityInfoStruct {
 pub(crate) struct VirtIOCapabilityInfo {
     pub type_: u8,
     pub bar: u8,
-    pub port: u16,
+    pub port: u32,
     pub use_mmio: bool,
     pub offset: u32,
     pub extra: Vec<u8>,
@@ -365,7 +365,7 @@ pub struct VirtQueueOptions {
 }
 
 pub struct VirtIOCommonCapabilityOptions {
-    pub initial_port: u16,
+    pub initial_port: u32,
     pub queues: Vec<VirtQueueOptions>,
     pub features: Vec<u8>,
     pub on_driver_ok: fn(StoreT)

@@ -19,7 +19,7 @@ pub fn int_log2_byte(i: u8) -> i32 {
 }
 
 pub fn int_log2(x: i32) -> i32 {
-    let mut x: u32 = x as u32;
+    let x: u32 = x as u32;
     assert!(x > 0);
 
     // http://jsperf.com/integer-log2/6
@@ -40,7 +40,6 @@ pub fn int_log2(x: i32) -> i32 {
         }
     }
 }
-
 
 macro_rules! copy_impl {
     ($name: ident, $type: ty, $l: literal) => {
@@ -76,7 +75,6 @@ macro_rules! write_impl {
         }
     };
 }
-
 
 copy_impl!(copy_to_i32s, i32, 4);
 
