@@ -1,5 +1,5 @@
 {
-    "cdrom": "arch/9pboot.iso",
+    "cdrom": "arch/linux4.iso",
     "bios_file": "arch/seabios.bin",
     "vga_bios_file": "arch/vgabios.bin",
     "wasm_file": "target/v86.wasm",
