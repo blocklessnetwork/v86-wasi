@@ -10,7 +10,7 @@ Blockless WASI-v86 Extension is an emulated v86 machine inside the Blockless Run
 install `wasm-unknown-unknown` target
 
 ```bash
-$ rustup target add wasm32-unknown-unknow
+$ rustup target add wasm32-unknown-unknown
 ```
 
 use the follow command  to generate the wasm file. 
