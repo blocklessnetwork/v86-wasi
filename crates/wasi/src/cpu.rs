@@ -35,7 +35,7 @@ use crate::{
     ne2k::Ne2k, 
     ide::{self, IDEDevice}, 
     storage::SyncFileBuffer, 
-    virtio::VirtIO, virtio9p::Virtio9p,
+    virtio::VirtIO, virtio9p::{Virtio9p, self},
 };
 use chrono::Duration;
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
@@ -372,6 +372,7 @@ impl CPU {
         let fdc = FloppyController::new(store.clone());
         let vga_mem_size = store.setting().vga_memory_size;
         let vga = VGAScreen::new(store.clone(), vga_mem_size);
+        let virtio9p = Virtio9p::new(store.clone());
         let uart0 = UART::new(store.clone(), 0x3F8);
         let ne2k = Ne2k::new(store.clone());
         let ide = None;

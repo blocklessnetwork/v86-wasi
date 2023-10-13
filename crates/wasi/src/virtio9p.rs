@@ -59,7 +59,7 @@ macro_rules! struct_push {
 }
 
 impl Virtio9p {
-    fn new(store: StoreT) ->  Virtio9p {
+    pub fn new(store: StoreT) ->  Virtio9p {
         Virtio9p {
             store,
             configspace_tagname: CONFIGSPACENAME,

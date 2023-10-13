@@ -10,7 +10,7 @@ use crate::{
 };
 use std::collections::{HashSet, HashMap};
 
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 
 const VIRTIO_PCI_VENDOR_ID: u16 = 0x1AF4;
 // Identifies vendor-specific PCI capability.
