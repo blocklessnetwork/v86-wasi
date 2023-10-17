@@ -94,6 +94,7 @@ impl InnerEmulator {
             .map(|store| inst.get_memory(store, "memory"))
             .flatten()
             .unwrap();
+        // spawn the jit thread
         std::thread::spawn(move || {
             let table = table;
             let store: StoreT = unsafe { Weak::from_raw(store_cl as *const Store<Emulator>) };

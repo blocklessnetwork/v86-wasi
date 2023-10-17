@@ -1,5 +1,5 @@
 use std::{mem, io::{Read, Write}, time::Duration};
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, TryRecvError};
 
 use tuntap::{Tap, Configuration, EtherAddr};
 
@@ -104,7 +104,11 @@ impl TunThread {
             let rs = self.rx.try_recv();
             match rs {
                 Ok(buf) => tap.write(&buf).unwrap(),
-                Err(_) => break,
+                Err(TryRecvError::Empty) => continue,
+                Err(e) => {
+                    eprintln!("recv from tap error:{}", e);
+                    break;
+                }
             };
         }
     }
