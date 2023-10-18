@@ -20,11 +20,12 @@ impl Select {
     }
 
     pub fn register(&mut self, tap: &impl Device) {
+        let fd = tap.fd().0;
         unsafe {
-            if self.nfds <= tap.fd().0 + 1 {
-                self.nfds = tap.fd().0 + 1
+            if self.nfds <= fd + 1 {
+                self.nfds = fd + 1
             }
-            libc::FD_SET(tap.fd().0, self.r_sets.as_mut_ptr());
+            libc::FD_SET(fd, self.r_sets.as_mut_ptr());
         }
     }
 
@@ -36,14 +37,17 @@ impl Select {
 
     pub fn poll(&mut self, t: Duration) -> i32 {
         let mut timeout: MaybeUninit<libc::timeval> = MaybeUninit::zeroed();
+        let mircos = t.as_micros();
         unsafe {
-            (&mut *timeout.as_mut_ptr()).tv_usec = (t.as_micros()%1000_000) as _;
-            (&mut *timeout.as_mut_ptr()).tv_sec = (t.as_millis()/1000) as _;
+            (&mut *timeout.as_mut_ptr()).tv_usec = (mircos%1000_000) as _;
+            (&mut *timeout.as_mut_ptr()).tv_sec = (mircos/1000_000) as _;
         }
+        // inital the from r_sets, the select system call will change the context in r_sets.
+        let mut r_sets = self.r_sets.clone();
         unsafe {
             libc::select(
                 self.nfds, 
-                self.r_sets.as_mut_ptr(), 
+                r_sets.as_mut_ptr(), 
                 std::ptr::null_mut(), 
                 std::ptr::null_mut(), 
                 timeout.as_mut_ptr()

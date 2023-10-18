@@ -33,8 +33,8 @@ pub struct TunThread {
     netmask: String,
     vm_eth0_mac: Option<[u8; 6]>,
     ether_addr: EtherAddr,
-    rx: Receiver<Vec<u8>>,
-    tx: Sender<Vec<u8>>,
+    vm_channel_rx: Receiver<Vec<u8>>,
+    vm_channel_tx: Sender<Vec<u8>>,
 }
 #[allow(dead_code)]
 const BORDCAST: [u8; 6] = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
@@ -54,8 +54,8 @@ impl TunThread {
         address: String, 
         netmask: String,
         ether_addr: Option<String>,
-        tx: Sender<Vec<u8>>,
-        rx: Receiver<Vec<u8>>,
+        vm_channel_tx: Sender<Vec<u8>>,
+        vm_channel_rx: Receiver<Vec<u8>>,
     ) -> Self {
         let ether_addr: EtherAddr = ether_addr
             .as_ref()
@@ -68,8 +68,8 @@ impl TunThread {
             address,
             netmask,
             ether_addr,
-            tx,
-            rx,
+            vm_channel_tx,
+            vm_channel_rx,
         }
     }
 
@@ -94,14 +94,16 @@ impl TunThread {
         tap_sel.register(&tap);
         loop {
             let mut buf = vec![0; 1024];
-            let rs = tap_sel.poll(Duration::from_micros(50));
+            let rs = tap_sel.poll(Duration::from_millis(1));
             if rs > 0 {
                 let l = tap.read(&mut buf);
                 if let Ok(l) = l {
-                    self.tx.try_send(buf[0..l].to_vec()).unwrap();
+                    self.vm_channel_tx.try_send(buf[0..l].to_vec()).unwrap();
+                } else {
+                    break;
                 }
             }
-            let rs = self.rx.try_recv();
+            let rs = self.vm_channel_rx.try_recv();
             match rs {
                 Ok(buf) => tap.write(&buf).unwrap(),
                 Err(TryRecvError::Empty) => continue,
@@ -143,7 +145,7 @@ impl TunThread {
             self.vm_eth0_mac = Some(s_eth_h.ether_shost);
             let end = std::mem::size_of::<EtherHdr>() + std::mem::size_of::<ArpHdr>();
             tap.write(&send_data[0..end]).unwrap();
-            let _ = self.tx.send(send_data);
+            let _ = self.vm_channel_tx.send(send_data);
         }
     }
 }
