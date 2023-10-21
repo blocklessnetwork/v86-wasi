@@ -2,23 +2,24 @@ use std::{mem::MaybeUninit, time::Duration};
 
 use crate::dev::Device;
 
-pub struct Select {
+pub struct Selector {
     nfds: i32,
     r_sets: MaybeUninit<libc::fd_set>,
 }
 
-impl Select {
-    pub fn new() -> Select {
+impl Selector {
+    pub fn new() -> Self {
         let mut r_sets = MaybeUninit::uninit();
         unsafe {
             libc::FD_ZERO(r_sets.as_mut_ptr());
         }
-        Select {
+        Self {
             nfds: 0,
             r_sets,
         }
     }
 
+    /// registor the tap fd in to select fd bit set.
     pub fn register(&mut self, tap: &impl Device) {
         let fd = tap.fd().0;
         unsafe {
@@ -29,9 +30,11 @@ impl Select {
         }
     }
 
+    /// unregistor the tap fd.
     pub fn unregister(&mut self, tap: &impl Device) {
+        let fd = tap.fd().0;
         unsafe {
-            libc::FD_CLR(tap.fd().0, self.r_sets.as_mut_ptr());
+            libc::FD_CLR(fd, self.r_sets.as_mut_ptr());
         }
     }
 
