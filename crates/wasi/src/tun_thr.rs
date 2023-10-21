@@ -90,7 +90,7 @@ impl TunThread {
             },
         };
         tap.set_nonblock().unwrap();
-        let mut tap_sel = tuntap::Select::new();
+        let mut tap_sel = tuntap::Selector::new();
         tap_sel.register(&tap);
         loop {
             let mut buf = vec![0; 1024];

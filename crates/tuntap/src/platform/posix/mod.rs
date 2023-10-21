@@ -1,6 +1,6 @@
 mod fd;
-mod select;
+mod selector;
 mod address;
 pub use fd::*;
 pub use address::*;
-pub use select::*;
+pub use selector::*;
