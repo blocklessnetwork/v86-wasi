@@ -16,7 +16,7 @@ pub struct Tap {
     fd: Fd,
     ctl: Fd,
     name: String,
-    config: Configuration,
+    _config: Configuration,
 }
 
 impl Tap {
@@ -60,7 +60,7 @@ impl Tap {
         }
     }
     
-    pub fn new(config: Configuration) -> Result<Self> {
+    pub fn new(_config: Configuration) -> Result<Self> {
         let (fd, idx) = Self::try_open()?;
         let fd = Fd::new(fd)
             .map_err(|_| Error::Io(io::Error::last_os_error()))?;
@@ -68,12 +68,12 @@ impl Tap {
             let ctl = Fd::new(libc::socket(AF_INET, SOCK_DGRAM, 0))
                     .map_err(|_| io::Error::last_os_error())?;
             let name = format!("tap{}", idx);
-            let cfg = config.clone();
+            let cfg = _config.clone();
             let mut tap = Self {
                 fd,
                 ctl,
                 name,
-                config,
+                _config,
             };
             tap.configure(&cfg)?;
             Ok(tap)
