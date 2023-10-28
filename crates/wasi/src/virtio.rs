@@ -927,7 +927,7 @@ impl VirtIO {
         let struct_ = VirtIOCapabilityInfoStruct {
             bytes: 4,
             name: "queue_desc (high dword)".into(),
-            read: |store| {
+            read: |_store| {
                 0
             },
             write: |_store, _data| {
