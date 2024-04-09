@@ -32,7 +32,7 @@ CARGO_FLAGS_SAFE=\
 		-C link-args="target/zstddeclib.o" \
 		--verbose
 
-CARGO_FLAGS=$(CARGO_FLAGS_SAFE) -C target-feature=+bulk-memory   -C overflow-checks=off
+CARGO_FLAGS=$(CARGO_FLAGS_SAFE) -C target-feature=+bulk-memory -C target-feature=+multivalue -C target-feature=+simd128
 
 RUST_FILES=$(shell find crates/v86/src/ -name '*.rs') \
 	   crates/v86/src/gen/interpreter.rs crates/v86/src/gen/interpreter0f.rs \

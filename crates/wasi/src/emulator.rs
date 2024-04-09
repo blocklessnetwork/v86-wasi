@@ -14,7 +14,6 @@ use wasmtime::{Extern, Instance, Linker, Store, Table};
 use crate::{
     io::IO,
     pci::PCI,
-    pic::PIC,
     pit::PIT,
     ps2::PS2,
     rtc::RTC,
@@ -165,7 +164,7 @@ impl InnerEmulator {
     fn start(&mut self, store: StoreT) {
         self.cpu.as_mut().map(|c| {
             c.init();
-            let mut t = c.main_run();
+            let mut t = c.main_loop();
             loop {
                 self.tick_trigger.iter().for_each(|cb| cb(&store));
                 t = c.next_tick(t as u64);
@@ -326,15 +325,6 @@ impl Emulator {
         self.inner_mut().bus.as_ref()
     }
 
-    #[inline]
-    pub(crate) fn pic_mut(&self) -> Option<&mut PIC> {
-        self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.pic)
-    }
-
-    #[inline]
-    pub(crate) fn pic(&self) -> Option<&PIC> {
-        self.inner_mut().cpu.as_ref().map(|cpu| &cpu.pic)
-    }
 
     #[inline]
     pub(crate) fn io_mut(&self) -> Option<&mut IO> {

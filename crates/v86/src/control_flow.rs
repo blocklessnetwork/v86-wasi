@@ -269,14 +269,16 @@ pub fn loopify(nodes: &Graph) -> Vec<WasmStructure> {
                 .collect();
 
             if entries_to_group.len() != 1 {
-                dbg_log!(
-                    "Compiling multi-entry loop with {} entries and {} basic blocks",
-                    entries_to_group.len(),
-                    group.len()
-                );
+                //dbg_log!(
+                //    "Compiling multi-entry loop with {} entries and {} basic blocks",
+                //    entries_to_group.len(),
+                //    group.len()
+                //);
             }
 
-            if entries_to_group.len() * group.len() > MAX_EXTRA_BASIC_BLOCKS {
+            let max_extra_basic_blocks = unsafe { MAX_EXTRA_BASIC_BLOCKS } as usize;
+
+            if entries_to_group.len() * group.len() > max_extra_basic_blocks {
                 let mut subgroup_edges: Graph = Graph::new();
                 for elem in group {
                     subgroup_edges.insert(
@@ -394,7 +396,7 @@ pub fn blockify(blocks: &mut Vec<WasmStructure>, edges: &Graph) {
         match &blocks[source + 1] {
             WasmStructure::BasicBlock(_) =>
                 //dbg_assert!(*b == bbs.next().unwrap())
-                {}
+                {},
             WasmStructure::Dispatcher(_) => {},
             WasmStructure::Loop(_blocks) | WasmStructure::Block(_blocks) => {}, //dbg_assert!(blocks[0].head() == bb),
         }

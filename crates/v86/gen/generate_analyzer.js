@@ -8,8 +8,7 @@ const x86_table = require("./x86_table");
 const rust_ast = require("./rust_ast");
 const { hex, mkdirpSync, get_switch_value, get_switch_exist, finalize_table_rust } = require("./util");
 
-const OUT_DIR = path.join(__dirname, "../../..", "crates/v86/src/gen/");
-console.log(OUT_DIR)
+const OUT_DIR = path.join(__dirname, "..", "src/gen/");
 
 mkdirpSync(OUT_DIR);
 

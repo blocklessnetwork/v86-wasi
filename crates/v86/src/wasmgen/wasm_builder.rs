@@ -4,7 +4,7 @@ use leb::{
     write_fixed_leb16_at_idx, write_fixed_leb32_at_idx, write_leb_i32, write_leb_i64, write_leb_u32,
 };
 use std::mem::transmute;
-use util::{SafeToU8, SafeToU16};
+use util::{SafeToU16, SafeToU8};
 use wasmgen::wasm_opcodes as op;
 
 #[derive(PartialEq)]
@@ -725,11 +725,11 @@ impl WasmBuilder {
         write_leb_u32(&mut self.instruction_body, byte_offset);
     }
 
-    //pub fn store_aligned_u16(&mut self, byte_offset: u32) {
-    //    self.instruction_body.push(op::OP_I32STORE16);
-    //    self.instruction_body.push(op::MEM_ALIGN16);
-    //    write_leb_u32(&mut self.instruction_body, byte_offset);
-    //}
+    pub fn store_aligned_u16(&mut self, byte_offset: u32) {
+        self.instruction_body.push(op::OP_I32STORE16);
+        self.instruction_body.push(op::MEM_ALIGN16);
+        write_leb_u32(&mut self.instruction_body, byte_offset);
+    }
 
     pub fn store_aligned_i32(&mut self, byte_offset: u32) {
         self.instruction_body.push(op::OP_I32STORE);

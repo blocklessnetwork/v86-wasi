@@ -238,8 +238,9 @@ impl VGAScreen {
             original_bar: 0,
             entries: Vec::new(),
         })];
+        const PCI_REVISION: u8 = 0;
         let pci_space: &[u8] = &[
-            0x34,0x12,0x11,0x11,0x03,0x01,0x00,0x00,0x02,0x00,0x00,0x03,0x00,0x00,0x00,0x00,0x08,
+            0x34,0x12,0x11,0x11,0x03,0x01,0x00,0x00,PCI_REVISION,0x00,0x00,0x03,0x00,0x00,0x00,0x00,0x08,
             (VGA_LFB_ADDRESS >> 8) as u8,(VGA_LFB_ADDRESS >> 16) as u8,(VGA_LFB_ADDRESS >> 24) as u8,
             0x00,0x00,0x00,0x00,0x00,0x00,0xbf,0xfe,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
             0x00,0x00,0x00,0x00,0x00,0x00,0xf4,0x1a,0x00,0x11,0x00,0x00,0xbe,0xfe,0x00,0x00,0x00,0x00,
@@ -931,6 +932,7 @@ impl VGAScreen {
     }
 
     fn vga_memory_read(&mut self, mut addr: u32) -> u8 {
+        println!("vga_memory_read {addr:X}");
         if self.svga_enabled && self.graphical_mode_is_linear {
             addr -= 0xA0000;
             addr |= self.svga_bank_offset as u32;
@@ -939,8 +941,9 @@ impl VGAScreen {
         }
 
         let memory_space_select = self.miscellaneous_graphics_register >> 2 & 0x3;
+        println!("{memory_space_select}");
         addr -= VGA_HOST_MEMORY_SPACE_START[memory_space_select as usize];
-
+        println!("addr:{addr}");
         // VGA chip only decodes addresses within the selected memory space.
         if addr >= VGA_HOST_MEMORY_SPACE_SIZE[memory_space_select as usize] as u32 {
             dbg_log!(

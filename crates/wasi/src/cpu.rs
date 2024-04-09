@@ -21,7 +21,6 @@ use crate::{
     kernel::load_kernel,
     log::LOG,
     pci::PCI,
-    pic::PIC,
     pit::PIT,
     ps2::PS2,
     rtc::RTC,
@@ -184,11 +183,11 @@ struct VMOpers {
     typed_write16: TypedFunc<(u32, i32), ()>,
     typed_write32: TypedFunc<(u32, i32), ()>,
     typed_reset_cpu: TypedFunc<(), ()>,
-    typed_get_eflags_no_arith: TypedFunc<(), i32>,
+    typed_handle_irqs: TypedFunc<(), ()>,
+    typed_main_loop: TypedFunc<(), f64>,
     typed_allocate_memory: TypedFunc<u32, u32>,
-    typed_do_many_cycles_native: TypedFunc<(), ()>,
     typed_set_tsc: TypedFunc<(u32, u32), ()>,
-    typed_pic_call_irq: TypedFunc<i32, ()>,
+    typed_pic_set_irq: TypedFunc<(u32), ()>,
     typed_rust_init: TypedFunc<(), ()>,
     typed_codegen_finalize_finished: TypedFunc<(i32, i32, i32), ()>,
 }
@@ -197,6 +196,15 @@ impl VMOpers {
     fn new(inst: &Instance, mut store: impl AsContextMut) -> Self {
         let typed_read8 = inst
             .get_typed_func(store.as_context_mut(), "read8")
+            .unwrap();
+        let typed_handle_irqs = inst
+            .get_typed_func(store.as_context_mut(), "handle_irqs")
+            .unwrap();
+        let typed_main_loop = inst
+            .get_typed_func(store.as_context_mut(), "main_loop")
+            .unwrap();
+        let typed_pic_set_irq = inst
+            .get_typed_func(store.as_context_mut(), "pic_set_irq")
             .unwrap();
         let typed_read16 = inst
             .get_typed_func(store.as_context_mut(), "read16")
@@ -216,17 +224,8 @@ impl VMOpers {
         let typed_allocate_memory = inst
             .get_typed_func(store.as_context_mut(), "allocate_memory")
             .unwrap();
-        let typed_get_eflags_no_arith = inst
-            .get_typed_func(store.as_context_mut(), "get_eflags_no_arith")
-            .unwrap();
-        let typed_do_many_cycles_native = inst
-            .get_typed_func(store.as_context_mut(), "do_many_cycles_native")
-            .unwrap();
         let typed_set_tsc = inst
             .get_typed_func(store.as_context_mut(), "set_tsc")
-            .unwrap();
-        let typed_pic_call_irq = inst
-            .get_typed_func(store.as_context_mut(), "pic_call_irq")
             .unwrap();
         let typed_rust_init = inst
             .get_typed_func(store.as_context_mut(), "rust_init")
@@ -242,11 +241,11 @@ impl VMOpers {
             typed_write16,
             typed_write32,
             typed_reset_cpu,
+            typed_main_loop,
             typed_rust_init,
-            typed_pic_call_irq,
+            typed_handle_irqs,
+            typed_pic_set_irq,
             typed_allocate_memory,
-            typed_get_eflags_no_arith,
-            typed_do_many_cycles_native,
             typed_codegen_finalize_finished,
         }
     }
@@ -282,23 +281,8 @@ impl VMOpers {
     }
 
     #[inline]
-    fn get_eflags_no_arith(&self, store: impl AsContextMut) -> i32 {
-        self.typed_get_eflags_no_arith.call(store, ()).unwrap()
-    }
-
-    #[inline]
-    fn do_many_cycles_native(&self, store: impl AsContextMut) {
-        self.typed_do_many_cycles_native.call(store, ()).unwrap();
-    }
-
-    #[inline]
     fn reset_cpu(&self, store: impl AsContextMut) {
         self.typed_reset_cpu.call(store, ()).unwrap()
-    }
-
-    #[inline]
-    fn pic_call_irq(&self, store: impl AsContextMut, interrupt_nr: i32) {
-        self.typed_pic_call_irq.call(store, interrupt_nr).unwrap();
     }
 
     #[inline]
@@ -309,6 +293,21 @@ impl VMOpers {
     #[inline]
     fn rust_init(&self, store: impl AsContextMut) {
         self.typed_rust_init.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn handle_irqs(&self, store: impl AsContextMut) {
+        self.typed_handle_irqs.call(store, ()).unwrap();
+    }
+
+    #[inline]
+    fn main_loop(&self, store: impl AsContextMut) -> f64 {
+        self.typed_main_loop.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn pic_set_irq(&self, store: impl AsContextMut, addr: u32) {
+        self.typed_pic_set_irq.call(store, addr).unwrap()
     }
 }
 
@@ -327,7 +326,6 @@ pub struct CPU {
     option_roms: Vec<OptionRom>,
     pub(crate) io: IO,
     pub(crate) dma: DMA,
-    pub(crate) pic: PIC,
     pub(crate) pit: PIT,
     pub(crate) pci: PCI,
     pub(crate) ps2: PS2,
@@ -386,7 +384,6 @@ impl CPU {
             option_roms: Vec::new(),
             iomap: IOMap::new(memory),
             io: IO::new(store.clone()),
-            pic: PIC::new(store.clone()),
             pci: PCI::new(store.clone()),
             dma: DMA::new(store.clone()),
             fw_value: Rc::new(Vec::new()),
@@ -501,21 +498,6 @@ impl CPU {
     fn write_mem_size(&mut self, size: u32) {
         self.store_mut().map(|s| {
             self.iomap.memory_size_io.write(s, 0u32, size as _);
-        });
-    }
-
-    #[inline]
-    pub fn pic_call_irq(&mut self, interrupt_nr: i32) {
-        self.store_mut().map(|store| {
-            self.vm_opers
-                .pic_call_irq(store.as_context_mut(), interrupt_nr);
-        });
-    }
-
-    #[inline]
-    fn do_many_cycles_native(&mut self) {
-        self.store_mut().map(|store| {
-            self.vm_opers.do_many_cycles_native(store);
         });
     }
 
@@ -695,7 +677,6 @@ impl CPU {
         self.debug.init();
         self.init_io();
         self.pci.init();
-        self.pic.init();
         
         self.reset_cpu();
         self.load_bios();
@@ -845,23 +826,14 @@ impl CPU {
     #[inline]
     fn do_tick(&mut self) -> f64 {
         self.idle = false;
-        self.main_run()
+        self.main_loop()
     }
 
     pub fn handle_irqs(&mut self) {
-        if self.has_interrupt() {
-            self.pic_acknowledge();
-        }
-    }
-
-    #[inline]
-    pub fn pic_acknowledge(&mut self) {
-        self.pic.acknowledge_irq();
-    }
-
-    #[inline]
-    fn has_interrupt(&self) -> bool {
-        (self.get_eflags_no_arith() & (FLAG_INTERRUPT as i32)) != 0
+        self.store_mut()
+            .map(|store| {
+                self.vm_opers.handle_irqs(store)
+            });
     }
 
     #[inline]
@@ -875,29 +847,6 @@ impl CPU {
     }
 
     #[inline]
-    pub fn hlt_op(&mut self) {
-        if !self.has_interrupt() {
-            self.store.bus_mut().map(|bus| {
-                bus.send("cpu-event-halt", crate::bus::BusData::None);
-            });
-        }
-        self.store_mut()
-            .map(|store| self.iomap.in_hlt_io.write(store, 0, 1));
-        self.hlt_loop();
-    }
-
-    #[inline]
-    fn hlt_loop(&mut self) -> f64 {
-        if self.has_interrupt() {
-            let s = self.run_hardware_timers(self.microtick());
-            self.handle_irqs();
-            s
-        } else {
-            100f64
-        }
-    }
-
-    #[inline]
     fn run_hardware_timers(&mut self, now: f64) -> f64 {
         //TODO:
         let pit_time = self.pit.timer(now, false);
@@ -905,37 +854,12 @@ impl CPU {
         100f64.min(rtc_time).min(pit_time)
     }
 
-    #[inline]
-    fn get_eflags_no_arith(&self) -> i32 {
+    pub fn main_loop(&mut self) -> f64 {
         self.store_mut()
-            .map_or(0, |store| self.vm_opers.get_eflags_no_arith(store))
-    }
-
-    #[inline]
-    fn do_many_cycles(&mut self) {
-        self.do_many_cycles_native();
-        //TODO:
-    }
-
-    pub fn main_run(&mut self) -> f64 {
-        if self.in_hlt() {
-            let t = self.hlt_loop();
-            if self.in_hlt() {
-                return t;
-            }
-        }
-        let start = self.microtick();
-        let mut now = start;
-        while now - start < TIME_PER_FRAME as _ {
-            self.do_many_cycles();
-            now = self.microtick();
-            let t = self.run_hardware_timers(now);
-            self.handle_irqs();
-            if self.in_hlt() {
-                return t;
-            }
-        }
-        return 0f64;
+            .map(|store| {
+                self.vm_opers.main_loop(store)
+            })
+            .unwrap()
     }
 
     pub fn fill_cmos(&mut self) {
@@ -1003,13 +927,15 @@ impl CPU {
     }
 
     pub fn device_raise_irq(&mut self, i: u8) {
-        self.pic.set_irq(i);
-        //TODO
+        self.store_mut().map(|store|
+            self.vm_opers.pic_set_irq(store, i as _)
+        );
     }
 
     pub fn device_lower_irq(&mut self, i: u8) {
-        self.pic.clear_irq(i);
-        //TODO:
+        self.store_mut().map(|store|
+            self.vm_opers.pic_set_irq(store, i as _)
+        );
     }
 
     pub fn reboot_internal(&mut self) {

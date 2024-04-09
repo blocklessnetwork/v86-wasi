@@ -405,7 +405,7 @@ impl InnerPIC {
             });
         } else {
             self.store.cpu_mut().map(|cpu| {
-                cpu.pic_call_irq(self.irq_map as i32 | self.requested_irq as i32);
+                // cpu.pic_call_irq(self.irq_map as i32 | self.requested_irq as i32);
             });
         }
         self.requested_irq = -1;
@@ -430,7 +430,7 @@ impl InnerPIC {
                 pic.master.irq_value &= !(1 << 2);
             });
             self.store.cpu_mut().map(|cpu| {
-                cpu.pic_call_irq((self.irq_map | 7) as i32);
+                // cpu.pic_call_irq((self.irq_map | 7) as i32);
             });
             return;
         }
@@ -455,7 +455,7 @@ impl InnerPIC {
             dbg_log!(LOG::PIC, "slave > acknowledge {}", self.requested_irq);
         }
         self.store.cpu_mut().map(|cpu| {
-            cpu.pic_call_irq(self.irq_map as i32 | self.requested_irq as i32);
+            // cpu.pic_call_irq(self.irq_map as i32 | self.requested_irq as i32);
         });
         self.requested_irq = -1;
         self.check_irqs();
