@@ -168,15 +168,21 @@ impl IDEInterface {
 
                 rtc.cmos_write(CMOS_DISK_DATA, rtc.cmos_read(CMOS_DISK_DATA) & 0x0F | 0xF0);
                 let reg = CMOS_DISK_DRIVE1_CYL;
-                rtc.cmos_write(reg + 0, (self.cylinder_count & 0xFF) as u8);
-                rtc.cmos_write(reg + 1, (self.cylinder_count >> 8 & 0xFF) as u8);
+                let (p1, p2) = if u32::MAX == self.cylinder_count {
+                    (0, 0)
+                } else {
+                    ((self.cylinder_count & 0xFF) as u8,
+                    (self.cylinder_count >> 8 & 0xFF) as u8)
+                };
+                rtc.cmos_write(reg + 0, p1);
+                rtc.cmos_write(reg + 1, p2);
                 rtc.cmos_write(reg + 2, (self.head_count & 0xFF) as u8);
                 rtc.cmos_write(reg + 3, 0xFF);
                 rtc.cmos_write(reg + 4, 0xFF);
                 rtc.cmos_write(reg + 5, 0xC8);
 
-                rtc.cmos_write(reg + 6, (self.cylinder_count & 0xFF) as u8);
-                rtc.cmos_write(reg + 7, (self.cylinder_count >> 8 & 0xFF) as u8);
+                rtc.cmos_write(reg + 6, p1);
+                rtc.cmos_write(reg + 7, p2);
                 rtc.cmos_write(reg + 8, (self.sectors_per_track & 0xFF) as u8);
             });
 
@@ -2060,8 +2066,8 @@ impl IDEDevice {
         let pci_space = vec![
             0x86, 0x80, 0x10, 0x70, 0x05, 0x00, 0xA0, 0x02,
             0x00, 0x80, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00,
-            0 | 1, 0, 0x00, 0x00,
-            0 | 1, 0, 0x00, 0x00,
+            (self.ata_port & 0xFF) as u8 | 1, (self.ata_port >> 8) as u8, 0x00, 0x00,
+            (self.ata_port_high & 0xFF) as u8 | (self.ata_port_high >> 8) as u8, 0, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, // second device
             0x00, 0x00, 0x00, 0x00, // second device
             (self.master_port & 0xFF) as u8 | 1,   (self.master_port >> 8) as u8, 0x00, 0x00,

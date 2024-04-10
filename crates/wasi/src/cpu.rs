@@ -26,9 +26,9 @@ use crate::{
     rtc::RTC,
     uart::UART,
     vga::VGAScreen,
-    ContextTrait, Dev, Emulator, StoreT, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, ne2k::Ne2k, ide::{self, IDEDevice}, storage::SyncFileBuffer,
+    ContextTrait, Dev, Emulator, StoreT, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, 
+    TIME_PER_FRAME, ne2k::Ne2k, ide::{self, IDEDevice}, storage::SyncFileBuffer,
 };
-use chrono::Duration;
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
 
 struct IOMap {
@@ -79,6 +79,8 @@ struct IOMap {
     apic_enabled_io: MemAccess<u8>,
     // configured when the emulator starts (changes bios initialisation)
     acpi_enabled_io: MemAccess<u8>,
+    svga_dirty_bitmap_min_offset: MemAccess<u32>,
+    svga_dirty_bitmap_max_offset: MemAccess<u32>,
 }
 
 impl IOMap {
@@ -112,7 +114,7 @@ impl IOMap {
         let is_32_io = MemAccess::new(804, 1, memory);
         let flags_io = MemAccess::new(120, 1, memory);
         let in_hlt_io = MemAccess::new(616, 1, memory);
-        let last_op1_io = MemAccess::new(96, 1, memory);
+        let last_op1_io = MemAccess::new(104, 1, memory);
         let prefixes_io = MemAccess::new(648, 1, memory);
         let eip_phys_io = MemAccess::new(624, 1, memory);
         let gdtr_size_io = MemAccess::new(572, 1, memory);
@@ -129,15 +131,17 @@ impl IOMap {
         let sysenter_cs_io = MemAccess::new(640, 1, memory);
         let sysenter_eip_io = MemAccess::new(644, 1, memory);
         let tss_size_32_io = MemAccess::new(1128, 1, memory);
-        let last_op_size_io = MemAccess::new(104, 1, memory);
+        let last_op_size_io = MemAccess::new(96, 1, memory);
         let stack_size_32_io = MemAccess::new(808, 1, memory);
         let last_virt_eip_io = MemAccess::new(620, 1, memory);
-        let flags_changed_io = MemAccess::new(116, 1, memory);
+        let flags_changed_io = MemAccess::new(100, 1, memory);
         let segment_limits_io = MemAccess::new(768, 8, memory);
         let protected_mode_io = MemAccess::new(800, 1, memory);
         let segment_is_null_io = MemAccess::new(724, 8, memory);
         let segment_offsets_io = MemAccess::new(736, 8, memory);
         let instruction_pointer_io = MemAccess::new(556, 1, memory);
+        let svga_dirty_bitmap_min_offset = MemAccess::new(716, 1, memory);
+        let svga_dirty_bitmap_max_offset = MemAccess::new(720, 1, memory);
         Self {
             memory_size_io,
             segment_is_null_io,
@@ -172,14 +176,31 @@ impl IOMap {
             acpi_enabled_io,
             mem8: None,
             mem32s: None,
+            svga_dirty_bitmap_min_offset,
+            svga_dirty_bitmap_max_offset,
         }
     }
 }
 
 struct VMOpers {
+    typed_port20_read: TypedFunc<(), i32>,
+    typed_port21_read: TypedFunc<(), i32>,
+    typed_portA0_read: TypedFunc<(), i32>,
+    typed_portA1_read: TypedFunc<(), i32>,
+    typed_port20_write: TypedFunc<i32, ()>,
+    typed_port21_write: TypedFunc<i32, ()>,
+    typed_portA0_write: TypedFunc<i32, ()>,
+    typed_portA1_write: TypedFunc<i32, ()>,
+
+    typed_port4D0_read: TypedFunc<(), i32>,
+    typed_port4D1_read: TypedFunc<(), i32>,
+    typed_port4D0_write: TypedFunc<i32, ()>,
+    typed_port4D1_write: TypedFunc<i32, ()>,
+
     typed_read8: TypedFunc<u32, i32>,
     typed_read16: TypedFunc<u32, i32>,
     typed_read32s: TypedFunc<u32, i32>,
+    typed_write8: TypedFunc<(u32, i32), ()>,
     typed_write16: TypedFunc<(u32, i32), ()>,
     typed_write32: TypedFunc<(u32, i32), ()>,
     typed_reset_cpu: TypedFunc<(), ()>,
@@ -194,6 +215,44 @@ struct VMOpers {
 
 impl VMOpers {
     fn new(inst: &Instance, mut store: impl AsContextMut) -> Self {
+        let typed_port20_read = inst
+            .get_typed_func(store.as_context_mut(), "port20_read")
+            .unwrap();
+        let typed_port21_read = inst
+            .get_typed_func(store.as_context_mut(), "port21_read")
+            .unwrap();
+        let typed_portA0_read = inst
+            .get_typed_func(store.as_context_mut(), "portA0_read")
+            .unwrap();
+        let typed_portA1_read = inst
+            .get_typed_func(store.as_context_mut(), "portA1_read")
+            .unwrap();
+        let typed_port20_write = inst
+            .get_typed_func(store.as_context_mut(), "port20_write")
+            .unwrap();
+        let typed_port21_write = inst
+            .get_typed_func(store.as_context_mut(), "port21_write")
+            .unwrap();
+        let typed_portA0_write = inst
+            .get_typed_func(store.as_context_mut(), "portA0_write")
+            .unwrap();
+        let typed_portA1_write = inst
+            .get_typed_func(store.as_context_mut(), "portA1_write")
+            .unwrap();
+
+        let typed_port4D0_read = inst
+            .get_typed_func(store.as_context_mut(), "port4D0_read")
+            .unwrap();
+        let typed_port4D1_read = inst
+            .get_typed_func(store.as_context_mut(), "port4D1_read")
+            .unwrap();
+        let typed_port4D0_write = inst
+            .get_typed_func(store.as_context_mut(), "port4D0_write")
+            .unwrap();
+        let typed_port4D1_write = inst
+            .get_typed_func(store.as_context_mut(), "port4D1_write")
+            .unwrap();
+
         let typed_read8 = inst
             .get_typed_func(store.as_context_mut(), "read8")
             .unwrap();
@@ -211,6 +270,9 @@ impl VMOpers {
             .unwrap();
         let typed_read32s = inst
             .get_typed_func(store.as_context_mut(), "read32s")
+            .unwrap();
+        let typed_write8 = inst
+            .get_typed_func(store.as_context_mut(), "write8")
             .unwrap();
         let typed_write16 = inst
             .get_typed_func(store.as_context_mut(), "write16")
@@ -234,10 +296,23 @@ impl VMOpers {
             .get_typed_func(store.as_context_mut(), "codegen_finalize_finished")
             .unwrap();
         Self {
+            typed_port20_read,
+            typed_port21_read,
+            typed_portA0_read,
+            typed_portA1_read,
+            typed_port20_write,
+            typed_port21_write,
+            typed_portA0_write,
+            typed_portA1_write,
+            typed_port4D0_read,
+            typed_port4D1_read,
+            typed_port4D0_write,
+            typed_port4D1_write,
             typed_read8,
             typed_read16,
             typed_set_tsc,
             typed_read32s,
+            typed_write8,
             typed_write16,
             typed_write32,
             typed_reset_cpu,
@@ -248,6 +323,66 @@ impl VMOpers {
             typed_allocate_memory,
             typed_codegen_finalize_finished,
         }
+    }
+
+    #[inline]
+    fn port20_read(&self, store: impl AsContextMut) -> i32 {
+        self.typed_port20_read.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn port21_read(&self, store: impl AsContextMut) -> i32 {
+        self.typed_port21_read.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn portA0_read(&self, store: impl AsContextMut) -> i32 {
+        self.typed_portA0_read.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn portA1_read(&self, store: impl AsContextMut) -> i32 {
+        self.typed_portA1_read.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn port4D0_read(&self, store: impl AsContextMut) -> i32 {
+        self.typed_port4D0_read.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn port4D1_read(&self, store: impl AsContextMut) -> i32 {
+        self.typed_port4D1_read.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn port20_write(&self, store: impl AsContextMut, val: i32) {
+        self.typed_port20_write.call(store, val).unwrap()
+    }
+
+    #[inline]
+    fn port21_write(&self, store: impl AsContextMut, val: i32) {
+        self.typed_port21_write.call(store, val).unwrap()
+    }
+
+    #[inline]
+    fn portA0_write(&self, store: impl AsContextMut, val: i32) {
+        self.typed_portA0_write.call(store, val).unwrap()
+    }
+
+    #[inline]
+    fn portA1_write(&self, store: impl AsContextMut, val: i32) {
+        self.typed_portA1_write.call(store, val).unwrap()
+    }
+
+    #[inline]
+    fn port4D0_write(&self, store: impl AsContextMut, val: i32) {
+        self.typed_port4D0_write.call(store, val).unwrap()
+    }
+
+    #[inline]
+    fn port4D1_write(&self, store: impl AsContextMut, val: i32) {
+        self.typed_port4D1_write.call(store, val).unwrap()
     }
 
     #[inline]
@@ -263,6 +398,11 @@ impl VMOpers {
     #[inline]
     fn read32s(&self, store: impl AsContextMut, addr: u32) -> i32 {
         self.typed_read32s.call(store, addr).unwrap()
+    }
+
+    #[inline]
+    fn write8(&self, store: impl AsContextMut, addr: u32, val: i32) {
+        self.typed_write8.call(store, (addr, val)).unwrap()
     }
 
     #[inline]
@@ -458,6 +598,78 @@ impl CPU {
             .unwrap();
         let dev = Dev::Emulator(self.store.clone());
         mfn(&dev, addr, value)
+    }
+
+    #[inline]
+    fn port20_read(&self) -> i32 {
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.port20_read(store))
+    }
+
+    #[inline]
+    fn port21_read(&self) -> i32 {
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.port21_read(store))
+    }
+
+    #[inline]
+    fn portA0_read(&self) -> i32 {
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.portA0_read(store))
+    }
+
+    #[inline]
+    fn portA1_read(&self) -> i32 {
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.portA1_read(store))
+    }
+
+    #[inline]
+    fn port4D0_read(&self) -> i32 {
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.port4D0_read(store))
+    }
+
+    #[inline]
+    fn port4D1_read(&self) -> i32 {
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.port4D1_read(store))
+    }
+
+    #[inline]
+    fn port20_write(&self, val: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.port20_write(store, val));
+    }
+
+    #[inline]
+    fn port21_write(&self, val: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.port21_write(store, val));
+    }
+
+    #[inline]
+    fn portA0_write(&self, val: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.portA0_write(store, val));
+    }
+
+    #[inline]
+    fn portA1_write(&self, val: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.portA1_write(store, val));
+    }
+
+    #[inline]
+    fn port4D0_write(&self, val: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.port4D0_write(store, val));
+    }
+
+    #[inline]
+    fn port4D1_write(&self, val: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.port4D1_write(store, val));
     }
 
     #[inline]
@@ -683,7 +895,103 @@ impl CPU {
         self.uart0.init();
         self.ide.as_mut().map(|ide| ide.init());
         self.load_kernel();
+
         
+        self.io.register_read8(
+            0x20,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32| {
+                dev.cpu_mut().map_or(0, |cpu| cpu.port20_read()) as _
+            },
+        );
+
+        self.io.register_read8(
+            0x21,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32| {
+                dev.cpu_mut().map_or(0, |cpu| cpu.port21_read()) as _
+            },
+        );
+
+        self.io.register_read8(
+            0xA0,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32| {
+                dev.cpu_mut().map_or(0, |cpu| cpu.portA0_read()) as _
+            },
+        );
+
+        self.io.register_read8(
+            0xA1,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32| {
+                dev.cpu_mut().map_or(0, |cpu| cpu.portA1_read()) as _
+            },
+        );
+
+        self.io.register_read8(
+            0x4D0,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32| {
+                dev.cpu_mut().map_or(0, |cpu| cpu.port4D0_read()) as _
+            },
+        );
+
+        self.io.register_read8(
+            0x4D1,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32| {
+                dev.cpu_mut().map_or(0, |cpu| cpu.port4D1_read()) as _
+            },
+        );
+
+        self.io.register_write8(
+            0x20,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32, val: u8| {
+                dev.cpu_mut().map(|cpu| cpu.port20_write(val as _));
+            },
+        );
+
+        self.io.register_write8(
+            0x21,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32, val: u8| {
+                dev.cpu_mut().map(|cpu| cpu.port21_write(val as _));
+            },
+        );
+
+        self.io.register_write8(
+            0xA0,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32, val: u8| {
+                dev.cpu_mut().map(|cpu| cpu.portA0_write(val as _));
+            },
+        );
+
+        self.io.register_write8(
+            0xA1,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32, val: u8| {
+                dev.cpu_mut().map(|cpu| cpu.portA1_write(val as _));
+            },
+        );
+
+        self.io.register_write8(
+            0x4D0,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32, val: u8| {
+                dev.cpu_mut().map(|cpu| cpu.port4D0_write(val as _));
+            },
+        );
+
+        self.io.register_write8(
+            0x4D1,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32, val: u8| {
+                dev.cpu_mut().map(|cpu| cpu.port4D1_write(val as _));
+            },
+        );
 
         self.io.register_read8(
             0x511,
@@ -796,7 +1104,7 @@ impl CPU {
         self.pit.init();
         self.dma.init();
         self.vga.init();
-        self.ne2k.init();
+        // self.ne2k.init();
         self.ps2.init();
         self.fdc.init();
         self.cdrom_init();
@@ -847,8 +1155,7 @@ impl CPU {
     }
 
     #[inline]
-    fn run_hardware_timers(&mut self, now: f64) -> f64 {
-        //TODO:
+    pub fn run_hardware_timers(&mut self, acpi_enabled: i32, now: f64) -> f64 {
         let pit_time = self.pit.timer(now, false);
         let rtc_time = self.rtc.timer(now) as f64;
         100f64.min(rtc_time).min(pit_time)
@@ -863,7 +1170,7 @@ impl CPU {
     }
 
     pub fn fill_cmos(&mut self) {
-        let boot_order: u32 = 0x213;
+        let boot_order: u32 = 0x123;
         // Used by seabios to determine the boot order
         //   Nibble
         //   1: FloppyPrio

@@ -155,7 +155,13 @@ impl RTC {
                     let rtc_time = rtc.rtc_time;
                     rtc.encode_time((Utc.timestamp_millis_opt(rtc_time).unwrap().year() % 100) as u8)
                 }
-                CMOS_STATUS_A => rtc.cmos_a,
+                CMOS_STATUS_A => {
+                    if dev.microtick() as u64 % 1000 >= 999 {
+                        rtc.cmos_a | 0x80
+                    } else {
+                        rtc.cmos_a
+                    }
+                },
                 CMOS_STATUS_B => rtc.cmos_b,
                 CMOS_STATUS_C => {
                     dev.cpu_mut().map(|cpu| cpu.device_lower_irq(8));
@@ -165,7 +171,7 @@ impl RTC {
                     rtc.cmos_c &= mask;
                     c
                 }
-                CMOS_STATUS_D => 0xFF,
+                CMOS_STATUS_D => 0,
                 CMOS_CENTURY => {
                     let rtc_time = rtc.rtc_time;
                     rtc.encode_time((Utc.timestamp_millis_opt(rtc_time).unwrap().year() % 100) as u8 | 0u8)
@@ -224,7 +230,7 @@ impl RTC {
                 rtc.periodic_interrupt_time = 1000.0 / (32768 >> (rtc.cmos_a & 0xF) - 1) as f64;
                 dbg_log!(
                     LOG::RTC,
-                    "Periodic interrupt, a= 0x{:02}  t={}",
+                    "Periodic interrupt, a={:#02X}  t={}",
                     rtc.cmos_a,
                     rtc.periodic_interrupt_time
                 );
@@ -260,6 +266,10 @@ impl RTC {
                     );
                     rtc.next_interrupt = alarm_date.timestamp_millis();
                 }
+                if rtc.cmos_b & 0x10 > 0 {
+                    dbg_log!(LOG::RTC, "Unimplemented: updated interrupt");
+                }
+                dbg_log!(LOG::RTC, "cmos b={:#02X}", rtc.cmos_b);
             }
             CMOS_RTC_SECONDS_ALARM | CMOS_RTC_MINUTES_ALARM | CMOS_RTC_HOURS_ALARM => {
                 rtc.cmos_write(rtc.cmos_index as _, v);
