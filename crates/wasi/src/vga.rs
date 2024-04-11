@@ -932,7 +932,6 @@ impl VGAScreen {
     }
 
     fn vga_memory_read(&mut self, mut addr: u32) -> u8 {
-        println!("vga_memory_read {addr:X}");
         if self.svga_enabled && self.graphical_mode_is_linear {
             addr -= 0xA0000;
             addr |= self.svga_bank_offset as u32;
@@ -941,9 +940,7 @@ impl VGAScreen {
         }
 
         let memory_space_select = self.miscellaneous_graphics_register >> 2 & 0x3;
-        println!("{memory_space_select}");
         addr -= VGA_HOST_MEMORY_SPACE_START[memory_space_select as usize];
-        println!("addr:{addr}");
         // VGA chip only decodes addresses within the selected memory space.
         if addr >= VGA_HOST_MEMORY_SPACE_SIZE[memory_space_select as usize] as u32 {
             dbg_log!(

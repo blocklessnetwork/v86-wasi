@@ -8,7 +8,7 @@ license = "MIT/Apache-2.0"
 repository = "https://github.com/blocklessnetwork/v86-wasi"
 
 [dependencies]
-wasmtime = "13.0.0"
+wasmtime = "15.0.0"
 lazy_static = "1.4.0"
 chrono = "0.4"
 rand = "0.8"
@@ -20,4 +20,14 @@ crossbeam-channel = "0.5.6"
 tuntap = {workspace = true}
 anyhow = "1.0.70"
 
+[profile.dev]
+lto = true
+opt-level = 2
+panic = "abort"
+overflow-checks = false
 
+[profile.release]
+lto = true
+opt-level = 3
+incremental = false
+panic = "abort"

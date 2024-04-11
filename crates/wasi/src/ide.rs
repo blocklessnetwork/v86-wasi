@@ -1274,7 +1274,6 @@ impl IDEInterface {
             self.error = 0;
             if self.data_pointer >= self.data_length {
                 self.status = 0x50;
-                self.push_irq();
             } else {
                 let sector_count = if self.current_command == 0xC4 || self.current_command == 0x29 {
                     let sector_count = (self.sectors_per_drq as usize).min(

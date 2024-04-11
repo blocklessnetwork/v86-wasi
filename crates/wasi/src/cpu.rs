@@ -1096,11 +1096,9 @@ impl CPU {
                 d.cpu_mut().map(|cpu| cpu.a20_byte = v);
             },
         );
-
+        self.fill_cmos();
         self.rtc.init();
         //TODO device loading
-        self.fill_cmos();
-
         self.pit.init();
         self.dma.init();
         self.vga.init();

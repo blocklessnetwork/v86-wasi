@@ -152,42 +152,43 @@ pub(crate) struct IO {
 }
 
 impl IO {
-    pub fn empty_read8(_: &Dev, p: u32) -> u8 {
+    pub fn empty_read8(_: &Dev, _p: u32) -> u8 {
         if LOG_ALL_IO {
-            dbg_log!(LOG::IO, "empty_read8: {}", p);
+            dbg_log!(LOG::IO, "empty_read8: {_p}");
         }
         0xFF
     }
 
-    pub fn empty_read16(_: &Dev, p: u32) -> u16 {
+    pub fn empty_read16(_: &Dev, _p: u32) -> u16 {
         if LOG_ALL_IO {
-            dbg_log!(LOG::IO, "empty_read16: {}", p);
+            dbg_log!(LOG::IO, "empty_read16: {_p}");
         }
         0xFFFF
     }
 
-    pub fn empty_read32(_: &Dev, p: u32) -> u32 {
+    pub fn empty_read32(_: &Dev, _p: u32) -> u32 {
         if LOG_ALL_IO {
-            dbg_log!(LOG::IO, "empty_read32: {}", p);
+            dbg_log!(LOG::IO, "empty_read32: {_p}");
         }
-        0xFFFF_FFFF
+        -1 as _
     }
 
-    pub fn empty_write8(_: &Dev, p: u32, _: u8) {
+    pub fn empty_write8(_: &Dev, _p: u32, _v: u8) {
         if LOG_ALL_IO {
-            dbg_log!(LOG::IO, "empty_write8: {}", p);
-        }
-    }
-
-    pub fn empty_write16(_: &Dev, p: u32, _: u16) {
-        if LOG_ALL_IO {
-            dbg_log!(LOG::IO, "empty_write16: {}", p);
+            dbg_log!(LOG::IO, "empty_write8: {_p} {_v}");
         }
     }
 
-    pub fn empty_write32(_: &Dev, p: u32, _: u32) {
+    pub fn empty_write16(_: &Dev, _p: u32, _v: u16) {
         if LOG_ALL_IO {
-            dbg_log!(LOG::IO, "empty_write32: {}", p);
+            dbg_log!(LOG::IO, "empty_write16: {_p} {_v}");
+        }
+    }
+
+    
+    pub fn empty_write32(_: &Dev, _p: u32, _v: u32) {
+        if LOG_ALL_IO {
+            dbg_log!(LOG::IO, "empty_write32: {_p} {_v}");
         }
     }
 
@@ -267,8 +268,7 @@ impl IO {
         if iops.read8 as *const () == Self::empty_read8 as *const () || LOG_ALL_IO {
             dbg_log!(
                 LOG::IO,
-                "read8 port  #{:02X} {}",
-                port,
+                "read8 port  #{port:#02X} {}",
                 self.get_port_description(port)
             );
         }
@@ -281,8 +281,7 @@ impl IO {
         if iops.read16 as *const () == Self::empty_read16 as *const () || LOG_ALL_IO {
             dbg_log!(
                 LOG::IO,
-                "read16 port  #{:02X} {}",
-                port,
+                "read16 port  #{port:#02X} {}",
                 self.get_port_description(port)
             );
         }
@@ -295,8 +294,7 @@ impl IO {
         if iops.read32 as *const () == Self::empty_read32 as *const () || LOG_ALL_IO {
             dbg_log!(
                 LOG::IO,
-                "read32 port #{:02X} {}",
-                port,
+                "read32 port #{port:#02X} {}",
                 self.get_port_description(port)
             );
         }
@@ -309,9 +307,7 @@ impl IO {
         if iops.write8 as *const () == Self::empty_write8 as *const () || LOG_ALL_IO {
             dbg_log!(
                 LOG::IO,
-                "write8 port  #{:02X} <- {:#02X} {}",
-                port,
-                data,
+                "write8 port  #{port:#02X} <- {data:#02X} {}",
                 self.get_port_description(port)
             );
         }
@@ -323,9 +319,7 @@ impl IO {
         if iops.write16 as *const () == Self::empty_write16 as *const () || LOG_ALL_IO {
             dbg_log!(
                 LOG::IO,
-                "write16 port  #{:02X} <- {:#02X} {}",
-                port,
-                data,
+                "write16 port  #{port:#02X} <- {data:#02X} {}",
                 self.get_port_description(port)
             );
         }
@@ -337,9 +331,7 @@ impl IO {
         if iops.write32 as *const () == Self::empty_write32 as *const () || LOG_ALL_IO {
             dbg_log!(
                 LOG::IO,
-                "write32 port  #{:02x} <- {:#02X} {}",
-                port,
-                data,
+                "write32 port  #{port:#02x} <- {data:#02X} {}",
                 self.get_port_description(port)
             );
         }

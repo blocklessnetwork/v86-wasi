@@ -172,7 +172,7 @@ fn make_linux_boot_rom(real_mode_segment: u16, heap_end: u16) -> Vec<u8> {
 
     const SIZE: u16 = 0x200;
 
-    let mut data8 = vec![0u8; 0x100];
+    let mut data8 = vec![0u8; 0x200];
     unsafe {
         *(data8.as_mut_ptr() as *mut u16) = 0xAA55;
     }
