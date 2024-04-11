@@ -534,10 +534,8 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, store: &mut Store<Emulat
             "mmap_read16",
             move |mut caller: Caller<'_, Emulator>, addr: i32| -> i32 {
                 let emu = caller.data_mut();
-                let a = emu.cpu_mut()
-                    .map_or(0, |cpu| cpu.mmap_read16(addr as u32) as i32);
-                dbg_log!(LOG::E, "{addr:#X}-------{a:#X}");
-                a
+                emu.cpu_mut()
+                    .map_or(0, |cpu| cpu.mmap_read16(addr as u32) as i32)
             },
         )
         .unwrap();
