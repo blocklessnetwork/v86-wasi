@@ -1,3 +1,4 @@
+
 [workspace]
 resolver = "2"
 members = [
@@ -7,11 +8,16 @@ members = [
     "crates/tuntap",
 ]
 
+
 [workspace.dependencies]
 v86-wasi = {path = "crates/wasi", version = "0.1.0"}
 tuntap = {path = "crates/tuntap", version = "0.1.0"}
 json = "0.12"
 
+[workspace.package]
+version = "0.1.0"
+authors = ["Join.Gong<joinhack@gmail.com>", "Derek Anderson<derek@txlabs.org>"]
+edition = "2021"
 
 [profile.dev]
 #lto = false

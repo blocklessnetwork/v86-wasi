@@ -3,39 +3,28 @@ on:
     types: [created]
   workflow_dispatch:
 
-name: Runtime Release Linux
+name: Runtime Release Win
 jobs:
   blockless_runtime:
     strategy:
       matrix:
         include:
-          - build: ubuntu-20.04
-            os: ubuntu-20.04
+          - build: windows
+            os: windows-latest
             rust: stable
-            runson: ubuntu-20.04
-            target: x86_64-unknown-linux-gnu
+            target: x86_64-pc-windows-msvc
             arch: x86_64
-            cross: false
-          - build: linux
-            os: linux-latest
-            rust: stable
-            runson: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            arch: x86_64
-            cross: false
-          - build: linux_arm64
-            os: linux-latest
-            runson: self-hosted
-            rust: stable
-            target: aarch64-unknown-linux-gnu
-            arch: aarch64
-            cross: true
-    runs-on: ${{ matrix.runson }}
+          # - build: windows
+          #   os: windows-latest
+          #   rust: stable
+          #   target: aarch64-pc-windows-msvc
+          #   arch: aarch64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
       - name: Get release
         id: get_release
-        uses: bruceadams/get-release@v1.3.2
+        uses: bruceadams/get-release@v1.2.3
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - name: Edit Toml
@@ -44,29 +33,13 @@ jobs:
           file: "v86-wasi/Cargo.toml"
           key: "version"
           value: "${{ steps.get_release.outputs.tag_name }}"
-      - name: create Cross.toml
-        run: |
-          echo [target.aarch64-unknown-linux-gnu] > Cross.toml
-          echo "dockerfile = \"./Dockerfile\"" >> Cross.toml
-      - name: create Dockerfile
-        run: |
-          echo "FROM arm64v8/rust" > Dockerfile
-          echo "RUN dpkg --add-architecture arm64 && \\" >> Dockerfile
-          echo "apt-get update && \\" >> Dockerfile
-          echo "apt-get install --assume-yes build-essential" >> Dockerfile
-<<<<<<< HEAD
-          echo "apt-get install --assume-yes makefile" >> Dockerfile
-=======
->>>>>>> 01e223e4ad490af3c3cd25db1beeff5cf3dbbac9
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - name: Build runtime
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: ${{ matrix.cross }}
-          command: build
-          args: --release --all-features --target ${{ matrix.target }}
+          target: ${{ matrix.target }}
+      - run: cargo build  --release --all-features --target ${{ matrix.target }}
+        env:
+          TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: gcc-10-aarch64-linux-gnu
       - name: Remove File
         uses: JesseTG/rm@v1.0.3
         with:

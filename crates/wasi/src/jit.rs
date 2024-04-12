@@ -7,7 +7,7 @@ use crate::{StoreT, ContextTrait};
 pub(crate) enum JitMsg {
     Quit,
     JitParams(i32, i32, i32, i32, i32),
-    JitResult(i32, i32, i32, Val)
+    JitResult(i32, i32, i32, Ref)
 }
 
 pub(crate) struct JitWorker {
@@ -42,7 +42,7 @@ impl JitWorker {
                 let inst = Instance::new(store.as_context_mut(), &module, &externs).unwrap();
                 let func = inst.get_func(store.as_context_mut(), "f");
                 assert!(func.is_some());
-                let func = Val::FuncRef(func);
+                let func = Ref::Func(func);
                 let rs = JitMsg::JitResult(index, start, state_flags, func);
                 self.sender.send(rs).unwrap();
             });

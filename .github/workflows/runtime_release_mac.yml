@@ -3,34 +3,23 @@ on:
     types: [created]
   workflow_dispatch:
 
-name: Runtime Release Linux
+name: Runtime Release Mac
 jobs:
   blockless_runtime:
     strategy:
       matrix:
         include:
-          - build: ubuntu-20.04
-            os: ubuntu-20.04
+          - build: macos
+            os: macos-latest
             rust: stable
-            runson: ubuntu-20.04
-            target: x86_64-unknown-linux-gnu
+            target: x86_64-apple-darwin
             arch: x86_64
-            cross: false
-          - build: linux
-            os: linux-latest
+          - build: macos_arm64
+            os: macos-latest
             rust: stable
-            runson: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            arch: x86_64
-            cross: false
-          - build: linux_arm64
-            os: linux-latest
-            runson: self-hosted
-            rust: stable
-            target: aarch64-unknown-linux-gnu
+            target: aarch64-apple-darwin
             arch: aarch64
-            cross: true
-    runs-on: ${{ matrix.runson }}
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
       - name: Get release
@@ -44,27 +33,14 @@ jobs:
           file: "v86-wasi/Cargo.toml"
           key: "version"
           value: "${{ steps.get_release.outputs.tag_name }}"
-      - name: create Cross.toml
-        run: |
-          echo [target.aarch64-unknown-linux-gnu] > Cross.toml
-          echo "dockerfile = \"./Dockerfile\"" >> Cross.toml
-      - name: create Dockerfile
-        run: |
-          echo "FROM arm64v8/rust" > Dockerfile
-          echo "RUN dpkg --add-architecture arm64 && \\" >> Dockerfile
-          echo "apt-get update && \\" >> Dockerfile
-          echo "apt-get install --assume-yes build-essential" >> Dockerfile
-<<<<<<< HEAD
-          echo "apt-get install --assume-yes makefile" >> Dockerfile
-=======
->>>>>>> 01e223e4ad490af3c3cd25db1beeff5cf3dbbac9
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+      - run: rustup target add aarch64-apple-darwin
       - name: Build runtime
         uses: actions-rs/cargo@v1
         with:
-          use-cross: ${{ matrix.cross }}
+          use-cross: false
           command: build
           args: --release --all-features --target ${{ matrix.target }}
       - name: Remove File
