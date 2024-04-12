@@ -11,3 +11,16 @@ members = [
 v86-wasi = {path = "crates/wasi", version = "0.1.0"}
 tuntap = {path = "crates/tuntap", version = "0.1.0"}
 json = "0.12"
+
+
+[profile.dev]
+#lto = false
+#opt-level = 2
+panic = "abort"
+overflow-checks = false
+
+[profile.release]
+lto = true
+opt-level = 3
+incremental = false
+panic = "abort"
