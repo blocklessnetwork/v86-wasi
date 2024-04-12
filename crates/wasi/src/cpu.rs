@@ -1010,10 +1010,22 @@ impl CPU {
             },
         );
 
+        //------Avoid logging noisey ports
         self.io.register_write8(
             0x80,
             Dev::Emulator(self.store.clone()),
             |dev: &Dev, _: u32, value: u8| {},
+        );
+
+        self.io.register_write8(
+            0xE9,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32, value: u8| {},
+        );
+        self.io.register_read8(
+            0x80, 
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32| {0xFF},
         );
 
         self.io.register_write(

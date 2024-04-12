@@ -3,6 +3,7 @@ use crate::{bus::BusData, log::LOG, ContextTrait, Dev, StoreT, IO};
 const UART_IER_MSI: u8 = 0x08; /* Modem Status Changed int. */
 const UART_IIR_THRI: u8 = 0x02; /* Transmitter holding register empty */
 const UART_IER_THRI: u8 = 0x02; /* Enable Transmitter holding register int. */
+const UART_IIR_RDI: u8 = 0x04; /* Receiver data interrupt */
 const DLAB: u8 = 0x80;
 const UART_IIR_CTI: u8 = 0x0c; /* Character timeout */
 const UART_IER_RDI: u8 = 0x01; /* Enable receiver data interrupt */
@@ -21,7 +22,6 @@ pub(crate) struct UART {
     com: u8,
     ints: u8,
     port: u32,
-    current_line: Vec<u8>,
     input: Vec<u8>,
     baud_rate: u16,
     line_control: u8,
@@ -29,6 +29,7 @@ pub(crate) struct UART {
     modem_control: u8,
     modem_status: u8,
     scratch_register: u8,
+    current_line: Vec<u8>,
 }
 
 impl UART {
@@ -105,6 +106,10 @@ impl UART {
                             uart.baud_rate = uart.baud_rate & 0xFF | (out_byte as u16) << 8;
                             dbg_log!(LOG::SERIAL, "baud rate: {:#X}", uart.baud_rate);
                         } else {
+                            if uart.ier & UART_IIR_THRI == 0 && out_byte & UART_IIR_THRI > 0 {
+                                // re-throw THRI if it was masked
+                                uart.throw_interrupt(UART_IIR_THRI);
+                            }
                             uart.ier = out_byte & 0xF;
                             dbg_log!(LOG::SERIAL, "interrupt enable: {:#X}", out_byte);
                             uart.check_interrupt();
@@ -121,23 +126,18 @@ impl UART {
                         if uart.line_control & DLAB > 0 {
                             (uart.baud_rate & 0xFF) as u8
                         } else {
-                            let data = match uart.input.pop() {
-                                None => {
-                                    dbg_log!(LOG::SERIAL, "Read input empty");
-                                    0xFF
-                                }
-                                Some(d) => {
-                                    if d == 0xFF {
-                                        dbg_log!(LOG::SERIAL, "Read input empty");
-                                    } else {
-                                        dbg_log!(LOG::SERIAL, "Read input: {:#X}", d);
-                                    }
-                                    d
-                                }
+                            let data = if  uart.input.len() == 0 {
+                                dbg_log!(LOG::SERIAL, "Read input empty");
+                                0
+                            } else {
+                                let d = uart.input.pop().unwrap();
+                                dbg_log!(LOG::SERIAL, "Read input: {d:#X}");
+                                d
                             };
                             if uart.input.len() == 0 {
                                 uart.lsr &= !UART_LSR_DATA_READY;
                                 uart.clear_interrupt(UART_IIR_CTI);
+                                uart.clear_interrupt(UART_IIR_RDI);
                             }
                             return data;
                         }
@@ -166,7 +166,7 @@ impl UART {
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32| {
                     dev.uart0_mut().map_or(0, |uart| {
-                        let ret = uart.iir & 0xF | 0xC0;
+                        let mut ret = uart.iir & 0xF;
                         dbg_log!(
                             LOG::SERIAL,
                             "read interrupt identification: {:#X}",
@@ -175,6 +175,10 @@ impl UART {
 
                         if uart.iir == UART_IIR_THRI {
                             uart.clear_interrupt(UART_IIR_THRI);
+                        }
+
+                        if uart.fifo_control & 1 > 0 {
+                            ret |= 0xC0;   
                         }
                         return ret;
                     })
@@ -278,7 +282,9 @@ impl UART {
                             "read modem status: {:#X}",
                             uart.modem_status
                         );
-                        return uart.lsr;
+                        // Clear delta bits
+                        uart.modem_status |= 0xF0;
+                        return uart.modem_status;
                     })
                 },
             );
@@ -287,9 +293,10 @@ impl UART {
             io.register_write8(
                 self.port | 6,
                 Dev::Emulator(self.store.clone()),
-                |dev: &Dev, _addr: u32, _out_byte: u8| {
-                    dev.uart0_mut().map(|_uart| {
-                        dbg_log!(LOG::SERIAL, "Unkown register write (base+6)");
+                |dev: &Dev, _addr: u32, out_byte: u8| {
+                    dev.uart0_mut().map(|uart| {
+                        dbg_log!(LOG::SERIAL, "write modem status: {out_byte:#X}");
+                        uart.set_modem_status(out_byte);
                     });
                 },
             );
@@ -323,28 +330,47 @@ impl UART {
         self.check_interrupt();
     }
 
+    #[inline(always)]
+    fn raise_irq(&mut self) {
+        self.store.cpu_mut().map(|cpu| {
+            cpu.device_raise_irq(self.irq);
+        });
+    }
+
+    #[inline(always)]
+    fn lower_irq(&mut self) {
+        self.store.cpu_mut().map(|cpu| {
+            cpu.device_lower_irq(self.irq);
+        });
+    }
+
     fn check_interrupt(&mut self) {
         if (self.ints as u16 & ((1 as u16) << UART_IIR_CTI)) > 0 && (self.ier & UART_IER_RDI) > 0 {
             self.iir = UART_IIR_CTI;
-            self.store.cpu_mut().map(|cpu| {
-                cpu.device_raise_irq(self.irq);
-            });
+            self.raise_irq();
+        } else if (self.ints & (1 << UART_IIR_RDI)) > 0 && (self.ier & UART_IIR_RDI) > 0 {
+            self.iir = UART_IIR_RDI;
+            self.raise_irq();
         } else if (self.ints & (1 << UART_IIR_THRI)) > 0 && (self.ier & UART_IER_THRI) > 0 {
             self.iir = UART_IIR_THRI;
-            self.store.cpu_mut().map(|cpu| {
-                cpu.device_raise_irq(self.irq);
-            });
+            self.raise_irq();
         } else if (self.ints & (1 << UART_IIR_MSI)) > 0 && (self.ier & UART_IER_MSI) > 0 {
             self.iir = UART_IIR_MSI;
-            self.store.cpu_mut().map(|cpu| {
-                cpu.device_raise_irq(self.irq);
-            });
+            self.raise_irq();
         } else {
             self.iir = UART_IIR_NO_INT;
-            self.store.cpu_mut().map(|cpu| {
-                cpu.device_lower_irq(self.irq);
-            });
+            self.lower_irq();
         }
+    }
+
+    fn set_modem_status(&mut self, status: u8) {
+        dbg_log!(LOG::SERIAL, "modem status: {status:#X}");
+        let prev_delta_bits = self.modem_status | 0xF0;
+        //TODO: need check
+        let mut delta = (self.modem_status^status) >> 4;
+        delta |= prev_delta_bits;
+        self.modem_status = status;
+        self.modem_status |= delta;
     }
 
     #[inline]
@@ -353,7 +379,11 @@ impl UART {
         self.input.push(data);
 
         self.lsr |= UART_LSR_DATA_READY;
-        self.throw_interrupt(UART_IIR_CTI);
+        if self.fifo_control & 1 > 0 {
+            self.throw_interrupt(UART_IIR_CTI);
+        } else {
+            self.throw_interrupt(UART_IIR_RDI);
+        }
     }
 
     #[inline]
