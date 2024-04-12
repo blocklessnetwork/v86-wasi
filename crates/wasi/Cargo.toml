@@ -1,14 +1,16 @@
 [package]
 name = "v86-wasi"
-version = "0.1.0"
-edition = "2021"
-authors = ["Join.Gong<joinhack@gmail.com>", "Derek Anderson<derek@txlabs.org>"]
+version.workspace = true
+authors.workspace = true
+categories = ["x86", "emulator"]
+readme = "README.md"
+edition.workspace = true
 description = "This crate is the v86 emulator with the wasi."
 license = "MIT/Apache-2.0"
 repository = "https://github.com/blocklessnetwork/v86-wasi"
 
 [dependencies]
-wasmtime = "13.0.0"
+wasmtime = "19.0.0"
 lazy_static = "1.4.0"
 chrono = "0.4"
 rand = "0.8"

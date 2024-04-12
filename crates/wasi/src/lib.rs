@@ -672,7 +672,7 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, store: &mut Store<Emulat
             "env",
             "jit_clear_func",
             move |mut caller: Caller<'_, Emulator>, index: u32| {
-                let func = Val::FuncRef(None);
+                let func = Ref::Func(None);
                 let emu: &'static Emulator = unsafe {
                     std::mem::transmute(caller.data())
                 };
@@ -687,7 +687,7 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, store: &mut Store<Emulat
             "env",
             "jit_clear_all_funcs",
             move |mut caller: Caller<'_, Emulator>| {
-                let func = Val::FuncRef(None);
+                let func = Ref::Func(None);
                 let emu: &'static Emulator = unsafe {
                     std::mem::transmute(caller.data())
                 };
