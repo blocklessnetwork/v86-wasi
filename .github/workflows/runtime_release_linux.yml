@@ -54,10 +54,7 @@ jobs:
           echo "RUN dpkg --add-architecture arm64 && \\" >> Dockerfile
           echo "apt-get update && \\" >> Dockerfile
           echo "apt-get install --assume-yes build-essential" >> Dockerfile
-<<<<<<< HEAD
           echo "apt-get install --assume-yes makefile" >> Dockerfile
-=======
->>>>>>> 01e223e4ad490af3c3cd25db1beeff5cf3dbbac9
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
