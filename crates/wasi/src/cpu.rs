@@ -209,6 +209,7 @@ struct VMOpers {
     typed_allocate_memory: TypedFunc<u32, u32>,
     typed_set_tsc: TypedFunc<(u32, u32), ()>,
     typed_pic_set_irq: TypedFunc<(u32), ()>,
+    typed_pic_clear_irq: TypedFunc<(u32), ()>,
     typed_rust_init: TypedFunc<(), ()>,
     typed_codegen_finalize_finished: TypedFunc<(i32, i32, i32), ()>,
 }
@@ -262,8 +263,11 @@ impl VMOpers {
         let typed_main_loop = inst
             .get_typed_func(store.as_context_mut(), "main_loop")
             .unwrap();
-        let typed_pic_set_irq = inst
+        let typed_pic_clear_irq = inst
             .get_typed_func(store.as_context_mut(), "pic_set_irq")
+            .unwrap();
+        let typed_pic_set_irq = inst
+            .get_typed_func(store.as_context_mut(), "pic_clear_irq")
             .unwrap();
         let typed_read16 = inst
             .get_typed_func(store.as_context_mut(), "read16")
@@ -320,6 +324,7 @@ impl VMOpers {
             typed_rust_init,
             typed_handle_irqs,
             typed_pic_set_irq,
+            typed_pic_clear_irq,
             typed_allocate_memory,
             typed_codegen_finalize_finished,
         }
@@ -448,6 +453,11 @@ impl VMOpers {
     #[inline]
     fn pic_set_irq(&self, store: impl AsContextMut, addr: u32) {
         self.typed_pic_set_irq.call(store, addr).unwrap()
+    }
+
+    #[inline]
+    fn pic_clear_irq(&self, store: impl AsContextMut, addr: u32) {
+        self.typed_pic_clear_irq.call(store, addr).unwrap()
     }
 }
 
@@ -1251,7 +1261,7 @@ impl CPU {
 
     pub fn device_lower_irq(&mut self, i: u8) {
         self.store_mut().map(|store|
-            self.vm_opers.pic_set_irq(store, i as _)
+            self.vm_opers.pic_clear_irq(store, i as _)
         );
     }
 

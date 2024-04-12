@@ -604,6 +604,7 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, store: &mut Store<Emulat
             "cpu_event_halt",
             move |mut _caller: Caller<'_, Emulator>| {
                 //TODO
+                println!("cpu_event_halt");
             },
         )
         .unwrap();
