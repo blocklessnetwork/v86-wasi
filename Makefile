@@ -19,7 +19,9 @@ endif
 
 WASM_OPT ?= false
 
-default: target/v86-debug.wasm
+default: build release
+
+debug: target/v86-debug.wasm 
 
 release: target/v86.wasm
 
@@ -102,86 +104,26 @@ target/zstddeclib.o: lib/zstd/zstddeclib.c
 	    lib/zstd/zstddeclib.c
 
 run_debug:
-	cargo run -p v86-wasi
+	cargo run -p v86-wasi  boot.json
+
+run:
+	cargo run --release -p v86-wasi  boot.json
+
+build:
+	cargo build --release -p v86-wasi
+
+build_debug:
+	cargo build  -p v86-wasi
 
 clean:
-	-rm target/libv86.js
-	-rm target/libv86-debug.js
-	-rm target/v86_all.js
 	-rm target/v86.wasm
 	-rm target/v86-debug.wasm
 	-rm $(INSTRUCTION_TABLES)
-	-rm target/*.map
-	-rm target/*.wast
 	-rm target/*.o
-	$(MAKE) -C $(NASM_TEST_DIR) clean
+	cargo clean
 
 
-tests: all-debug target/integration-test-fs/fs.json
-	./tests/full/run.js
 
-tests-release: all target/integration-test-fs/fs.json
-	TEST_RELEASE_BUILD=1 ./tests/full/run.js
-
-nasmtests: all-debug
-	$(MAKE) -C $(NASM_TEST_DIR) all
-	$(NASM_TEST_DIR)/gen_fixtures.js
-	$(NASM_TEST_DIR)/run.js
-
-nasmtests-force-jit: all-debug
-	$(MAKE) -C $(NASM_TEST_DIR) all
-	$(NASM_TEST_DIR)/gen_fixtures.js
-	$(NASM_TEST_DIR)/run.js --force-jit
-
-jitpagingtests: all-debug
-	$(MAKE) -C tests/jit-paging test-jit
-	./tests/jit-paging/run.js
-
-qemutests: all-debug
-	$(MAKE) -C tests/qemu test-i386
-	./tests/qemu/run.js > target/qemu-test-result
-	./tests/qemu/run-qemu.js > target/qemu-test-reference
-	diff target/qemu-test-result target/qemu-test-reference
-
-qemutests-release: all
-	$(MAKE) -C tests/qemu test-i386
-	TEST_RELEASE_BUILD=1 time ./tests/qemu/run.js > target/qemu-test-result
-	./tests/qemu/run-qemu.js > target/qemu-test-reference
-	diff target/qemu-test-result target/qemu-test-reference
-
-kvm-unit-test: all-debug
-	(cd tests/kvm-unit-tests && ./configure && make x86/realmode.flat)
-	tests/kvm-unit-tests/run.js tests/kvm-unit-tests/x86/realmode.flat
-
-kvm-unit-test-release: all
-	(cd tests/kvm-unit-tests && ./configure && make x86/realmode.flat)
-	TEST_RELEASE_BUILD=1 tests/kvm-unit-tests/run.js tests/kvm-unit-tests/x86/realmode.flat
-
-expect-tests: all-debug target/libwabt.js
-	make -C tests/expect/tests
-	./tests/expect/run.js
-
-devices-test: all-debug
-	./tests/devices/virtio_9p.js
-
-rust-test: $(RUST_FILES)
-	env RUSTFLAGS="-D warnings" RUST_BACKTRACE=full RUST_TEST_THREADS=1 cargo test -- --nocapture
-	./tests/rust/verify-wasmgen-dummy-output.js
-
-rust-test-intensive:
-	QUICKCHECK_TESTS=100000000 make rust-test
-
-api-tests: all-debug
-	./tests/api/clean-shutdown.js
-	./tests/api/state.js
-	./tests/api/reset.js
-
-all-tests: jshint kvm-unit-test qemutests qemutests-release jitpagingtests api-tests nasmtests nasmtests-force-jit tests expect-tests
-	# Skipping:
-	# - devices-test (hangs)
-
-jshint:
-	jshint --config=./.jshint.json src tests gen lib
 
 rustfmt: $(RUST_FILES)
 	cargo fmt --all -- --check
