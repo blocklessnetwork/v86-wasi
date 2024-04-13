@@ -350,7 +350,7 @@ impl UART {
         if (self.ints as u16 & ((1 as u16) << UART_IIR_CTI)) > 0 && (self.ier & UART_IER_RDI) > 0 {
             self.iir = UART_IIR_CTI;
             self.raise_irq();
-        } else if (self.ints & (1 << UART_IIR_RDI)) > 0 && (self.ier & UART_IIR_RDI) > 0 {
+        } else if (self.ints & (1 << UART_IIR_RDI)) > 0 && (self.ier & UART_IER_RDI) > 0 {
             self.iir = UART_IIR_RDI;
             self.raise_irq();
         } else if (self.ints & (1 << UART_IIR_THRI)) > 0 && (self.ier & UART_IER_THRI) > 0 {

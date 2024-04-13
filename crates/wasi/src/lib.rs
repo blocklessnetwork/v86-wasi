@@ -414,8 +414,8 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, store: &mut Store<Emulat
         .func_wrap(
             "env",
             "cpu_exception_hook",
-            move |mut _caller: Caller<'_, Emulator>, i: i32| -> i32 {
-                panic!("env cpu_exception_hook call. {i}");
+            move |mut _caller: Caller<'_, Emulator>, _i: i32| -> i32 {
+                0
             },
         )
         .unwrap();
@@ -436,7 +436,7 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, store: &mut Store<Emulat
             "env",
             "dbg_trace_from_wasm",
             move |mut _caller: Caller<'_, Emulator>| {
-                panic!("env dbg_trace_from_wasm call.");
+                dbg_log!(LOG::CPU, "dbg_trace_from_wasm");
             },
         )
         .unwrap();
