@@ -1124,7 +1124,7 @@ impl CPU {
         self.pit.init();
         self.dma.init();
         self.vga.init();
-        // self.ne2k.init();
+        self.ne2k.init();
         self.ps2.init();
         self.fdc.init();
         self.cdrom_init();

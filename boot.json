@@ -8,7 +8,7 @@
     "cmdline": ["tsc=reliable mitigations=off random.trust_cpu=on"],
     "logger": {
         "log_file": "debug.log",
-        "log_module": ["E", "BIOS", "PCI", "IO", "RTC", "CPU", "PS2"]
+        "log_module": ["E", "BIOS", "PCI", "IO", "RTC", "CPU", "PS2", "NET"]
     },
     "tun": {
         "address": "192.168.0.1",

@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::{bus::BusData, log::LOG, ContextTrait, Dev, StoreT, IO};
 
 const UART_IER_MSI: u8 = 0x08; /* Modem Status Changed int. */
@@ -22,7 +24,7 @@ pub(crate) struct UART {
     com: u8,
     ints: u8,
     port: u32,
-    input: Vec<u8>,
+    input: VecDeque<u8>,
     baud_rate: u16,
     line_control: u8,
     fifo_control: u8,
@@ -58,7 +60,7 @@ impl UART {
             modem_status: 0,
             modem_control: 0,
             scratch_register: 0,
-            input: Vec::with_capacity(4086),
+            input: VecDeque::with_capacity(4086),
             current_line: Vec::new(),
         }
     }
@@ -130,7 +132,7 @@ impl UART {
                                 dbg_log!(LOG::SERIAL, "Read input empty");
                                 0
                             } else {
-                                let d = uart.input.pop().unwrap();
+                                let d = uart.input.pop_front().unwrap();
                                 dbg_log!(LOG::SERIAL, "Read input: {d:#X}");
                                 d
                             };
@@ -376,7 +378,7 @@ impl UART {
     #[inline]
     fn data_received(&mut self, data: u8) {
         dbg_log!(LOG::SERIAL, "input: {:#X}", data);
-        self.input.push(data);
+        self.input.push_back(data);
 
         self.lsr |= UART_LSR_DATA_READY;
         if self.fifo_control & 1 > 0 {
