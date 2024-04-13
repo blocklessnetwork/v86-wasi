@@ -18,7 +18,6 @@ mod dma;
 
 mod jit;
 mod mem;
-mod pic;
 mod pci;
 mod ide;
 mod pit;
@@ -42,7 +41,6 @@ use io::IO;
 use bus::BUS;
 use dma::DMA;
 use pci::PCI;
-use pic::PIC;
 use pit::PIT;
 use ps2::PS2;
 use rtc::RTC;
@@ -122,9 +120,6 @@ trait ContextTrait {
     fn rtc_mut(&self) -> Option<&mut RTC>;
     fn io_mut(&self) -> Option<&mut IO>;
     fn dma_mut(&self) -> Option<&mut DMA>;
-
-    fn pic_mut(&self) -> Option<&mut PIC>;
-    fn pic(&self) -> Option<&PIC>;
 
     fn io(&self) -> Option<&IO>;
     fn bus_mut(&self) -> Option<&mut BUS>;
@@ -222,16 +217,6 @@ impl ContextTrait for StoreT {
     #[inline]
     fn dma_mut(&self) -> Option<&mut DMA> {
         self.emulator_mut().dma_mut()
-    }
-
-    #[inline]
-    fn pic_mut(&self) -> Option<&mut PIC> {
-        self.emulator_mut().pic_mut()
-    }
-
-    #[inline]
-    fn pic(&self) -> Option<&PIC> {
-        self.emulator_mut().pic()
     }
 
     #[inline]
@@ -417,12 +402,13 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, store: &mut Store<Emulat
         .unwrap();
 
     linker
-        .func_wrap("env", "hlt_op", move |mut caller: Caller<'_, Emulator>| {
-            let emu = caller.data_mut();
-            emu.cpu_mut().map(|cpu| {
-                cpu.hlt_op();
-            });
-        })
+        .func_wrap(
+            "env",
+            "cpu_event_halt",
+            move |mut _caller: Caller<'_, Emulator>| {
+                println!("cpu_event_halt");
+            },
+        )
         .unwrap();
     linker
         .func_wrap(
@@ -471,18 +457,6 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, store: &mut Store<Emulat
             "dbg_trace_from_wasm",
             move |mut _caller: Caller<'_, Emulator>| {
                 panic!("env dbg_trace_from_wasm call.");
-            },
-        )
-        .unwrap();
-
-    linker
-        .func_wrap(
-            "env",
-            "pic_acknowledge",
-            move |mut caller: Caller<'_, Emulator>| {
-                caller.data_mut().cpu_mut().map(|cpu| {
-                    cpu.pic_acknowledge();
-                });
             },
         )
         .unwrap();

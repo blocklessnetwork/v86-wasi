@@ -21,7 +21,6 @@ use crate::{
     kernel::load_kernel,
     log::LOG,
     pci::PCI,
-    pic::PIC,
     pit::PIT,
     ps2::PS2,
     rtc::RTC,
@@ -472,7 +471,6 @@ pub struct CPU {
     option_roms: Vec<OptionRom>,
     pub(crate) io: IO,
     pub(crate) dma: DMA,
-    pub(crate) pic: PIC,
     pub(crate) pit: PIT,
     pub(crate) pci: PCI,
     pub(crate) ps2: PS2,
@@ -531,7 +529,6 @@ impl CPU {
             option_roms: Vec::new(),
             iomap: IOMap::new(memory),
             io: IO::new(store.clone()),
-            pic: PIC::new(store.clone()),
             pci: PCI::new(store.clone()),
             dma: DMA::new(store.clone()),
             fw_value: Rc::new(Vec::new()),
@@ -904,7 +901,6 @@ impl CPU {
         self.debug.init();
         self.init_io();
         self.pci.init();
-        self.pic.init();
         
         self.reset_cpu();
         self.load_bios();
@@ -1152,12 +1148,6 @@ impl CPU {
         self.main_loop()
     }
 
-    pub fn handle_irqs(&mut self) {
-        if self.has_interrupt() {
-            self.pic_acknowledge();
-        }
-    }
-
     #[inline]
     pub fn main_loop(&mut self) -> f64 {
         self.store_mut()
@@ -1165,11 +1155,6 @@ impl CPU {
                 self.vm_opers.main_loop(store)
             })
             .unwrap()
-    }
-
-    #[inline]
-    pub fn pic_acknowledge(&mut self) {
-        self.pic.acknowledge_irq();
     }
 
     #[inline]
@@ -1185,29 +1170,6 @@ impl CPU {
     #[inline]
     fn microtick(&self) -> f64 {
         self.emulator_mut().map_or(0f64, |e| e.microtick())
-    }
-
-    #[inline]
-    pub fn hlt_op(&mut self) {
-        if !self.has_interrupt() {
-            self.store.bus_mut().map(|bus| {
-                bus.send("cpu-event-halt", crate::bus::BusData::None);
-            });
-        }
-        self.store_mut()
-            .map(|store| self.iomap.in_hlt_io.write(store, 0, 1));
-        self.hlt_loop();
-    }
-
-    #[inline]
-    fn hlt_loop(&mut self) -> f64 {
-        if self.has_interrupt() {
-            let s = self.run_hardware_timers(self.microtick());
-            self.handle_irqs();
-            s
-        } else {
-            100f64
-        }
     }
 
     #[inline]

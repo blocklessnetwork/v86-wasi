@@ -2,7 +2,7 @@
 use std::rc::Rc;
 
 use crate::{
-    bus::BUS, debug::Debug, dma::DMA, floppy::FloppyController, io::IO, pci::PCI, pic::PIC,
+    bus::BUS, debug::Debug, dma::DMA, floppy::FloppyController, io::IO, pci::PCI, 
     pit::PIT, ps2::PS2, rtc::RTC, uart::UART, vga::VGAScreen, ContextTrait,
     Emulator, StoreT, CPU, ne2k::Ne2k, ide::IDEDevice,
 };
@@ -79,22 +79,6 @@ impl Dev {
     pub(crate) fn dma_mut(&self) -> Option<&mut DMA> {
         match *self {
             Dev::Emulator(ref e) => e.dma_mut(),
-            _ => None,
-        }
-    }
-
-    #[inline]
-    pub(crate) fn pic_mut(&self) -> Option<&mut PIC> {
-        match *self {
-            Dev::Emulator(ref e) => e.pic_mut(),
-            _ => None,
-        }
-    }
-
-    #[inline]
-    pub(crate) fn pic(&self) -> Option<&PIC> {
-        match *self {
-            Dev::Emulator(ref e) => e.pic(),
             _ => None,
         }
     }

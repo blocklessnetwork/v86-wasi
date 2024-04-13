@@ -2236,7 +2236,19 @@ pub unsafe fn instr_F4() {
         return;
     }
 
-    hlt_op();
+    *in_hlt = true;
+
+    // Try an hlt loop right now: This will run timer interrupts, and if one is
+    // due it will immediately call call_interrupt_vector and continue
+    // execution without an unnecessary cycle through do_run
+    if *flags & FLAG_INTERRUPT != 0 {
+        run_hardware_timers(*acpi_enabled, microtick());
+        handle_irqs();
+    }
+    else {
+        // execution can never resume (until NMIs are supported)
+        cpu_event_halt();
+    }
 }
 #[no_mangle]
 pub unsafe fn instr_F5() {

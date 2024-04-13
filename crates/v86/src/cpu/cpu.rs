@@ -2,9 +2,10 @@
 
 extern "C" {
     fn cpu_exception_hook(interrupt: i32) -> bool;
-    fn microtick() -> f64;
+    pub fn cpu_event_halt();
+    pub fn microtick() -> f64;
     fn call_indirect1(f: i32, x: u16);
-    fn run_hardware_timers(acpi_enabled: bool, t: f64) -> f64;
+    pub fn run_hardware_timers(acpi_enabled: bool, t: f64) -> f64;
 
     pub fn io_port_read8(port: i32) -> i32;
     pub fn io_port_read16(port: i32) -> i32;
