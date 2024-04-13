@@ -178,6 +178,23 @@ impl IOMap {
 }
 
 struct VMOpers {
+    typed_port20_read: TypedFunc<(), i32>,
+    typed_port21_read: TypedFunc<(), i32>,
+    typed_portA0_read: TypedFunc<(), i32>,
+    typed_portA1_read: TypedFunc<(), i32>,
+    typed_port20_write: TypedFunc<i32, ()>,
+    typed_port21_write: TypedFunc<i32, ()>,
+    typed_portA0_write: TypedFunc<i32, ()>,
+    typed_portA1_write: TypedFunc<i32, ()>,
+
+    typed_port4D0_read: TypedFunc<(), i32>,
+    typed_port4D1_read: TypedFunc<(), i32>,
+    typed_port4D0_write: TypedFunc<i32, ()>,
+    typed_port4D1_write: TypedFunc<i32, ()>,
+    typed_pic_set_irq: TypedFunc<(u32), ()>,
+    typed_pic_clear_irq: TypedFunc<(u32), ()>,
+    typed_main_loop: TypedFunc<(), f64>,
+
     typed_read8: TypedFunc<u32, i32>,
     typed_read16: TypedFunc<u32, i32>,
     typed_read32s: TypedFunc<u32, i32>,
@@ -188,13 +205,59 @@ struct VMOpers {
     typed_allocate_memory: TypedFunc<u32, u32>,
     typed_do_many_cycles_native: TypedFunc<(), ()>,
     typed_set_tsc: TypedFunc<(u32, u32), ()>,
-    typed_pic_call_irq: TypedFunc<i32, ()>,
     typed_rust_init: TypedFunc<(), ()>,
     typed_codegen_finalize_finished: TypedFunc<(i32, i32, i32), ()>,
 }
 
 impl VMOpers {
     fn new(inst: &Instance, mut store: impl AsContextMut) -> Self {
+        let typed_port20_read = inst
+            .get_typed_func(store.as_context_mut(), "port20_read")
+            .unwrap();
+        let typed_port21_read = inst
+            .get_typed_func(store.as_context_mut(), "port21_read")
+            .unwrap();
+        let typed_portA0_read = inst
+            .get_typed_func(store.as_context_mut(), "portA0_read")
+            .unwrap();
+        let typed_portA1_read = inst
+            .get_typed_func(store.as_context_mut(), "portA1_read")
+            .unwrap();
+        let typed_port20_write = inst
+            .get_typed_func(store.as_context_mut(), "port20_write")
+            .unwrap();
+        let typed_port21_write = inst
+            .get_typed_func(store.as_context_mut(), "port21_write")
+            .unwrap();
+        let typed_portA0_write = inst
+            .get_typed_func(store.as_context_mut(), "portA0_write")
+            .unwrap();
+        let typed_portA1_write = inst
+            .get_typed_func(store.as_context_mut(), "portA1_write")
+            .unwrap();
+
+        let typed_port4D0_read = inst
+            .get_typed_func(store.as_context_mut(), "port4D0_read")
+            .unwrap();
+        let typed_port4D1_read = inst
+            .get_typed_func(store.as_context_mut(), "port4D1_read")
+            .unwrap();
+        let typed_port4D0_write = inst
+            .get_typed_func(store.as_context_mut(), "port4D0_write")
+            .unwrap();
+        let typed_port4D1_write = inst
+            .get_typed_func(store.as_context_mut(), "port4D1_write")
+            .unwrap();
+        let typed_main_loop = inst
+            .get_typed_func(store.as_context_mut(), "main_loop")
+            .unwrap();
+        let typed_pic_clear_irq = inst
+            .get_typed_func(store.as_context_mut(), "pic_set_irq")
+            .unwrap();
+        let typed_pic_set_irq = inst
+            .get_typed_func(store.as_context_mut(), "pic_clear_irq")
+            .unwrap();
+
         let typed_read8 = inst
             .get_typed_func(store.as_context_mut(), "read8")
             .unwrap();
@@ -225,9 +288,6 @@ impl VMOpers {
         let typed_set_tsc = inst
             .get_typed_func(store.as_context_mut(), "set_tsc")
             .unwrap();
-        let typed_pic_call_irq = inst
-            .get_typed_func(store.as_context_mut(), "pic_call_irq")
-            .unwrap();
         let typed_rust_init = inst
             .get_typed_func(store.as_context_mut(), "rust_init")
             .unwrap();
@@ -235,6 +295,22 @@ impl VMOpers {
             .get_typed_func(store.as_context_mut(), "codegen_finalize_finished")
             .unwrap();
         Self {
+            typed_port20_read,
+            typed_port21_read,
+            typed_portA0_read,
+            typed_portA1_read,
+            typed_port20_write,
+            typed_port21_write,
+            typed_portA0_write,
+            typed_portA1_write,
+            typed_port4D0_read,
+            typed_port4D1_read,
+            typed_port4D0_write,
+            typed_port4D1_write,
+            typed_pic_set_irq,
+            typed_pic_clear_irq,
+            typed_main_loop,
+
             typed_read8,
             typed_read16,
             typed_set_tsc,
@@ -243,7 +319,6 @@ impl VMOpers {
             typed_write32,
             typed_reset_cpu,
             typed_rust_init,
-            typed_pic_call_irq,
             typed_allocate_memory,
             typed_get_eflags_no_arith,
             typed_do_many_cycles_native,
@@ -297,11 +372,6 @@ impl VMOpers {
     }
 
     #[inline]
-    fn pic_call_irq(&self, store: impl AsContextMut, interrupt_nr: i32) {
-        self.typed_pic_call_irq.call(store, interrupt_nr).unwrap();
-    }
-
-    #[inline]
     fn set_tsc(&self, store: impl AsContextMut, low: u32, hig: u32) {
         self.typed_set_tsc.call(store, (low, hig)).unwrap()
     }
@@ -309,6 +379,81 @@ impl VMOpers {
     #[inline]
     fn rust_init(&self, store: impl AsContextMut) {
         self.typed_rust_init.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn pic_set_irq(&self, store: impl AsContextMut, addr: u32) {
+        self.typed_pic_set_irq.call(store, addr).unwrap()
+    }
+
+    #[inline]
+    fn pic_clear_irq(&self, store: impl AsContextMut, addr: u32) {
+        self.typed_pic_clear_irq.call(store, addr).unwrap()
+    }
+
+    #[inline]
+    fn port20_read(&self, store: impl AsContextMut) -> i32 {
+        self.typed_port20_read.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn port21_read(&self, store: impl AsContextMut) -> i32 {
+        self.typed_port21_read.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn portA0_read(&self, store: impl AsContextMut) -> i32 {
+        self.typed_portA0_read.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn portA1_read(&self, store: impl AsContextMut) -> i32 {
+        self.typed_portA1_read.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn port4D0_read(&self, store: impl AsContextMut) -> i32 {
+        self.typed_port4D0_read.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn port4D1_read(&self, store: impl AsContextMut) -> i32 {
+        self.typed_port4D1_read.call(store, ()).unwrap()
+    }
+
+    #[inline]
+    fn port20_write(&self, store: impl AsContextMut, val: i32) {
+        self.typed_port20_write.call(store, val).unwrap()
+    }
+
+    #[inline]
+    fn port21_write(&self, store: impl AsContextMut, val: i32) {
+        self.typed_port21_write.call(store, val).unwrap()
+    }
+
+    #[inline]
+    fn portA0_write(&self, store: impl AsContextMut, val: i32) {
+        self.typed_portA0_write.call(store, val).unwrap()
+    }
+
+    #[inline]
+    fn portA1_write(&self, store: impl AsContextMut, val: i32) {
+        self.typed_portA1_write.call(store, val).unwrap()
+    }
+
+    #[inline]
+    fn port4D0_write(&self, store: impl AsContextMut, val: i32) {
+        self.typed_port4D0_write.call(store, val).unwrap()
+    }
+
+    #[inline]
+    fn port4D1_write(&self, store: impl AsContextMut, val: i32) {
+        self.typed_port4D1_write.call(store, val).unwrap()
+    }
+
+    #[inline]
+    fn main_loop(&self, store: impl AsContextMut) -> f64 {
+        self.typed_main_loop.call(store, ()).unwrap()
     }
 }
 
@@ -505,14 +650,6 @@ impl CPU {
     }
 
     #[inline]
-    pub fn pic_call_irq(&mut self, interrupt_nr: i32) {
-        self.store_mut().map(|store| {
-            self.vm_opers
-                .pic_call_irq(store.as_context_mut(), interrupt_nr);
-        });
-    }
-
-    #[inline]
     fn do_many_cycles_native(&mut self) {
         self.store_mut().map(|store| {
             self.vm_opers.do_many_cycles_native(store);
@@ -577,6 +714,78 @@ impl CPU {
         self.store_mut().map(|store| {
             self.iomap.mem8_write_slice(store, idx, s);
         });
+    }
+
+    #[inline]
+    fn port20_read(&self) -> i32 {
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.port20_read(store))
+    }
+
+    #[inline]
+    fn port21_read(&self) -> i32 {
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.port21_read(store))
+    }
+
+    #[inline]
+    fn portA0_read(&self) -> i32 {
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.portA0_read(store))
+    }
+
+    #[inline]
+    fn portA1_read(&self) -> i32 {
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.portA1_read(store))
+    }
+
+    #[inline]
+    fn port4D0_read(&self) -> i32 {
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.port4D0_read(store))
+    }
+
+    #[inline]
+    fn port4D1_read(&self) -> i32 {
+        self.store_mut()
+            .map_or(0, |store| self.vm_opers.port4D1_read(store))
+    }
+
+    #[inline]
+    fn port20_write(&self, val: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.port20_write(store, val));
+    }
+
+    #[inline]
+    fn port21_write(&self, val: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.port21_write(store, val));
+    }
+
+    #[inline]
+    fn portA0_write(&self, val: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.portA0_write(store, val));
+    }
+
+    #[inline]
+    fn portA1_write(&self, val: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.portA1_write(store, val));
+    }
+
+    #[inline]
+    fn port4D0_write(&self, val: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.port4D0_write(store, val));
+    }
+
+    #[inline]
+    fn port4D1_write(&self, val: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.port4D1_write(store, val));
     }
 
     fn load_bios(&mut self) {
@@ -703,6 +912,101 @@ impl CPU {
         self.ide.as_mut().map(|ide| ide.init());
         self.load_kernel();
         
+        self.io.register_read8(
+            0x20,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32| {
+                dev.cpu_mut().map_or(0, |cpu| cpu.port20_read()) as _
+            },
+        );
+
+        self.io.register_read8(
+            0x21,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32| {
+                dev.cpu_mut().map_or(0, |cpu| cpu.port21_read()) as _
+            },
+        );
+
+        self.io.register_read8(
+            0xA0,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32| {
+                dev.cpu_mut().map_or(0, |cpu| cpu.portA0_read()) as _
+            },
+        );
+
+        self.io.register_read8(
+            0xA1,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32| {
+                dev.cpu_mut().map_or(0, |cpu| cpu.portA1_read()) as _
+            },
+        );
+
+        self.io.register_read8(
+            0x4D0,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32| {
+                dev.cpu_mut().map_or(0, |cpu| cpu.port4D0_read()) as _
+            },
+        );
+
+        self.io.register_read8(
+            0x4D1,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32| {
+                dev.cpu_mut().map_or(0, |cpu| cpu.port4D1_read()) as _
+            },
+        );
+
+        self.io.register_write8(
+            0x20,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32, val: u8| {
+                dev.cpu_mut().map(|cpu| cpu.port20_write(val as _));
+            },
+        );
+
+        self.io.register_write8(
+            0x21,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32, val: u8| {
+                dev.cpu_mut().map(|cpu| cpu.port21_write(val as _));
+            },
+        );
+
+        self.io.register_write8(
+            0xA0,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32, val: u8| {
+                dev.cpu_mut().map(|cpu| cpu.portA0_write(val as _));
+            },
+        );
+
+        self.io.register_write8(
+            0xA1,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32, val: u8| {
+                dev.cpu_mut().map(|cpu| cpu.portA1_write(val as _));
+            },
+        );
+
+        self.io.register_write8(
+            0x4D0,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32, val: u8| {
+                dev.cpu_mut().map(|cpu| cpu.port4D0_write(val as _));
+            },
+        );
+
+        self.io.register_write8(
+            0x4D1,
+            Dev::Emulator(self.store.clone()),
+            |dev: &Dev, _: u32, val: u8| {
+                dev.cpu_mut().map(|cpu| cpu.port4D1_write(val as _));
+            },
+        );
 
         self.io.register_read8(
             0x511,
@@ -845,13 +1149,22 @@ impl CPU {
     #[inline]
     fn do_tick(&mut self) -> f64 {
         self.idle = false;
-        self.main_run()
+        self.main_loop()
     }
 
     pub fn handle_irqs(&mut self) {
         if self.has_interrupt() {
             self.pic_acknowledge();
         }
+    }
+
+    #[inline]
+    pub fn main_loop(&mut self) -> f64 {
+        self.store_mut()
+            .map(|store| {
+                self.vm_opers.main_loop(store)
+            })
+            .unwrap()
     }
 
     #[inline]
@@ -898,7 +1211,7 @@ impl CPU {
     }
 
     #[inline]
-    fn run_hardware_timers(&mut self, now: f64) -> f64 {
+    pub fn run_hardware_timers(&mut self, now: f64) -> f64 {
         //TODO:
         let pit_time = self.pit.timer(now, false);
         let rtc_time = self.rtc.timer(now) as f64;
@@ -914,28 +1227,6 @@ impl CPU {
     #[inline]
     fn do_many_cycles(&mut self) {
         self.do_many_cycles_native();
-        //TODO:
-    }
-
-    pub fn main_run(&mut self) -> f64 {
-        if self.in_hlt() {
-            let t = self.hlt_loop();
-            if self.in_hlt() {
-                return t;
-            }
-        }
-        let start = self.microtick();
-        let mut now = start;
-        while now - start < TIME_PER_FRAME as _ {
-            self.do_many_cycles();
-            now = self.microtick();
-            let t = self.run_hardware_timers(now);
-            self.handle_irqs();
-            if self.in_hlt() {
-                return t;
-            }
-        }
-        return 0f64;
     }
 
     pub fn fill_cmos(&mut self) {
@@ -1003,13 +1294,15 @@ impl CPU {
     }
 
     pub fn device_raise_irq(&mut self, i: u8) {
-        self.pic.set_irq(i);
-        //TODO
+        self.store_mut().map(|store|
+            self.vm_opers.pic_set_irq(store, i as _)
+        );
     }
 
     pub fn device_lower_irq(&mut self, i: u8) {
-        self.pic.clear_irq(i);
-        //TODO:
+        self.store_mut().map(|store|
+            self.vm_opers.pic_clear_irq(store, i as _)
+        );
     }
 
     pub fn reboot_internal(&mut self) {

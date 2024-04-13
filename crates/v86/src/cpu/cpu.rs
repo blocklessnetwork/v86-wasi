@@ -4,7 +4,7 @@ extern "C" {
     fn cpu_exception_hook(interrupt: i32) -> bool;
     fn microtick() -> f64;
     fn call_indirect1(f: i32, x: u16);
-    fn pic_acknowledge();
+    fn run_hardware_timers(acpi_enabled: bool, t: f64) -> f64;
 
     pub fn io_port_read8(port: i32) -> i32;
     pub fn io_port_read16(port: i32) -> i32;
@@ -35,6 +35,8 @@ use state_flags::CachedStateFlags;
 use std::collections::HashSet;
 pub use util::dbg_trace;
 
+use super::pic;
+
 /// The offset for our generated functions in the wasm table. Every index less than this is
 /// reserved for rustc's indirect functions
 pub const WASM_TABLE_OFFSET: u32 = 1024;
@@ -58,6 +60,9 @@ pub union reg128 {
 pub const CHECK_MISSED_ENTRY_POINTS: bool = false;
 
 pub const INTERPRETER_ITERATION_LIMIT: u32 = 100_001;
+
+// How often, in milliseconds, to yield to the browser for rendering and running events
+pub const TIME_PER_FRAME: f64 = 1.0;
 
 pub const FLAG_SUB: i32 = -0x8000_0000;
 pub const FLAG_CARRY: i32 = 1;
@@ -3013,6 +3018,45 @@ pub unsafe fn segment_prefix_op(seg: i32) {
 }
 
 #[no_mangle]
+pub unsafe fn main_loop() -> f64 {
+    profiler::stat_increment(MAIN_LOOP);
+
+    let start = microtick();
+
+    if *in_hlt {
+        if *flags & FLAG_INTERRUPT != 0 {
+            let t = run_hardware_timers(*acpi_enabled, start);
+            handle_irqs();
+            if *in_hlt {
+                profiler::stat_increment(MAIN_LOOP_IDLE);
+                return t;
+            }
+        }
+        else {
+            // dead
+            return 100.0;
+        }
+    }
+
+    loop {
+        do_many_cycles_native();
+
+        let now = microtick();
+        let t = run_hardware_timers(*acpi_enabled, now);
+        handle_irqs();
+        if *in_hlt {
+            return t;
+        }
+
+        if now - start > TIME_PER_FRAME {
+            break;
+        }
+    }
+
+    return 0.0;
+}
+
+#[no_mangle]
 pub unsafe fn do_many_cycles_native() {
     profiler::stat_increment(DO_MANY_CYCLES);
     let initial_instruction_counter = *instruction_counter;
@@ -4069,14 +4113,16 @@ pub unsafe fn store_current_tsc() { *current_tsc = read_tsc(); }
 #[no_mangle]
 pub unsafe fn handle_irqs() {
     if *flags & FLAG_INTERRUPT != 0 {
-        pic_acknowledge()
+        if let Some(irq) = pic::pic_acknowledge_irq() {
+            pic_call_irq(irq)
+        }
     }
 }
 
-#[no_mangle]
-pub unsafe fn pic_call_irq(interrupt_nr: i32) {
+unsafe fn pic_call_irq(interrupt_nr: u8) {
     *previous_ip = *instruction_pointer; // XXX: What if called after instruction (port IO)
-    call_interrupt_vector(interrupt_nr, false, None);
+    *in_hlt = false;
+    call_interrupt_vector(interrupt_nr as i32, false, None);
 }
 
 #[no_mangle]

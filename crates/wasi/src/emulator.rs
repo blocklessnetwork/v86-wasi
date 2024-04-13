@@ -165,7 +165,7 @@ impl InnerEmulator {
     fn start(&mut self, store: StoreT) {
         self.cpu.as_mut().map(|c| {
             c.init();
-            let mut t = c.main_run();
+            let mut t = c.main_loop();
             loop {
                 self.tick_trigger.iter().for_each(|cb| cb(&store));
                 t = c.next_tick(t as u64);

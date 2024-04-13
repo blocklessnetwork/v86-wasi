@@ -424,7 +424,18 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, store: &mut Store<Emulat
             });
         })
         .unwrap();
-
+    linker
+        .func_wrap(
+            "env",
+            "run_hardware_timers",
+            move |mut caller: Caller<'_, Emulator>, acpi_enabled: i32, now: f64| {
+                let emu = caller.data_mut();
+                emu.cpu_mut().map(|cpu| {
+                    cpu.run_hardware_timers(now)
+                }).unwrap()
+            },
+        )
+        .unwrap();
     linker
         .func_wrap(
             "env",
