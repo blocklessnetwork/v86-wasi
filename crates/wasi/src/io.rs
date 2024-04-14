@@ -84,6 +84,7 @@ impl_mem_access!(i16, 2);
 impl_mem_access!(i32, 4);
 
 const PORTS_SIZE: usize = 0x10000;
+const CONS_PORTS_SIZE: usize = 0x1000;
 
 type Rd8Fn = fn(&Dev, u32) -> u8;
 type Rd16Fn = fn(&Dev, u32) -> u16;
@@ -224,7 +225,7 @@ impl IO {
             p.push(IO::default_iops());
         }
         let mut cp = Vec::new();
-        for _ in 0..PORTS_SIZE {
+        for _ in 0..CONS_PORTS_SIZE {
             cp.push(IO::default_cons_iops());
         }
 
@@ -420,6 +421,26 @@ impl IO {
         w8_4: Wr8Fn,
     ) {
         let paddr = port_addr as usize;
+        assert!(self.cons_ports[paddr].w1 == IO::empty_write8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr].w2 == IO::empty_write8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr].w3 == IO::empty_write8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr].w4 == IO::empty_write8, "can't register the same consecutive");
+
+        assert!(self.cons_ports[paddr+1].w1 == IO::empty_write8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+1].w2 == IO::empty_write8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+1].w3 == IO::empty_write8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+1].w4 == IO::empty_write8, "can't register the same consecutive");
+
+        assert!(self.cons_ports[paddr+2].w1 == IO::empty_write8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+2].w2 == IO::empty_write8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+2].w3 == IO::empty_write8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+2].w4 == IO::empty_write8, "can't register the same consecutive");
+
+        assert!(self.cons_ports[paddr+3].w1 == IO::empty_write8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+3].w2 == IO::empty_write8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+3].w3 == IO::empty_write8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+3].w4 == IO::empty_write8, "can't register the same consecutive");
+
         self.cons_ports[paddr].w1 = w8_1;
         self.cons_ports[paddr].w2 = w8_2;
         self.cons_ports[paddr].w3 = w8_3;
@@ -430,6 +451,16 @@ impl IO {
         self.cons_ports[paddr + 1].w3 = w8_3;
         self.cons_ports[paddr + 1].w4 = w8_4;
         self.cons_ports[paddr + 1].dev = dev.clone();
+        self.cons_ports[paddr + 2].w1 = w8_1;
+        self.cons_ports[paddr + 2].w2 = w8_2;
+        self.cons_ports[paddr + 2].w3 = w8_3;
+        self.cons_ports[paddr + 2].w4 = w8_4;
+        self.cons_ports[paddr + 2].dev = dev.clone();
+        self.cons_ports[paddr + 3].w1 = w8_1;
+        self.cons_ports[paddr + 3].w2 = w8_2;
+        self.cons_ports[paddr + 3].w3 = w8_3;
+        self.cons_ports[paddr + 3].w4 = w8_4;
+        self.cons_ports[paddr + 3].dev = dev.clone();
 
         let w16_1: Wr16Fn = |dev: &Dev, addr: u32, data: u16| {
             dev.io().map(|io| {
@@ -456,16 +487,6 @@ impl IO {
         };
         let empty_w = IO::empty_write8 as *const ();
         if w8_3 as *const () != empty_w && w8_4 as *const () != empty_w {
-            self.cons_ports[paddr + 2].w1 = w8_1;
-            self.cons_ports[paddr + 2].w2 = w8_2;
-            self.cons_ports[paddr + 2].w3 = w8_3;
-            self.cons_ports[paddr + 2].w4 = w8_4;
-            self.cons_ports[paddr + 2].dev = dev.clone();
-            self.cons_ports[paddr + 3].w1 = w8_1;
-            self.cons_ports[paddr + 3].w2 = w8_2;
-            self.cons_ports[paddr + 3].w3 = w8_3;
-            self.cons_ports[paddr + 3].w4 = w8_4;
-            self.cons_ports[paddr + 3].dev = dev.clone();
             self.register_write(port_addr, dev.clone(), w8_1, w16_1, w32);
             self.register_write8(port_addr + 1, dev.clone(), w8_2);
             self.register_write(port_addr + 2, dev.clone(), w8_3, w16_2, IO::empty_write32);
@@ -486,6 +507,25 @@ impl IO {
         r8_4: Rd8Fn,
     ) {
         let paddr = port_addr as usize;
+        assert!(self.cons_ports[paddr].r1 == IO::empty_read8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr].r2 == IO::empty_read8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr].r3 == IO::empty_read8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr].r4 == IO::empty_read8, "can't register the same consecutive");
+
+        assert!(self.cons_ports[paddr+1].r1 == IO::empty_read8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+1].r2 == IO::empty_read8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+1].r3 == IO::empty_read8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+1].r4 == IO::empty_read8, "can't register the same consecutive");
+
+        assert!(self.cons_ports[paddr+2].r1 == IO::empty_read8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+2].r2 == IO::empty_read8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+2].r3 == IO::empty_read8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+2].r4 == IO::empty_read8, "can't register the same consecutive");
+
+        assert!(self.cons_ports[paddr+3].r1 == IO::empty_read8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+3].r2 == IO::empty_read8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+3].r3 == IO::empty_read8, "can't register the same consecutive");
+        assert!(self.cons_ports[paddr+3].r4 == IO::empty_read8, "can't register the same consecutive");
         self.cons_ports[paddr].r1 = r8_1;
         self.cons_ports[paddr].r2 = r8_2;
         self.cons_ports[paddr].r3 = r8_3;
@@ -496,6 +536,16 @@ impl IO {
         self.cons_ports[paddr + 1].r3 = r8_3;
         self.cons_ports[paddr + 1].r4 = r8_4;
         self.cons_ports[paddr + 1].dev = dev.clone();
+        self.cons_ports[paddr + 2].r1 = r8_1;
+        self.cons_ports[paddr + 2].r2 = r8_2;
+        self.cons_ports[paddr + 2].r3 = r8_3;
+        self.cons_ports[paddr + 2].r4 = r8_4;
+        self.cons_ports[paddr + 2].dev = dev.clone();
+        self.cons_ports[paddr + 3].r1 = r8_1;
+        self.cons_ports[paddr + 3].r2 = r8_2;
+        self.cons_ports[paddr + 3].r3 = r8_3;
+        self.cons_ports[paddr + 3].r4 = r8_4;
+        self.cons_ports[paddr + 3].dev = dev.clone();
         let r16_1: Rd16Fn = |dev: &Dev, port_addr: u32| {
             dev.io().map_or(0, |io| {
                 let paddr = port_addr as usize;
@@ -521,16 +571,6 @@ impl IO {
         };
         let empty_r = IO::empty_read8 as *const ();
         if r8_3 as *const () != empty_r && r8_4 as *const () != empty_r {
-            self.cons_ports[paddr + 2].r1 = r8_1;
-            self.cons_ports[paddr + 2].r2 = r8_2;
-            self.cons_ports[paddr + 2].r3 = r8_3;
-            self.cons_ports[paddr + 2].r4 = r8_4;
-            self.cons_ports[paddr + 2].dev = dev.clone();
-            self.cons_ports[paddr + 3].r1 = r8_1;
-            self.cons_ports[paddr + 3].r2 = r8_2;
-            self.cons_ports[paddr + 3].r3 = r8_3;
-            self.cons_ports[paddr + 3].r4 = r8_4;
-            self.cons_ports[paddr + 3].dev = dev.clone();
             self.register_read(port_addr, dev.clone(), r8_1, r16_1, r32);
             self.register_read8(port_addr + 1, dev.clone(), r8_2);
             self.register_read(port_addr + 2, dev.clone(), r8_3, r16_2, IO::empty_read32);
