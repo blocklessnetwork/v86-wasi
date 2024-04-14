@@ -393,8 +393,8 @@ impl IO {
         dev.cpu_mut().map(|cpu| {
             let mmp_fn = cpu.mmap_fn.memory_map_write8.get(&aligned_addr).unwrap();
             (mmp_fn)(dev, addr, (val & 0xFF) as u8);
-            (mmp_fn)(dev, addr+1, (val >> 8 & 0xFF) as u8);
-            (mmp_fn)(dev, addr+2, (val >> 16 & 0xFF) as u8);
+            (mmp_fn)(dev, addr+1, ((val >> 8) & 0xFF) as u8);
+            (mmp_fn)(dev, addr+2, ((val >> 16) & 0xFF) as u8);
             (mmp_fn)(dev, addr+3, (val >> 24) as u8);
         });
     }

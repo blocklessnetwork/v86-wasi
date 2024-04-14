@@ -298,7 +298,7 @@ impl PCI {
         let device_id: usize = dev.pci_id() as _;
         dbg_log!(
             LOG::PCI,
-            "PCI register bdf={:x} ({})",
+            "PCI register bdf={:#X} ({})",
             device_id,
             dev.name()
         );

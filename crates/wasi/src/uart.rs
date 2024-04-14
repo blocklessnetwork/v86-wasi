@@ -53,7 +53,7 @@ impl UART {
             lsr,
             port,
             ier: 0,
-            iir: 0,
+            iir: UART_IIR_NO_INT,
             baud_rate: 0,
             line_control: 0,
             fifo_control: 0,

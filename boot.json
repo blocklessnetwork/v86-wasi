@@ -1,5 +1,5 @@
 {
-    "cdrom": "arch/linux4.iso",
+    "cdrom": "arch/linux.iso",
     "bios_file": "arch/seabios.bin",
     "vga_bios_file": "arch/vgabios.bin",
     "wasm_file": "target/v86.wasm",
@@ -8,7 +8,7 @@
     "cmdline": ["tsc=reliable mitigations=off random.trust_cpu=on"],
     "logger": {
         "log_file": "debug.log",
-        "log_module": ["E", "BIOS", "PCI", "IO", "RTC", "CPU", "PS2", "NET"]
+        "log_module": ["PS2"]
     },
     "tun": {
         "address": "192.168.0.1",
