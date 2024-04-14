@@ -194,7 +194,7 @@ impl PCI {
                 },
             );
 
-            io.register_write8(
+            io.register_write(
                 PCI_CONFIG_DATA + 2,
                 crate::Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _port: u32, w8: u8| {
@@ -202,6 +202,12 @@ impl PCI {
                         pci.pci_write8(pci.pci_addr32() + 2 | 0, w8);
                     });
                 },
+                |dev: &Dev, _port: u32, w16: u16| {
+                    dev.pci_mut().map(|pci| {
+                        pci.pci_write16(pci.pci_addr32() + 2 | 0, w16);
+                    });
+                },
+                IO::empty_write32,
             );
 
             io.register_write8(
@@ -276,11 +282,10 @@ impl PCI {
             1 << 3,
             vec![
                 // 00:01.0 ISA bridge: Intel Corporation 82371SB PIIX3 ISA [Natoma/Triton II]
-                0x86, 0x80, 0x00, 0x70, 0x07, 0x00, 0x00, 0x02, 0x00, 0x00, 0x01, 0x06, 0x00, 0x00,
-                0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x86, 0x80, 0x00, 0x70, 0x07, 0x00, 0x00, 0x02, 0x00, 0x00, 0x01, 0x06, 0x00, 0x00, 0x80, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             ],
             vec![],
             "82371SB PIIX3 ISA",
@@ -477,7 +482,7 @@ impl PCI {
                     let to = written & 0xfffffffe & 0xFFFF;
                     dbg_log!(
                         LOG::PCI,
-                        "io bar changed from {:x} to {:x} size={}",
+                        "io bar changed from {:#08X} to {:#08X} size={}",
                         from >> 0,
                         to >> 0,
                         bar.size
@@ -594,7 +599,7 @@ impl PCI {
             let dev = self.devices[bdf as usize].as_ref().unwrap();
             dbg_log!(LOG::PCI, "{} ({})", dbg_line, dev.name());
         } else {
-            self.pci_response = (0xFFFF_FFFFu32).to_le_bytes(); //-1i32
+            self.pci_response = (-1i32).to_le_bytes(); //-1i32
             self.pci_status = [0; 4];
         }
     }
@@ -624,13 +629,13 @@ impl PCI {
                 if old_entry.read8 as *const () == IO::empty_read8 as *const ()
                     && old_entry.read16 as *const () == IO::empty_read16 as *const ()
                     && old_entry.read32 as *const () == IO::empty_read32 as *const ()
-                    && old_entry.write32 as *const () == IO::empty_write32 as *const ()
-                    && old_entry.write16 as *const () == IO::empty_write16 as *const ()
                     && old_entry.write8 as *const () == IO::empty_write8 as *const ()
+                    && old_entry.write16 as *const () == IO::empty_write16 as *const ()
+                    && old_entry.write32 as *const () == IO::empty_write32 as *const ()
                 {
                     dbg_log!(
                         LOG::PCI,
-                        "Warning: Bad IO bar: Source not mapped, port={:#X}",
+                        "Warning: Bad IO bar: Source not mapped, port={:#04X}",
                         from + i
                     );
                 }
