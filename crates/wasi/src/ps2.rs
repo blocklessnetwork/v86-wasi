@@ -491,7 +491,7 @@ impl PS2 {
             dbg_log!(LOG::PS2, "adding kbd code: {:#X}", code);
             self.kbd_buffer.push_back(code);
             //TODO: this is error, should be self.raise_irq(); 
-            self.kbd_irq();
+            self.raise_irq();
         }
     }
 
