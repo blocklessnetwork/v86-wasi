@@ -4,9 +4,15 @@ use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 use crate::error::*;
 use libc::{self, fcntl, F_GETFL, F_SETFL, O_NONBLOCK};
 
+
 /// POSIX file descriptor support for `io` traits.
+#[cfg(any(target_os="linux", target_os="macos"))]
 pub struct Fd(pub RawFd);
 
+#[cfg(target_os="windows")]
+pub struct Fd;
+
+#[cfg(any(target_os="linux", target_os="macos"))]
 impl Fd {
     pub fn new(value: RawFd) -> Result<Self> {
         if value < 0 {
