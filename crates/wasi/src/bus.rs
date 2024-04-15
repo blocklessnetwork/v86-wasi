@@ -1,5 +1,5 @@
 #![allow(unused)]
-use std::{collections::HashMap, os::unix::prelude::OsStrExt, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{Dev, StoreT};
 pub(crate) struct ScreenPutChar(pub u16, pub u16, pub u8, pub i32, pub i32);
