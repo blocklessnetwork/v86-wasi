@@ -544,7 +544,7 @@ impl PS2 {
     }
 
     fn mouse_send_click(&mut self, left: u8, middle: u8, right: u8) {
-        if !self.have_mouse || self.use_mouse {
+        if !self.have_mouse || !self.use_mouse {
             return;
         }
 
