@@ -7,6 +7,7 @@ members = [
     "crates/v86-lib",
     "crates/tuntap",
 ]
+default-members = ["crates/wasi"]
 
 
 [workspace.dependencies]
