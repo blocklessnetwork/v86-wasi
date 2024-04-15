@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::{mem, io::{Read, Write}, time::Duration};
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
 
