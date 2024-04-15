@@ -33,7 +33,7 @@ use crate::{
 };
 
 #[cfg(feature = "tap")]
-use crate::tap::TunThread;
+use crate::tun_thr::TunThread;
 
 pub(crate) struct InnerEmulator {
     start_time: time::Instant,
@@ -145,7 +145,6 @@ impl InnerEmulator {
                 });
                 self.net_adapter = Some(NetAdapter::new(store.clone(), tun_rx1, tun_tx2));
         }
-        
         self.cpu = Some(CPU::new(&mut inst, store.clone()));
         self.net_term_adapter.as_mut().map(|t| t.init());
         #[cfg(feature = "tap")]
