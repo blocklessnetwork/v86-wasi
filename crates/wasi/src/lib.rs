@@ -31,6 +31,7 @@ mod debug;
 mod ws_thr;
 mod floppy;
 mod kernel;
+#[cfg(feature = "tap")]
 mod tun_thr;
 mod adapter;
 mod storage;
