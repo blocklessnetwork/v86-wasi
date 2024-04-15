@@ -73,6 +73,7 @@ pub(crate) struct Ne2k {
     pstart: u8,
     boundary: u8,
     mac: Vec<u8>,
+    mar: Vec<u8>,
     pci_id : u16,
     memory: Vec<u8>,
 }
@@ -82,6 +83,7 @@ impl Ne2k {
         let pci_id = 0x05 << 3;
         let mac = vec![0x00, 0x22, 0x15,rand::random::<u8>(), rand::random::<u8>(), rand::random::<u8>()];
         let mut memory = vec![0u8; 256 * 0x80];
+        let mar = vec![0xFF, 0xFF, 0xFF, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF];
         let cr = 1;
         let imr = 0;
         let tsr = 1;
@@ -115,6 +117,7 @@ impl Ne2k {
 
         Self {
             cr,
+            mar,
             mac,
             isr,
             imr,
