@@ -167,9 +167,15 @@ impl Ne2k {
                 (self.port | EN0_COUNTER0) as u32, 
                 Dev::Emulator(self.store.clone()), 
                 |dev: &Dev, _addr: u32| {
-                    dev.ne2k().map_or(0, |_ne2k| {
-                        dbg_log!(LOG::NET, "Read counter0");
-                        0
+                    dev.ne2k().map_or(0, |ne2k| {
+                        let pg = ne2k.get_page();
+                        if pg == 1 {
+                            dbg_log!(LOG::NET, "Read mar5");
+                            return ne2k.mar[5];
+                        } else {
+                            dbg_log!(LOG::NET, "Read counter0 pg={pg}");
+                            return 0;
+                        }
                     })
                 }
             );
