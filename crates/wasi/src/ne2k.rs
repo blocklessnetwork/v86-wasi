@@ -1,7 +1,7 @@
 #![allow(unused)]
 use crate::{bus::BusData, io::IO, log::LOG, pci::{GenericPCIDevice, PCIBar, PCIDevice}, ContextTrait, Dev, StoreT};
 
-const NE2K_LOG_VERBOSE: bool = false;
+const NE2K_LOG_VERBOSE: bool = true;
 
 const E8390_CMD: u16 = 0x00; /* The command register (for all pages) */
 
