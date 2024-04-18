@@ -28,3 +28,5 @@ jobs:
             !target/release/deps
             !target/release/examples
             !target/release/incremental
+        run: |
+          echo "test"
