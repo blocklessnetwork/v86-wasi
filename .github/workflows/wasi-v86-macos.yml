@@ -61,6 +61,16 @@ jobs:
         uses: JesseTG/rm@v1.0.3
         with:
           path: target/${{ matrix.target }}/release/deps
+      - name: Copy term
+        uses: actions/checkout@master
+        with:
+          source: term
+          target: target/${{ matrix.target }}/release/
+      - name: Copy arch
+        uses: actions/checkout@master
+        with:
+          source: arch
+          target: target/${{ matrix.target }}/release/
       - name: Archive Release
         uses: thedoctor0/zip-release@main
         with:
