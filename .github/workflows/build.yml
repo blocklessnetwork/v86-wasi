@@ -18,6 +18,7 @@ jobs:
         with:
           command: build
           args: --release
+      - name: move Archive
         run: |
           echo "test"
       - uses: actions/upload-artifact@v4
@@ -25,7 +26,6 @@ jobs:
           name: ${{ matrix.os }}-v86-wasi
           path: |
             target/release
-            term/
             !target/release/build
             !target/release/deps
             !target/release/examples
