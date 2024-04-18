@@ -31,7 +31,7 @@ jobs:
         with:
           toolchain: stable
           target: ${{ matrix.target }}
-      - run: cargo build  --release --all-features --target ${{ matrix.target }}
+      - run: cargo build  --release --target ${{ matrix.target }}
         env:
           TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: gcc-10-aarch64-linux-gnu
       - name: Remove File
