@@ -72,11 +72,10 @@ jobs:
           directory: target/${{ matrix.target }}/release
           path: .
       - name: upload artifact
-        uses: actions/upload-release-asset@v1
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
-          asset_name: v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
-          asset_content_type: application/gzip
+          files: |
+            v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
+            term
