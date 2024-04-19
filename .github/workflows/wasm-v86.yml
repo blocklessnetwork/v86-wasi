@@ -37,8 +37,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          with:
-            target: ${{ matrix.target }}
+          target: ${{ matrix.target }}
       - name: Build v86
         run: |
           make release
