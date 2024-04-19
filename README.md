@@ -47,7 +47,7 @@ The follow is the configure file
 
 ### 3. Run the test linux
 
-use the follow command to run the linux with the configure file.
+use the following command to run the linux with the configure file.
 
 ```bash
 $ cargo run -p v86-wasi --release ./boot.json
