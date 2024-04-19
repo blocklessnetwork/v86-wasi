@@ -19,11 +19,11 @@ jobs:
     runs-on: ${{ matrix.runson }}
     steps:
       - uses: actions/checkout@v2
-      - name: Get release
-        id: get_release
-        uses: bruceadams/get-release@v1.3.2
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      # - name: Get release
+      #   id: get_release
+      #   uses: bruceadams/get-release@v1.3.2
+      #   env:
+      #     GITHUB_TOKEN: ${{ github.token }}
       - name: create Cross.toml
         run: |
           echo [target.wasm32-unknown-unknown] > Cross.toml
