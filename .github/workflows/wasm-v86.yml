@@ -44,36 +44,25 @@ jobs:
       - name: Remove File
         uses: JesseTG/rm@v1.0.3
         with:
-          path: target/${{ matrix.target }}/release/.fingerprint
+          path: target/${{ matrix.target }}
       - name: Remove File
         uses: JesseTG/rm@v1.0.3
         with:
-          path: target/${{ matrix.target }}/release/examples
+          path: target/softfloat.o
       - name: Remove File
         uses: JesseTG/rm@v1.0.3
         with:
-          path: target/${{ matrix.target }}/release/build
+          path: target/zstddeclib.o
       - name: Remove File
         uses: JesseTG/rm@v1.0.3
         with:
-          path: target/${{ matrix.target }}/release/incremental
-      - name: Remove File
-        uses: JesseTG/rm@v1.0.3
-        with:
-          path: target/${{ matrix.target }}/release/examples
-      - name: Remove File
-        uses: JesseTG/rm@v1.0.3
-        with:
-          path: target/${{ matrix.target }}/release/deps
-      - name: Move Archive
-        run: |
-          rm -rf target/${{ matrix.target }}/release/*.d
+          path: target/CACHEDIR.TAG
       - name: Archive Release
         uses: thedoctor0/zip-release@main
         with:
           type: "tar"
           filename: ../../../v86.tar.gz
-          directory: target/${{ matrix.target }}/release
+          directory: target
           path: .
       - name: upload artifact
         uses: softprops/action-gh-release@v2
