@@ -72,7 +72,7 @@ jobs:
         with:
           name: v86.tar.gz
           path: |
-            target/release
+            target
             !target/release/build
             !target/release/deps
             !target/release/examples
