@@ -3,7 +3,7 @@ on:
     types: [created]
   workflow_dispatch:
 
-name: V86-WASI Release Linux
+name: V86 WASM Release
 jobs:
   v86-wasi:
     strategy:
