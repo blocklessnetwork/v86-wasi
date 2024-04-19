@@ -81,9 +81,9 @@ jobs:
         uses: JesseTG/rm@v1.0.3
         with:
           path: target/${{ matrix.target }}/release/deps
-      - name: move Archive
+      - name: Move Archive
         run: |
-          echo "test"
+          rm -rf target/${{ matrix.target }}/release/*.d
           cp -r term target/${{ matrix.target }}/release
           cp -r arch target/${{ matrix.target }}/release
       - name: Archive Release
