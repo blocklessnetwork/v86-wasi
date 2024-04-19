@@ -48,7 +48,7 @@ jobs:
       - name: Remove File
         uses: JesseTG/rm@v1.0.3
         with:
-          path: ttarget/${{ matrix.target }}/release/build
+          path: target/${{ matrix.target }}/release/build
       - name: Remove File
         uses: JesseTG/rm@v1.0.3
         with:
@@ -63,14 +63,14 @@ jobs:
           path: target/${{ matrix.target }}/release/deps
       - name: move Archive
         run: |
-          echo "test"
-          cp -r term target/release
-          cp -r arch target/release
+          rm -rf target/${{ matrix.target }}/release/*.d
+          cp -r term target/${{ matrix.target }}/release
+          cp -r arch target/${{ matrix.target }}/release
       - name: Archive Release
         uses: thedoctor0/zip-release@main
         with:
           type: "tar"
-          filename: ${{github.workspace}}/v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
+          filename: ../../../v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
           directory: target/${{ matrix.target }}/release
           path: .
       - name: upload artifact
@@ -79,4 +79,4 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           files: |
-            ${{github.workspace}}/v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
+            v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
