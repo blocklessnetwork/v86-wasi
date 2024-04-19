@@ -84,8 +84,8 @@ jobs:
       - name: move Archive
         run: |
           echo "test"
-          cp -r term target/release
-          cp -r arch target/release
+          cp -r term target/${{ matrix.target }}/release
+          cp -r arch target/${{ matrix.target }}/release
       - name: Archive Release
         uses: thedoctor0/zip-release@main
         with:
