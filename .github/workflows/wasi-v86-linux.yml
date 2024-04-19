@@ -81,11 +81,16 @@ jobs:
         uses: JesseTG/rm@v1.0.3
         with:
           path: target/${{ matrix.target }}/release/deps
+      - name: move Archive
+        run: |
+          echo "test"
+          cp -r term target/release
+          cp -r arch target/release
       - name: Archive Release
         uses: thedoctor0/zip-release@main
         with:
           type: "tar"
-          filename: ../../../v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
+          filename: ${{github.workspace}}/v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
           directory: target/${{ matrix.target }}/release
           path: .
       - name: upload artifact
@@ -94,5 +99,4 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           files: |
-            v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
-            term
+            ${{github.workspace}}/v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
