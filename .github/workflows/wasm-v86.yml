@@ -64,10 +64,19 @@ jobs:
           filename: ../../../v86.tar.gz
           directory: target
           path: .
-      - name: upload artifact
-        uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@v4
         with:
-          files: |
-            v86.tar.gz
+          name: v86.tar.gz
+          path: |
+            target/release
+            !target/release/build
+            !target/release/deps
+            !target/release/examples
+            !target/release/incremental
+      # - name: upload artifact
+      #   uses: softprops/action-gh-release@v2
+      #   env:
+      #     GITHUB_TOKEN: ${{ github.token }}
+      #   with:
+      #     files: |
+      #       v86.tar.gz
