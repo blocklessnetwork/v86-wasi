@@ -60,7 +60,7 @@ After run the VM, you can open the "term.html" file for control the VM.
 ### 4. DIY the linux iso
 
 If you wanna DIY the linux by your self, please see the document
-"https://github.com/blocklessnetwork/build-blockless-linux](https://github.com/blocklessnetwork/build-blockless-linux)"
+"[https://github.com/blocklessnetwork/build-blockless-linux](https://github.com/blocklessnetwork/build-blockless-linux)"
 
 ## v86 Lib compilation
 
