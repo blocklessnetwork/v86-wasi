@@ -65,13 +65,16 @@ jobs:
         uses: thedoctor0/zip-release@main
         with:
           type: "tar"
-          filename: ../../../v86.tar.gz
+          filename: ${{github.workspace}}/v86.${{ matrix.arch }}.tar.gz
           directory: target
           path: .
+      - name: echo File
+        run: |
+          echo "${{github.workspace}}/v86.${{ matrix.arch }}.tar.gz"
       - name: upload artifact
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           files: |
-            v86.tar.gz
+            ${{github.workspace}}/v86.${{ matrix.arch }}.tar.gz
