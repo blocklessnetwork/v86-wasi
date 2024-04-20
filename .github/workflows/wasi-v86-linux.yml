@@ -9,13 +9,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - build: ubuntu-20.04
-            os: ubuntu-20.04
-            rust: stable
-            runson: ubuntu-20.04
-            target: x86_64-unknown-linux-gnu
-            arch: x86_64
-            cross: false
           - build: linux
             os: linux-latest
             rust: stable
@@ -25,7 +18,7 @@ jobs:
             cross: false
           - build: linux_arm64
             os: linux-latest
-            runson: self-hosted
+            runson: ubuntu-latest
             rust: stable
             target: aarch64-unknown-linux-gnu
             arch: aarch64
