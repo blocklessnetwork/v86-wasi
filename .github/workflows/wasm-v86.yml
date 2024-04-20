@@ -24,10 +24,6 @@ jobs:
         uses: bruceadams/get-release@v1.3.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - name: create Cross.toml
-        run: |
-          echo [target.wasm32-unknown-unknown] > Cross.toml
-          echo "dockerfile = \"./Dockerfile\"" >> Cross.toml
       - name: create Dockerfile
         run: |
           echo "apt-get update && \\" >> Dockerfile
