@@ -9,13 +9,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - build: ubuntu-20.04
-            os: ubuntu-20.04
-            rust: stable
-            runson: ubuntu-20.04
-            target: x86_64-unknown-linux-gnu
-            arch: x86_64
-            cross: false
           - build: linux
             os: linux-latest
             rust: stable
@@ -25,7 +18,7 @@ jobs:
             cross: false
           - build: linux_arm64
             os: linux-latest
-            runson: self-hosted
+            runson: ubuntu-latest
             rust: stable
             target: aarch64-unknown-linux-gnu
             arch: aarch64
@@ -38,22 +31,6 @@ jobs:
         uses: bruceadams/get-release@v1.3.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - name: Edit Toml
-        uses: dmikey/toml-editor@master
-        with:
-          file: "v86-wasi/Cargo.toml"
-          key: "version"
-          value: "${{ steps.get_release.outputs.tag_name }}"
-      - name: create Cross.toml
-        run: |
-          echo [target.aarch64-unknown-linux-gnu] > Cross.toml
-          echo "dockerfile = \"./Dockerfile\"" >> Cross.toml
-      - name: create Dockerfile
-        run: |
-          echo "FROM arm64v8/rust" > Dockerfile
-          echo "RUN dpkg --add-architecture arm64 && \\" >> Dockerfile
-          echo "apt-get update && \\" >> Dockerfile
-          echo "apt-get install --assume-yes build-essential" >> Dockerfile
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -62,7 +39,7 @@ jobs:
         with:
           use-cross: ${{ matrix.cross }}
           command: build
-          args: --release --all-features --target ${{ matrix.target }}
+          args: --release  --target ${{ matrix.target }}
       - name: Remove File
         uses: JesseTG/rm@v1.0.3
         with:
@@ -74,7 +51,7 @@ jobs:
       - name: Remove File
         uses: JesseTG/rm@v1.0.3
         with:
-          path: ttarget/${{ matrix.target }}/release/build
+          path: target/${{ matrix.target }}/release/build
       - name: Remove File
         uses: JesseTG/rm@v1.0.3
         with:
@@ -87,6 +64,11 @@ jobs:
         uses: JesseTG/rm@v1.0.3
         with:
           path: target/${{ matrix.target }}/release/deps
+      - name: Move Archive
+        run: |
+          rm -rf target/${{ matrix.target }}/release/*.d
+          cp -r term target/${{ matrix.target }}/release
+          cp -r arch target/${{ matrix.target }}/release
       - name: Archive Release
         uses: thedoctor0/zip-release@main
         with:
@@ -95,11 +77,9 @@ jobs:
           directory: target/${{ matrix.target }}/release
           path: .
       - name: upload artifact
-        uses: actions/upload-release-asset@v1
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
-          asset_name: v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
-          asset_content_type: application/gzip
+          files: |
+            v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz

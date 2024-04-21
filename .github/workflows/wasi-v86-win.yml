@@ -27,17 +27,11 @@ jobs:
         uses: bruceadams/get-release@v1.2.3
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - name: Edit Toml
-        uses: dmikey/toml-editor@master
-        with:
-          file: "v86-wasi/Cargo.toml"
-          key: "version"
-          value: "${{ steps.get_release.outputs.tag_name }}"
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           target: ${{ matrix.target }}
-      - run: cargo build  --release --all-features --target ${{ matrix.target }}
+      - run: cargo build  --release --target ${{ matrix.target }}
         env:
           TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: gcc-10-aarch64-linux-gnu
       - name: Remove File
@@ -51,7 +45,7 @@ jobs:
       - name: Remove File
         uses: JesseTG/rm@v1.0.3
         with:
-          path: ttarget/${{ matrix.target }}/release/build
+          path: target/${{ matrix.target }}/release/build
       - name: Remove File
         uses: JesseTG/rm@v1.0.3
         with:
@@ -64,6 +58,11 @@ jobs:
         uses: JesseTG/rm@v1.0.3
         with:
           path: target/${{ matrix.target }}/release/deps
+      - name: move Archive
+        run: |
+          rm target/${{ matrix.target }}/release/*.d
+          cp -r term/ target/${{ matrix.target }}/release
+          cp -r arch/ target/${{ matrix.target }}/release
       - name: Archive Release
         uses: thedoctor0/zip-release@main
         with:
@@ -72,11 +71,9 @@ jobs:
           directory: target/${{ matrix.target }}/release
           path: .
       - name: upload artifact
-        uses: actions/upload-release-asset@v1
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
-          asset_name: v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz
-          asset_content_type: application/gzip
+          files: |
+            v86-wasi.${{ matrix.os }}.${{ matrix.arch }}.tar.gz

@@ -1,0 +1,76 @@
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+name: V86 WASM Release
+jobs:
+  v86-wasi:
+    strategy:
+      matrix:
+        include:
+          - build: ubuntu-20.04
+            os: ubuntu-20.04
+            rust: stable
+            runson: ubuntu-20.04
+            target: wasm32-unknown-unknown
+            arch: x86_32
+            cross: true
+    runs-on: ${{ matrix.runson }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Get release
+        id: get_release
+        uses: bruceadams/get-release@v1.3.2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: create Dockerfile
+        run: |
+          echo "apt-get update && \\" >> Dockerfile
+          echo "apt-get install --assume-yes build-essential" >> Dockerfile
+          echo "apt-get install --assume-yes makefile" >> Dockerfile
+          echo "apt-get install --assume-yes clang" >> Dockerfile
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+      - name: Build v86
+        run: |
+          make release
+      - name: Remove File
+        uses: JesseTG/rm@v1.0.3
+        with:
+          path: target/${{ matrix.target }}
+      - name: Remove File
+        uses: JesseTG/rm@v1.0.3
+        with:
+          path: target/softfloat.o
+      - name: Remove File
+        uses: JesseTG/rm@v1.0.3
+        with:
+          path: target/zstddeclib.o
+      - name: Remove File
+        uses: JesseTG/rm@v1.0.3
+        with:
+          path: target/CACHEDIR.TAG
+      - name: Remove File
+        uses: JesseTG/rm@v1.0.3
+        with:
+          path: target/release
+      - name: Archive Release
+        uses: thedoctor0/zip-release@main
+        with:
+          type: "tar"
+          filename: ${{github.workspace}}/v86.${{ matrix.arch }}.tar.gz
+          directory: target
+          path: .
+      - name: echo File
+        run: |
+          echo "${{github.workspace}}/v86.${{ matrix.arch }}.tar.gz"
+      - name: upload artifact
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          files: |
+            ${{github.workspace}}/v86.${{ matrix.arch }}.tar.gz
