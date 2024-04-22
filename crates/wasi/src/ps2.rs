@@ -453,7 +453,7 @@ impl PS2 {
                 0xF2 => {
                     // identify
                     self.kbd_buffer.push_back(0xAB);
-                    self.kbd_buffer.push_back(83);
+                    self.kbd_buffer.push_back(0x83);
                 }
                 //  Set typematic rate and delay
                 0xF3 => self.next_read_rate = true,
@@ -491,7 +491,7 @@ impl PS2 {
             dbg_log!(LOG::PS2, "adding kbd code: {:#X}", code);
             self.kbd_buffer.push_back(code);
             //TODO: this is error, should be self.raise_irq(); 
-            self.raise_irq();
+            self.kbd_irq();
         }
     }
 

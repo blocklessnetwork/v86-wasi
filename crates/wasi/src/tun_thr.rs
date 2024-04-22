@@ -1,5 +1,7 @@
 use std::{mem, io::{Read, Write}, time::Duration};
-use crossbeam_channel::{Receiver, Sender, TryRecvError};
+use crossbeam_channel::{
+    Receiver, Sender, TryRecvError, TrySendError
+};
 
 use tuntap::{Tap, Configuration, EtherAddr};
 
@@ -92,15 +94,37 @@ impl TunThread {
         tap.set_nonblock().unwrap();
         let mut tap_sel = tuntap::Selector::new();
         tap_sel.register(&tap);
+        // the ethernet frame size is 1514. so change to 2048 is sufficient.
+        let mut buf = [0; 2048];
+        let mut try_sent_buf: Option<Vec<u8>> = None;
+        macro_rules! try_send {
+            ($sent: ident) => {
+                try_sent_buf = match self.vm_channel_tx.try_send($sent) {
+                    Err(TrySendError::Full(b)) => {
+                        Some(b)
+                    },
+                    Err(e) => {
+                        eprintln!("{}", e);
+                        break;
+                    },
+                    _ => None
+                }
+            }
+        }
         loop {
-            let mut buf = vec![0; 1024];
             let rs = tap_sel.poll(Duration::from_millis(1));
             if rs > 0 {
-                let l = tap.read(&mut buf);
-                if let Ok(l) = l {
-                    self.vm_channel_tx.try_send(buf[0..l].to_vec()).unwrap();
+                if try_sent_buf.is_some() {
+                    let sent = try_sent_buf.take().unwrap();
+                    try_send!(sent);
                 } else {
-                    break;
+                    let l = tap.read(&mut buf);
+                    if let Ok(l) = l {
+                        let sent = buf[0..l].to_vec();
+                        try_send!(sent);
+                    } else {
+                        break;
+                    }
                 }
             }
             let rs = self.vm_channel_rx.try_recv();
