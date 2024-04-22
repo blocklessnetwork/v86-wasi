@@ -47,7 +47,7 @@ The follow is the configure file
 
 ### 3. Run the test linux
 
-use the follow command to run the linux with the configure file.
+use the following command to run the linux with the configure file.
 
 ```bash
 $ cargo run -p v86-wasi --release ./boot.json
@@ -60,7 +60,7 @@ After run the VM, you can open the "term.html" file for control the VM.
 ### 4. DIY the linux iso
 
 If you wanna DIY the linux by your self, please see the document
-"https://github.com/txlabs/v86-linux"
+"[https://github.com/blocklessnetwork/build-blockless-linux](https://github.com/blocklessnetwork/build-blockless-linux)"
 
 ## v86 Lib compilation
 

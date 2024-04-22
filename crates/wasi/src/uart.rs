@@ -1,6 +1,9 @@
 use std::collections::VecDeque;
 
-use crate::{bus::BusData, log::LOG, ContextTrait, Dev, StoreT, IO};
+use crate::{
+    bus::BusData, log::LOG, 
+    ContextTrait, Dev, StoreT, IO
+};
 
 const UART_IER_MSI: u8 = 0x08; /* Modem Status Changed int. */
 const UART_IIR_THRI: u8 = 0x02; /* Transmitter holding register empty */
@@ -168,7 +171,7 @@ impl UART {
                 Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _addr: u32| {
                     dev.uart0_mut().map_or(0, |uart| {
-                        let mut ret = uart.iir & 0xF;
+                        let ret = uart.iir & 0xF;
                         dbg_log!(
                             LOG::SERIAL,
                             "read interrupt identification: {:#X}",
@@ -177,10 +180,6 @@ impl UART {
 
                         if uart.iir == UART_IIR_THRI {
                             uart.clear_interrupt(UART_IIR_THRI);
-                        }
-
-                        if uart.fifo_control & 1 > 0 {
-                            ret |= 0xC0;   
                         }
                         return ret;
                     })

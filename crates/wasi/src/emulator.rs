@@ -28,8 +28,11 @@ use crate::{
     adapter::{NetAdapter, NetTermAdapter},
     floppy::FloppyController,
     jit::{JitMsg, JitWorker},
-    ContextTrait, Setting, StoreT, CPU, WASM_TABLE_OFFSET, tun_thr::TunThread,
+    ContextTrait, Setting, StoreT, CPU, WASM_TABLE_OFFSET, 
 };
+
+#[cfg(feature = "tap")]
+use crate::tun_thr::TunThread;
 
 pub(crate) struct InnerEmulator {
     start_time: time::Instant,
@@ -143,6 +146,7 @@ impl InnerEmulator {
         }
         self.cpu = Some(CPU::new(&mut inst, store.clone()));
         self.net_term_adapter.as_mut().map(|t| t.init());
+        #[cfg(feature = "tap")]
         self.net_adapter.as_mut().map(|t| t.init());
 
         self.register_trigger(|store| {
@@ -164,6 +168,7 @@ impl InnerEmulator {
     }
 
     fn start(&mut self, store: StoreT) {
+        println!("v86-wasi started.");
         self.cpu.as_mut().map(|c| {
             c.init();
             let mut t = c.main_loop();
