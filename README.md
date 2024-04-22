@@ -25,7 +25,7 @@ The follow is the configure file
 
 ```json
 {
-  "cdrom": "arch/linux4.iso",
+  "cdrom": "arch/blockless.iso",
   "bios_file": "arch/seabios.bin",
   "vga_bios_file": "arch/vgabios.bin",
   "wasm_file": "target/v86.wasm",
@@ -50,7 +50,7 @@ The follow is the configure file
 use the following command to run the linux with the configure file.
 
 ```bash
-$ cargo run -p v86-wasi --release ./boot.json
+$ cargo run --release ./boot.json
 ```
 
 After run the VM, you can open the "term.html" file for control the VM.
@@ -62,10 +62,10 @@ After run the VM, you can open the "term.html" file for control the VM.
 If you wanna DIY the linux by your self, please see the document
 "[https://github.com/blocklessnetwork/build-blockless-linux](https://github.com/blocklessnetwork/build-blockless-linux)"
 
-## v86 Lib compilation
+## V86 Lib compilation
 
 ```sh
-cargo build --release -p v86-lib
+cargo build --release
 ```
 
 This will generate a `libv86_lib.dylib` file for your machine arch (which can be packaged in the car format to be run in the runtime)
