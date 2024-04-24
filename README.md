@@ -8,7 +8,7 @@ Runtime Environment.
 ### 1. Try run it with the release file
 
 ```bash
-$ curl -s https://github.com/blocklessnetwork/v86-wasi/blob/main/download.sh|bash
+$ curl -s https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/download.sh|bash
 ```
 
 
