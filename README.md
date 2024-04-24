@@ -5,7 +5,14 @@ Runtime Environment.
 
 ## How to build.
 
-### 1. Build wasm
+### 1. Try run it with the release file
+
+```bash
+curl -s https://github.com/blocklessnetwork/v86-wasi/blob/main/download.sh|bash
+```
+
+
+### 2. Build wasm
 
 install `wasm-unknown-unknown` target
 
@@ -19,7 +26,7 @@ use the follow command to generate the wasm file.
 $ make release
 ```
 
-### 2. Modify the config file.
+### 3. Modify the config file.
 
 The follow is the configure file
 
@@ -45,7 +52,7 @@ The follow is the configure file
 }
 ```
 
-### 3. Run the test linux
+### 4. Run the test linux
 
 use the following command to run the linux with the configure file.
 
@@ -57,7 +64,7 @@ After run the VM, you can open the "term.html" file for control the VM.
 
 ![](term/Screen.png)
 
-### 4. DIY the linux iso
+### 5. DIY the linux iso
 
 If you wanna DIY the linux by your self, please see the document
 "[https://github.com/blocklessnetwork/build-blockless-linux](https://github.com/blocklessnetwork/build-blockless-linux)"
