@@ -14,6 +14,14 @@ default-members = ["crates/wasi"]
 v86-wasi = {path = "crates/wasi", version = "0.1.0"}
 tuntap = {path = "crates/tuntap", version = "0.1.0"}
 json = "0.12"
+mio = "0.8.11"
+tokio = "1"
+futures-util = "0.3"
+crossbeam-channel = "0.5.6"
+anyhow = "1.0.70"
+lazy_static = "1.4.0"
+rand = "0.8"
+chrono = "0.4"
 
 [workspace.package]
 version = "0.1.0"

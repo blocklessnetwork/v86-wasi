@@ -9,8 +9,14 @@ use crate::{Result, Error};
 use std::ptr;
 use crate::platform::posix::IntoSockAddr;
 
-
-use super::sys::{ifreq, siocsifaddr_eth, ETHER_ADDR_LEN, ifaliasreq, ifmtu, siocifmut};
+use super::sys::{
+    ifreq, 
+    siocsifaddr_eth, 
+    ETHER_ADDR_LEN, 
+    ifaliasreq, 
+    ifmtu, 
+    siocifmut
+};
 
 pub struct Tap {
     fd: Fd,
@@ -85,7 +91,7 @@ impl Tap {
             let mut rs = 0;
             let mut idx = 0;
             for n in 0 ..= 15 {
-                let path = format!("/dev/tap{}", n);
+                let path = format!("/dev/tap{}\0", n);
                 rs = libc::open(path.as_ptr() as _, libc::O_RDWR|libc::O_NONBLOCK);
                 idx = n;
                 if rs > 0 {

@@ -1,8 +1,24 @@
 #![allow(dead_code)]
+<<<<<<< Updated upstream
 use std::{mem, io::{Read, Write}, time::Duration};
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
+=======
+use std::{
+    mem, io::{Read, Write}, time::Duration
+};
+use crossbeam_channel::{
+    Receiver, Sender, TryRecvError, TrySendError
+};
+>>>>>>> Stashed changes
 
-use tuntap::{Tap, Configuration, EtherAddr};
+use tuntap::{
+    Tap, 
+    Token,
+    Events,
+    Interest,
+    EtherAddr,
+    Configuration, 
+};
 
 #[allow(unused_imports)]
 use crate::ContextTrait;
@@ -32,8 +48,8 @@ struct ArpHdr {
 pub struct TunThread {
     address: String,
     netmask: String,
-    vm_eth0_mac: Option<[u8; 6]>,
     ether_addr: EtherAddr,
+    vm_eth0_mac: Option<[u8; 6]>,
     vm_channel_rx: Receiver<Vec<u8>>,
     vm_channel_tx: Sender<Vec<u8>>,
 }
@@ -91,6 +107,7 @@ impl TunThread {
             },
         };
         tap.set_nonblock().unwrap();
+<<<<<<< Updated upstream
         let mut tap_sel = tuntap::Selector::new();
         tap_sel.register(&tap);
         loop {
@@ -102,8 +119,62 @@ impl TunThread {
                     self.vm_channel_tx.try_send(buf[0..l].to_vec()).unwrap();
                 } else {
                     break;
+=======
+        let mut tap_poll = tuntap::Poll::new();
+        let mut events = Events::with_capacity(10);
+        let tap_token = Token(0);
+        
+        // the ethernet frame size is 1514. so change to 2048 is sufficient.
+        let mut buf = [0; 2048];
+        let mut try_sent_buf: Option<Vec<u8>> = None;
+
+        macro_rules! try_channel_send {
+            ($sent: ident) => {
+                try_sent_buf = match self.vm_channel_tx.try_send($sent) {
+                    Err(TrySendError::Full(b)) => {
+                        Some(b)
+                    },
+                    Err(e) => {
+                        eprintln!("{}", e);
+                        break;
+                    },
+                    _ => None
                 }
             }
+        }
+        
+        loop {
+            tap_poll.register(&tap, tap_token, Interest::READABLE).unwrap();
+            let rs = tap_poll.poll(&mut events, Some(Duration::from_millis(1)));
+            let mut event = None;
+            if let Ok(_) = rs {
+                for e in &events {
+                    if e.token() == tap_token {
+                        event = Some(e);
+                        break;
+                    }
+                };
+            }
+            
+            if event.is_some() {
+                let event = event.unwrap();
+                if try_sent_buf.is_some() {
+                    let sent = try_sent_buf.take().unwrap();
+                    try_channel_send!(sent);
+                } else {
+                    if event.is_readable() {
+                        let l = tap.read(&mut buf);
+                        if let Ok(l) = l {
+                            let sent = buf[0..l].to_vec();
+                            try_channel_send!(sent);
+                        } else {
+                            break;
+                        }
+                    }
+>>>>>>> Stashed changes
+                }
+            }
+            
             let rs = self.vm_channel_rx.try_recv();
             match rs {
                 Ok(buf) => tap.write(&buf).unwrap(),
