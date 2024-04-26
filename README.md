@@ -5,7 +5,14 @@ Runtime Environment.
 
 ## How to build.
 
-### 1. Build wasm
+### 1. Try run it with the release file
+
+```bash
+$ curl -s https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/download.sh|bash
+```
+
+
+### 2. Build wasm
 
 install `wasm-unknown-unknown` target
 
@@ -19,13 +26,13 @@ use the follow command to generate the wasm file.
 $ make release
 ```
 
-### 2. Modify the config file.
+### 3. Modify the config file.
 
 The follow is the configure file
 
 ```json
 {
-  "cdrom": "arch/linux4.iso",
+  "cdrom": "arch/blockless.iso",
   "bios_file": "arch/seabios.bin",
   "vga_bios_file": "arch/vgabios.bin",
   "wasm_file": "target/v86.wasm",
@@ -45,27 +52,27 @@ The follow is the configure file
 }
 ```
 
-### 3. Run the test linux
+### 4. Run the test linux
 
 use the following command to run the linux with the configure file.
 
 ```bash
-$ cargo run -p v86-wasi --release ./boot.json
+$ cargo run --release ./boot.json
 ```
 
 After run the VM, you can open the "term.html" file for control the VM.
 
 ![](term/Screen.png)
 
-### 4. DIY the linux iso
+### 5. DIY the linux iso
 
 If you wanna DIY the linux by your self, please see the document
 "[https://github.com/blocklessnetwork/build-blockless-linux](https://github.com/blocklessnetwork/build-blockless-linux)"
 
-## v86 Lib compilation
+## V86 Lib compilation
 
 ```sh
-cargo build --release -p v86-lib
+cargo build --release
 ```
 
 This will generate a `libv86_lib.dylib` file for your machine arch (which can be packaged in the car format to be run in the runtime)

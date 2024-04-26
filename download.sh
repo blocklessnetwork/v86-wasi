@@ -1,7 +1,7 @@
 #!/bin/bash
-TMP_DIR="/tmp/v86-wasi"
+BIN_DIR="v86-wasi-bin"
 function cleanup {
-	echo rm -rf $TMP_DIR > /dev/null
+	echo rm -rf $BIN_DIR > /dev/null
 }
 function fail {
 	cleanup
@@ -17,7 +17,7 @@ function install {
 	MOVE="true"
 	RELEASE="latest"
 	INSECURE="false"
-	OUT_DIR="/usr/local/bin"
+	OUT_DIR=`pwd`
 	GH="https://github.com"
 	#bash check
 	[ ! "$BASH_VERSION" ] && fail "Please use bash instead"
@@ -62,26 +62,37 @@ function install {
 		fail "unknown arch: $(uname -m)"
 	fi
 
+
+	BROWER_CMD="open"
+	
+	if [[ $OS = "darwin" ]]; then
+		BROWER_CMD="open"
+	fi
+
+	if [[ $OS = "linux" ]]; then
+		BROWER_CMD="firefox"
+	fi
+
 	#choose from asset list
 	URL=""
 	FTYPE=""
     if [ ! -n "$VERSION" ]; then
 	    VERSION="latest"
     fi
-    WASM_URL="https://github.com/blocklessnetwork/v86-wasi/releases/download/${VERSION}/v86.x86_32.tar.gz"
+    WASM_URL="https://github.com/blocklessnetwork/v86-wasi/releases/${VERSION}/download/v86.x86_32.tar.gz"
     FTYPE=".tar.gz"
 	case "${OS}_${ARCH}" in
 	"darwin_amd64")
-		URL="https://github.com/blocklessnetwork/v86-wasi/releases/download/${VERSION}/v86-wasi.macos-latest.x86_64.tar.gz"
+		URL="https://github.com/blocklessnetwork/v86-wasi/releases/${VERSION}/download/v86-wasi.macos-latest.x86_64.tar.gz"
 		;;
 	"darwin_arm64")
-		URL="https://github.com/blocklessnetwork/v86-wasi/releases/download/${VERSION}/v86-wasi.macos-latest.aarch64.tar.gz"
+		URL="https://github.com/blocklessnetwork/v86-wasi/releases/${VERSION}/download/v86-wasi.macos-latest.aarch64.tar.gz"
 		;;
 	"linux_amd64")
-		URL="https://github.com/blocklessnetwork/v86-wasi/releases/download/${VERSION}/v86-wasi.linux-latest.x86_64.tar.gz"
+		URL="https://github.com/blocklessnetwork/v86-wasi/releases/${VERSION}/download/v86-wasi.linux-latest.x86_64.tar.gz"
 		;;
 	"linux_arm64")
-		URL="https://github.com/blocklessnetwork/v86-wasi/releases/download/${VERSION}/v86-wasi.linux-latest.aarch64.tar.gz"
+		URL="https://github.com/blocklessnetwork/v86-wasi/releases/${VERSION}/download/v86-wasi.linux-latest.aarch64.tar.gz"
 		;;
 	*) fail "No asset for platform ${OS}-${ARCH}";;
 	esac
@@ -91,8 +102,8 @@ function install {
 	echo "....."
 	
 	#enter tempdir
-	mkdir -p $TMP_DIR
-	cd $TMP_DIR
+	mkdir -p $BIN_DIR
+	cd $BIN_DIR
 	if [[ $FTYPE = ".gz" ]]; then
 		which gzip > /dev/null || fail "gzip is not installed"
 		#gzipped binary
@@ -104,8 +115,9 @@ function install {
 		#check if archiver progs installed
 		which tar > /dev/null || fail "tar is not installed"
 		which gzip > /dev/null || fail "gzip is not installed"
-        echo $URL
+		echo "GET BIN"
 		bash -c "$GET $URL" | tar zxf - || fail "download failed"
+		echo "GET WASM"
         bash -c "$GET $WASM_URL" | tar zxf - || fail "download failed"
 	elif [[ $FTYPE = ".zip" ]]; then
 		which unzip > /dev/null || fail "unzip is not installed"
@@ -117,20 +129,15 @@ function install {
 	else
 		fail "unknown file type: $FTYPE"
 	fi
-	#search subtree largest file (bin)
-	# TMP_BIN=$(find . -type f | xargs du | sort -n | tail -n 1 | cut -f 2)
-	# if [ ! -f "$TMP_BIN" ]; then
-	# 	fail "could not find find binary (largest file)"
-	# fi
-	#ensure its larger than 1MB
-	# if [[ $(du -m $TMP_BIN | cut -f1) -lt 1 ]]; then
-	# 	fail "no binary found ($TMP_BIN is not larger than 1MB)"
-	# fi
-	#move into PATH or cwd
-	# chmod +x $TMP_BIN || fail "chmod +x failed"
-	
-	# mv $TMP_BIN $OUT_DIR/$PROG || fail "mv failed" #FINAL STEP!
-	echo "Installed $PROG $VERSION at $OUT_DIR/$PROG"
+	curl -s https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/boot.json | sed 's/target\///g' > $OUT_DIR/$BIN_DIR/boot.json
+	curl -s https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/run.sh | sed 's/target\///g' > $OUT_DIR/$BIN_DIR/run.sh
+	chmod +x $OUT_DIR/$BIN_DIR/run.sh
+
+	echo "Installed $PROG $VERSION at $OUT_DIR/$BIN_DIR"
+
+	$BROWER_CMD $OUT_DIR/$BIN_DIR/term/term.html
+	cd $OUT_DIR/$BIN_DIR && ./run.sh
+
 	#done
 	cleanup
 }
