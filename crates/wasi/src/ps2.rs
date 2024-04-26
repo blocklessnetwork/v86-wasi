@@ -318,7 +318,7 @@ impl PS2 {
             if write_byte > 0 {
                 // set scan code set
             } else {
-                self.kbd_buffer.push_back(2);
+                self.kbd_buffer.push_back(1);
             }
         } else if self.next_read_rate {
             // nope
@@ -453,7 +453,7 @@ impl PS2 {
                 0xF2 => {
                     // identify
                     self.kbd_buffer.push_back(0xAB);
-                    self.kbd_buffer.push_back(83);
+                    self.kbd_buffer.push_back(0x83);
                 }
                 //  Set typematic rate and delay
                 0xF3 => self.next_read_rate = true,
