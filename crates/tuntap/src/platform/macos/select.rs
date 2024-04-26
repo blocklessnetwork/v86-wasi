@@ -38,9 +38,11 @@ impl Selector {
             if self.nfds <= fd + 1 {
                 self.nfds = fd + 1
             }
+            libc::FD_CLR(fd, self.r_sets.as_mut_ptr());
+            libc::FD_CLR(fd, self.w_sets.as_mut_ptr());
             if interest.is_readable() {
                 libc::FD_SET(fd, self.r_sets.as_mut_ptr());
-            }
+            } 
             if interest.is_writeable() {
                 libc::FD_SET(fd, self.w_sets.as_mut_ptr());
             }

@@ -124,9 +124,10 @@ impl TunThread {
                 }
             }
         }
-        
+        let mut tap_sent_handle = None;
+        let mut interests = Interest::READABLE;
         loop {
-            tap_poll.register(&tap, tap_token, Interest::READABLE).unwrap();
+            tap_poll.register(&tap, tap_token, interests).unwrap();
             let rs = tap_poll.poll(&mut events, Some(Duration::from_millis(1)));
             let mut event = None;
             if let Ok(_) = rs {
@@ -138,13 +139,16 @@ impl TunThread {
                 };
             }
             
-            if event.is_some() {
-                let event = event.unwrap();
+            let writeable = if event.is_some() {
+                let (readable, writeable) = 
+                    event.map_or((false, false), 
+                        |e| (e.is_readable(), e.is_writeable())
+                    );
                 if try_sent_buf.is_some() {
                     let sent = try_sent_buf.take().unwrap();
                     try_channel_send!(sent);
                 } else {
-                    if event.is_readable() {
+                    if readable {
                         let l = tap.read(&mut buf);
                         if let Ok(l) = l {
                             let sent = buf[0..l].to_vec();
@@ -154,17 +158,38 @@ impl TunThread {
                         }
                     }
                 }
-            }
-            
-            let rs = self.vm_channel_rx.try_recv();
-            match rs {
-                Ok(buf) => tap.write(&buf).unwrap(),
-                Err(TryRecvError::Empty) => continue,
-                Err(e) => {
-                    eprintln!("recv from tap error:{}", e);
-                    break;
-                }
+                writeable
+            } else {
+                false
             };
+
+            // no data sent to tap, recv it from vm
+            if tap_sent_handle.is_none() {
+                tap_sent_handle = match self.vm_channel_rx.try_recv() {
+                    Ok(buf) => Some(buf),
+                    Err(TryRecvError::Empty) => continue,
+                    Err(e) => {
+                        eprintln!("recv from tap error:{}", e);
+                        break;
+                    }
+                }
+            }
+
+            // if the tap is writeable, write the data tap which from vm
+            // write success reset the handle.
+            if writeable && tap_sent_handle.is_some() {
+                tap_sent_handle.map(|ref b| {
+                    tap.write(b).unwrap();
+                });
+                tap_sent_handle = None;
+            }
+
+            if tap_sent_handle.is_some() {
+                interests = Interest::RDWR;
+            } else {
+                interests = Interest::READABLE;
+            }
+
         }
     }
 

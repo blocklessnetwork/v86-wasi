@@ -10,6 +10,8 @@ impl Interest {
     
     pub const WRITEABLE: Self = Interest(WRITEABLE);
 
+    pub const RDWR: Self = Interest(WRITEABLE|READABLE);
+
     #[inline]
     pub fn add(self, i: Interest) -> Self {
         Self(self.0|i.0)
