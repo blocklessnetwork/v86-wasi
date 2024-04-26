@@ -84,7 +84,9 @@ impl Selector {
             );
             let r_ptr = r_sets.as_ptr();
             let w_ptr = w_sets.as_ptr();
-            
+            if max_fd < 0 {
+                return Err(io::Error::last_os_error());
+            }
             for n in 0..self.nfds {
                 let r = libc::FD_ISSET(n, r_ptr);
                 let w = libc::FD_ISSET(n, w_ptr);

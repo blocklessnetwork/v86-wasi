@@ -1,15 +1,10 @@
 #![allow(dead_code)]
-<<<<<<< Updated upstream
-use std::{mem, io::{Read, Write}, time::Duration};
-use crossbeam_channel::{Receiver, Sender, TryRecvError};
-=======
 use std::{
     mem, io::{Read, Write}, time::Duration
 };
 use crossbeam_channel::{
     Receiver, Sender, TryRecvError, TrySendError
 };
->>>>>>> Stashed changes
 
 use tuntap::{
     Tap, 
@@ -107,19 +102,6 @@ impl TunThread {
             },
         };
         tap.set_nonblock().unwrap();
-<<<<<<< Updated upstream
-        let mut tap_sel = tuntap::Selector::new();
-        tap_sel.register(&tap);
-        loop {
-            let mut buf = vec![0; 1024];
-            let rs = tap_sel.poll(Duration::from_millis(1));
-            if rs > 0 {
-                let l = tap.read(&mut buf);
-                if let Ok(l) = l {
-                    self.vm_channel_tx.try_send(buf[0..l].to_vec()).unwrap();
-                } else {
-                    break;
-=======
         let mut tap_poll = tuntap::Poll::new();
         let mut events = Events::with_capacity(10);
         let tap_token = Token(0);
@@ -171,7 +153,6 @@ impl TunThread {
                             break;
                         }
                     }
->>>>>>> Stashed changes
                 }
             }
             
