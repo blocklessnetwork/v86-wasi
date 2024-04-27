@@ -1,6 +1,6 @@
 [package]
 name = "tuntap"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 authors = ["Join.Gong<joinhack@gmail.com>", "Derek Anderson<derek@txlabs.org>"]
 description = "This crate is the v86 emulator the tun implement."

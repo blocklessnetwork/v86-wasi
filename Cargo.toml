@@ -11,8 +11,8 @@ default-members = ["crates/wasi"]
 
 
 [workspace.dependencies]
-v86-wasi = {path = "crates/wasi", version = "0.1.0"}
-tuntap = {path = "crates/tuntap", version = "0.1.0"}
+v86-wasi = {path = "crates/wasi", version = "0.0.2"}
+tuntap = {path = "crates/tuntap", version = "0.0.2"}
 json = "0.12"
 mio = "0.8.11"
 tokio = "1"
@@ -24,7 +24,7 @@ rand = "0.8"
 chrono = "0.4"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.0.2"
 authors = ["Join.Gong<joinhack@gmail.com>", "Derek Anderson<derek@txlabs.org>"]
 edition = "2021"
 

@@ -124,6 +124,18 @@ impl TunThread {
                 }
             }
         }
+        macro_rules! recv_from_vm_channel {
+            () => {
+                match self.vm_channel_rx.try_recv() {
+                    Ok(buf) => Some(buf),
+                    Err(TryRecvError::Empty) => None,
+                    Err(e) => {
+                        eprintln!("recv from vm error:{}", e);
+                        break;
+                    }
+                }
+            }
+        }
         let mut tap_sent_handle = None;
         let mut interests = Interest::READABLE;
         loop {
@@ -165,22 +177,21 @@ impl TunThread {
 
             // no data sent to tap, recv it from vm
             if tap_sent_handle.is_none() {
-                tap_sent_handle = match self.vm_channel_rx.try_recv() {
-                    Ok(buf) => Some(buf),
-                    Err(TryRecvError::Empty) => continue,
-                    Err(e) => {
-                        eprintln!("recv from tap error:{}", e);
-                        break;
-                    }
-                }
+                tap_sent_handle = recv_from_vm_channel!();
             }
 
             // if the tap is writeable, write the data tap which from vm
             // write success reset the handle.
             if writeable && tap_sent_handle.is_some() {
-                tap_sent_handle.map(|ref b| {
-                    tap.write(b).unwrap();
-                });
+                let mut max_send_limited: u8 = 16;
+                while max_send_limited > 0 {
+                    match tap_sent_handle {
+                        Some(ref b) => tap.write(b).unwrap(),
+                        None => break,
+                    };
+                    tap_sent_handle = recv_from_vm_channel!();
+                    max_send_limited -= 1;
+                } 
                 tap_sent_handle = None;
             }
 
