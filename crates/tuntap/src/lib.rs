@@ -6,13 +6,14 @@ mod platform;
 mod poll;
 mod token;
 mod event;
+mod r#async;
 mod interest;
 
-pub(crate) use error::*;
+pub use error::{Error, Result};
 
-pub use platform::{Fd, Tap};
+pub use platform::Fd;
 
-pub use address::*;
+pub use address::{EtherAddr, IntoAddress};
 
 pub use configuration::Configuration;
 
@@ -22,5 +23,7 @@ pub use event::{Event, Events};
 
 pub use token::Token;
 
-pub use poll::*;
+pub use poll::Poll;
+
+pub use dev::Tap;
 

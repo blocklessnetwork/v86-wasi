@@ -27,3 +27,6 @@ anyhow = {workspace = true}
 [features]
 default = []
 tap = ["tuntap"]
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+tuntap = {workspace = true}

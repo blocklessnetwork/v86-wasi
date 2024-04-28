@@ -147,7 +147,6 @@ impl InnerEmulator {
         }
         self.cpu = Some(CPU::new(&mut inst, store.clone()));
         self.net_term_adapter.as_mut().map(|t| t.init());
-        #[cfg(feature = "tap")]
         self.net_adapter.as_mut().map(|t| t.init());
 
         self.register_trigger(|store| {

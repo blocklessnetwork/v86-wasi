@@ -1,10 +1,16 @@
 use std::io::{Read, Write};
 
-use libc::{AF_INET, SOCK_DGRAM, sockaddr};
+use libc::{
+    AF_INET, SOCK_DGRAM, sockaddr
+};
 use std::io;
 
 use crate::address::EtherAddr;
-use crate::{platform::posix::Fd, dev::Device, configuration::Configuration};
+use crate::{
+    dev::Device, 
+    platform::posix::Fd, 
+    configuration::Configuration
+};
 use crate::{Result, Error};
 use std::ptr;
 use crate::platform::posix::IntoSockAddr;
@@ -88,19 +94,18 @@ impl Tap {
 
     fn try_open() -> Result<(libc::c_int, i8)> {
         unsafe {
-            let mut rs = 0;
+            let mut ret = 0;
             let mut idx = 0;
             for n in 0 ..= 15 {
                 let path = format!("/dev/tap{}\0", n);
-                rs = libc::open(path.as_ptr() as _, libc::O_RDWR|libc::O_NONBLOCK);
+                ret = libc::open(path.as_ptr() as _, libc::O_RDWR|libc::O_NONBLOCK);
                 idx = n;
-                if rs > 0 {
+                if ret > 0 {
                     break;
                 }
             }
-            Ok((rs, idx))
+            Ok((ret, idx))
         }
-        
     }
 }
 
