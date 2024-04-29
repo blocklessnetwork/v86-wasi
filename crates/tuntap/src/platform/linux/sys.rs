@@ -2,10 +2,11 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(dead_code)]
-
 use std::mem;
+use ioctl::ioctl;
 
-const IFNAMSIZ: u32 = 16;
+
+const IFNAMSIZ: usize = libc::IFNAMSIZ;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -39,12 +40,7 @@ pub union ifreq_ifru {
     align: [u64; 3usize],
 }
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct sockaddr {
-    pub sa_family: ::std::os::raw::c_ushort,
-    pub sa_data: [::std::os::raw::c_char; 14usize],
-}
+type sockaddr = libc::sockaddr;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -84,3 +80,42 @@ impl ifreq {
         name
     }
 }
+
+
+const IFF_UP: u16         = 1<<0;
+const IFF_RUNNING: u16    = 1<<6;
+const IFF_TUN: u16        = 0x0001;
+const IFF_TAP: u16        = 0x0002;
+const IFF_NO_PI: u16      = 0x0100;
+const IFF_ONE_QUEUE: u16  = 0x0200;
+const IFF_VNET_HDR: u16   = 0x0400;
+const IFF_TUN_EXCL: u16   = 0x0800;
+
+
+
+const TUNSETIFF: u64      = 0x400454ca;
+const TUNSETOWNER: u64    = 0x400454cc;
+const TUNSETGROUP: u64    = 0x400454ce;
+
+const SIOCGIFFLAGS: u64   = 0x8913;
+const SIOCSIFFLAGS: u64   = 0x8914;
+const SIOCSIFADDR: u64    = 0x8916;
+const SIOCGIFADDR: u64    = 0x8915;
+const SIOCGIFMTU: u64     = 0x8921;
+const SIOCSIFMTU: u64     = 0x8922;
+const SIOCSIFNAME: u64    = 0x8923;
+const SIOCSIFHWADDR: u64  = 0x8924;
+const SIOCGIFHWADDR: u64  = 0x8927;
+const SIOCGIFINDEX: u64   = 0x8933;
+const SIOGIFINDEX: u64    = 0x8933; // same as SIOCGIFINDEX
+
+
+
+
+ioctl!(bad write siocsifname with TUNSETIFF; ifreq);
+ioctl!(bad write siocgifmtu with SIOCGIFMTU; ifreq);
+ioctl!(bad read siocsifmtu with SIOCSIFMTU; ifreq);
+ioctl!(bad write siocsifhwaddr with SIOCSIFHWADDR; ifreq);
+ioctl!(bad read siocgifhwaddr with SIOCGIFHWADDR; ifreq);
+ioctl!(bad write siocsifaddr with SIOCSIFADDR; ifreq);
+ioctl!(bad read siocgifaddr with SIOCGIFADDR; ifreq);
