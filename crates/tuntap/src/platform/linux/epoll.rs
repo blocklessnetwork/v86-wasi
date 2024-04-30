@@ -2,6 +2,7 @@ use std::{io, os::fd::RawFd, ptr};
 
 use crate::{dev::Device, Interest, Token};
 
+use std::time::Duration;
 
 pub struct Epoll {
     fd: RawFd
@@ -34,11 +35,7 @@ impl Epoll {
         Ok(())
     }
 
-    pub fn unregister(&mut self, tap: &impl Device, token: Token, interest: Interest) -> io::Result<()> {
-        let mut event = libc::epoll_event {
-            events: interests_to_epoll(interest),
-            u64: token.0 as u64,
-        };
+    pub fn unregister(&mut self, tap: &impl Device) -> io::Result<()> {
         unsafe {
             if libc::epoll_ctl(
                 self.fd, 
@@ -49,6 +46,11 @@ impl Epoll {
                 return Err(io::Error::last_os_error());
             }
         }
+        Ok(())
+    }
+
+    pub fn poll(&mut self, events: &mut super::event::Events, t: Option<Duration>) -> io::Result<()> {
+
         Ok(())
     }
 }

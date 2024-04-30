@@ -6,3 +6,5 @@ mod event;
 pub use event::{Event, Events};
 
 pub use dev::Tap;
+
+pub use epoll::Epoll;

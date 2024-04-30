@@ -10,15 +10,18 @@ use crate::{
 
 
 pub struct Poll {
-    #[cfg(atrget="macos")]
-    inner: platform::Selector
-    #[cfg(atrget="linux")]
-    inner: platform::E
+    #[cfg(target_os="macos")]
+    inner: platform::Selector,
+    #[cfg(target_os="linux")]
+    inner: platform::Epoll,
 }
 
 impl Poll {
     pub fn new() -> Self {
+        #[cfg(target_os="macos")]
         let inner = platform::Selector::new();
+        #[cfg(target_os="linux")]
+        let inner =  platform::Epoll::new();
         Self {
             inner
         }
