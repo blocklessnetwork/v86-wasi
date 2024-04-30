@@ -2,11 +2,12 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::net::Ipv4Addr;
 use std::os::fd::AsRawFd;
+
 use crate::{Configuration, Fd};
 use crate::{Error, Result};
 use crate::dev::Device;
 
-use super::sys::{ifreq, siocgifaddr, siocgifmtu, siocsifaddr, siocsifmtu, siocsifname};
+use super::sys::*;
 
 
 pub struct Tap {
@@ -55,6 +56,32 @@ impl Tap {
 
 }
 
+trait Sockaddr2Ipv4 {
+    fn to_ipv4(&self) -> Ipv4Addr;
+}
+
+trait Ipv42Sockaddr {
+    fn to_sockaddr(&self) -> libc::sockaddr;
+} 
+
+impl Sockaddr2Ipv4 for libc::sockaddr {
+    fn to_ipv4(&self) -> Ipv4Addr {
+        let sa = self.sa_data;
+        Ipv4Addr::new(sa[0] as _, sa[1] as _, sa[2] as _, sa[3] as _)
+    }
+}
+
+impl Ipv42Sockaddr for Ipv4Addr {
+    fn to_sockaddr(&self) -> libc::sockaddr {
+        let mut sockaddr = unsafe {std::mem::zeroed::<libc::sockaddr>()};
+        sockaddr.sa_family = libc::AF_INET as _;
+        for (i, v) in self.octets().iter().enumerate() {
+            sockaddr.sa_data[i] = *v as _;
+        }
+        sockaddr
+    }
+}
+
 impl Device for Tap {
     fn name(&self) -> &str {
         &self.name
@@ -70,7 +97,21 @@ impl Device for Tap {
     }
 
     fn enabled(&mut self, value: bool) -> Result<()> {
-        todo!()
+        let mut req = ifreq::new(&self.name);
+        unsafe {
+            if siocgifflags(self.fd.0, &mut req) < 0 {
+                return Err(Error::Io(io::Error::last_os_error()));
+            }
+            if value {
+                req.ifr_ifru.ifru_flags |= (IFF_UP|IFF_RUNNING) as i16;
+            } else {
+                req.ifr_ifru.ifru_flags &= !(IFF_UP|IFF_RUNNING) as i16;
+            }
+            if siocsifflags(self.fd.0, &req) < 0 {
+                return Err(Error::Io(io::Error::last_os_error()));
+            }
+        }
+        Ok(())
     }
 
     fn address(&self) -> Result<std::net::Ipv4Addr> {
@@ -80,17 +121,14 @@ impl Device for Tap {
                 return Err(Error::Io(io::Error::last_os_error()));
             }
         }
-        let sa = req.ifr_ifru.ifru_addr.sa_data;
-        let ipv4 = Ipv4Addr::new(sa[0] as _, sa[1] as _, sa[2] as _, sa[3] as _);
-        Ok(ipv4)
+        Ok(req.ifr_ifru.ifru_addr.to_ipv4())
     }
 
     fn set_address(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
         let mut req = ifreq::new(&self.name);
-        let sa = req.ifr_ifru.ifru_addr.sa_data;
-        req.ifr_ifru.ifru_addr.sa_family = libc::AF_INET as _;
+        req.ifr_ifru.ifru_addr = value.to_sockaddr();
         unsafe {
-            if siocsifaddr(self.fd.0, &mut req) < 0 {
+            if siocsifaddr(self.fd.0, &req) < 0 {
                 return Err(Error::Io(io::Error::last_os_error()));
             }
         }
@@ -98,27 +136,66 @@ impl Device for Tap {
     }
 
     fn destination(&self) -> Result<std::net::Ipv4Addr> {
-        todo!()
+        let mut req = ifreq::new(&self.name);
+        unsafe {
+            if siocgifdestaddr(self.fd.0, &mut req) < 0 {
+                return Err(Error::Io(io::Error::last_os_error()));
+            }
+        }
+        Ok(req.ifr_ifru.ifru_dstaddr.to_ipv4())
     }
 
     fn set_destination(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
-        todo!()
+        let mut req = ifreq::new(&self.name);
+        req.ifr_ifru.ifru_dstaddr = value.to_sockaddr();
+        unsafe {
+            if siocsifdestaddr(self.fd.0, &req) < 0 {
+                return Err(Error::Io(io::Error::last_os_error()));
+            }
+        }
+        Ok(())
     }
 
     fn broadcast(&self) -> Result<std::net::Ipv4Addr> {
-        todo!()
+        let mut req = ifreq::new(&self.name);
+        unsafe {
+            if siocgifbroadcast(self.fd.0, &mut req) < 0 {
+                return Err(Error::Io(io::Error::last_os_error()));
+            }
+        }
+        Ok(req.ifr_ifru.ifru_broadaddr.to_ipv4())
     }
 
     fn set_broadcast(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
-        todo!()
+        let mut req = ifreq::new(&self.name);
+        req.ifr_ifru.ifru_broadaddr = value.to_sockaddr();
+        unsafe {
+            if siocsifbroadcast(self.fd.0, &req) < 0 {
+                return Err(Error::Io(io::Error::last_os_error()));
+            }
+        }
+        Ok(())
     }
 
     fn netmask(&self) -> Result<std::net::Ipv4Addr> {
-        todo!()
+        let mut req = ifreq::new(&self.name);
+        unsafe {
+            if siocgifnetmask(self.fd.0, &mut req) < 0 {
+                return Err(Error::Io(io::Error::last_os_error()));
+            }
+        }
+        Ok(req.ifr_ifru.ifru_netmask.to_ipv4())
     }
 
     fn set_netmask(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
-        todo!()
+        let mut req = ifreq::new(&self.name);
+        req.ifr_ifru.ifru_netmask = value.to_sockaddr();
+        unsafe {
+            if siocsifnetmask(self.fd.0, &req) < 0 {
+                return Err(Error::Io(io::Error::last_os_error()));
+            }
+        }
+        Ok(())
     }
 
     fn mtu(&self) -> Result<i32> {
@@ -135,7 +212,7 @@ impl Device for Tap {
         let mut req = ifreq::new(&self.name);
         req.ifr_ifru.ifru_mtu = value;
         unsafe {
-            if siocsifmtu(self.fd.0, &mut req) < 0 {
+            if siocsifmtu(self.fd.0, &req) < 0 {
                 return Err(Error::Io(io::Error::last_os_error()));
             }
         }
@@ -143,7 +220,16 @@ impl Device for Tap {
     }
 
     fn set_ether_address(&mut self, eth: crate::EtherAddr) -> Result<()> {
-        todo!()
+        let mut req = ifreq::new(&self.name);
+        for (i, v) in eth.as_ref().iter().enumerate() {
+            req.ifr_ifru.ifru_hwaddr.sa_data[i] = *v as _;
+        }
+        unsafe {
+            if  siocsifhwaddr(self.fd.0, &req) < 0 {
+                return Err(Error::Io(io::Error::last_os_error()));
+            }
+        }
+        Ok(())
     }
 
     fn fd(&self) -> &Fd {
@@ -169,4 +255,3 @@ impl Write for Tap {
         self.flush()
     }
 }
-

@@ -10,7 +10,10 @@ use crate::{
 
 
 pub struct Poll {
+    #[cfg(atrget="macos")]
     inner: platform::Selector
+    #[cfg(atrget="linux")]
+    inner: platform::E
 }
 
 impl Poll {

@@ -23,7 +23,7 @@ impl Interest {
     }
 
     #[inline]
-    pub fn is_writeable(self) -> bool {
+    pub fn is_writable(self) -> bool {
         (self.0 & WRITEABLE) != 0
     }
 

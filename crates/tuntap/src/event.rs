@@ -20,8 +20,8 @@ impl Event {
     }
 
     #[inline]
-    pub fn is_writeable(&self) -> bool {
-        self.inner.is_writeable()
+    pub fn is_writable(&self) -> bool {
+        self.inner.is_writable()
     }
 
     /// The event repr is the transparent that mean the the memory align is same as inner

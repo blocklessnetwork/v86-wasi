@@ -82,8 +82,8 @@ impl ifreq {
 }
 
 
-const IFF_UP: u16         = 1<<0;
-const IFF_RUNNING: u16    = 1<<6;
+pub const IFF_UP: u16         = libc::IFF_UP as _;
+pub const IFF_RUNNING: u16    = libc::IFF_RUNNING as _;
 const IFF_TUN: u16        = 0x0001;
 const IFF_TAP: u16        = 0x0002;
 const IFF_NO_PI: u16      = 0x0100;
@@ -97,25 +97,41 @@ const TUNSETIFF: u64      = 0x400454ca;
 const TUNSETOWNER: u64    = 0x400454cc;
 const TUNSETGROUP: u64    = 0x400454ce;
 
-const SIOCGIFFLAGS: u64   = 0x8913;
-const SIOCSIFFLAGS: u64   = 0x8914;
-const SIOCSIFADDR: u64    = 0x8916;
-const SIOCGIFADDR: u64    = 0x8915;
-const SIOCGIFMTU: u64     = 0x8921;
-const SIOCSIFMTU: u64     = 0x8922;
-const SIOCSIFNAME: u64    = 0x8923;
-const SIOCSIFHWADDR: u64  = 0x8924;
-const SIOCGIFHWADDR: u64  = 0x8927;
-const SIOCGIFINDEX: u64   = 0x8933;
-const SIOGIFINDEX: u64    = 0x8933; // same as SIOCGIFINDEX
-
+const SIOCGIFFLAGS: u64   = libc::SIOCGIFFLAGS;
+const SIOCSIFFLAGS: u64   = libc::SIOCSIFFLAGS;
+const SIOCSIFADDR: u64    = libc::SIOCSIFADDR;
+const SIOCGIFADDR: u64    = libc::SIOCGIFADDR;
+const SIOCGIFMTU: u64     = libc::SIOCGIFMTU;
+const SIOCSIFMTU: u64     = libc::SIOCSIFMTU;
+const SIOCSIFNAME: u64    = libc::SIOCSIFNAME;
+const SIOCSIFHWADDR: u64  = libc::SIOCSIFHWADDR;
+const SIOCGIFHWADDR: u64  = libc::SIOCGIFHWADDR;
+const SIOCGIFINDEX: u64   = libc::SIOCGIFINDEX;
+const SIOGIFINDEX: u64    = libc::SIOGIFINDEX; // same as SIOCGIFINDEX
+const SIOCSIFNETMASK: u64 = libc::SIOCSIFNETMASK;
+const SIOCGIFNETMASK: u64 = libc::SIOCGIFNETMASK;
+const SIOCGIFBRDADDR: u64 = libc::SIOCGIFBRDADDR;
+const SIOCSIFBRDADDR: u64 = libc::SIOCSIFBRDADDR;
+const SIOCGIFDSTADDR: u64 = libc::SIOCGIFDSTADDR;
+const SIOCSIFDSTADDR: u64 = libc::SIOCSIFDSTADDR;
 
 
 
 ioctl!(bad write siocsifname with TUNSETIFF; ifreq);
-ioctl!(bad write siocgifmtu with SIOCGIFMTU; ifreq);
-ioctl!(bad read siocsifmtu with SIOCSIFMTU; ifreq);
+ioctl!(bad read siocgifmtu with SIOCGIFMTU; ifreq);
+ioctl!(bad write siocsifmtu with SIOCSIFMTU; ifreq);
 ioctl!(bad write siocsifhwaddr with SIOCSIFHWADDR; ifreq);
 ioctl!(bad read siocgifhwaddr with SIOCGIFHWADDR; ifreq);
 ioctl!(bad write siocsifaddr with SIOCSIFADDR; ifreq);
 ioctl!(bad read siocgifaddr with SIOCGIFADDR; ifreq);
+ioctl!(bad read siocgifnetmask with SIOCSIFNETMASK; ifreq);
+ioctl!(bad write siocsifnetmask with SIOCGIFNETMASK; ifreq);
+
+ioctl!(bad read siocgifflags with SIOCGIFFLAGS; ifreq);
+ioctl!(bad write siocsifflags with SIOCSIFFLAGS; ifreq);
+
+ioctl!(bad read siocgifbroadcast with SIOCGIFBRDADDR; ifreq);
+ioctl!(bad write siocsifbroadcast with SIOCSIFBRDADDR; ifreq);
+
+ioctl!(bad read siocgifdestaddr with SIOCGIFDSTADDR; ifreq);
+ioctl!(bad write siocsifdestaddr with SIOCSIFDSTADDR; ifreq);

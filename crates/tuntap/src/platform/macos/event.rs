@@ -17,8 +17,8 @@ impl Event {
     }
 
     #[inline]
-    pub fn is_writeable(&self) -> bool {
-        self.interest.is_writeable()
+    pub fn is_writable(&self) -> bool {
+        self.interest.is_writable()
     }
 }
 
