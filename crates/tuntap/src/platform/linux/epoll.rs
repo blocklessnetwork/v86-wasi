@@ -50,7 +50,30 @@ impl Epoll {
     }
 
     pub fn poll(&mut self, events: &mut super::event::Events, t: Option<Duration>) -> io::Result<()> {
-
+        let timeout = t
+            .map(|to| {
+                // `Duration::as_millis` truncates, so round up. This avoids
+                // turning sub-millisecond timeouts into a zero timeout, unless
+                // the caller explicitly requests that by specifying a zero
+                // timeout.
+                to.checked_add(Duration::from_nanos(999_999))
+                    .unwrap_or(to)
+                    .as_millis() as libc::c_int
+            })
+            .unwrap_or(-1);
+        events.clear();
+        unsafe {
+            let n = libc::epoll_wait(
+                self.fd,
+                events.as_mut_ptr(),
+                events.capacity() as i32,
+                timeout,
+            );
+            if n < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            
+        }
         Ok(())
     }
 }
