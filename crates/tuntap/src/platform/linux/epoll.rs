@@ -65,14 +65,14 @@ impl Epoll {
         unsafe {
             let n = libc::epoll_wait(
                 self.fd,
-                events.as_mut_ptr(),
+                events.as_mut_ptr() as _,
                 events.capacity() as i32,
                 timeout,
             );
             if n < 0 {
                 return Err(io::Error::last_os_error());
             }
-            
+            events.set_len(n as _);
         }
         Ok(())
     }

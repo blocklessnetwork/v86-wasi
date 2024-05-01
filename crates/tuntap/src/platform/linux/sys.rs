@@ -84,12 +84,12 @@ impl ifreq {
 
 pub const IFF_UP: u16         = libc::IFF_UP as _;
 pub const IFF_RUNNING: u16    = libc::IFF_RUNNING as _;
-const IFF_TUN: u16        = 0x0001;
-const IFF_TAP: u16        = 0x0002;
-const IFF_NO_PI: u16      = 0x0100;
-const IFF_ONE_QUEUE: u16  = 0x0200;
-const IFF_VNET_HDR: u16   = 0x0400;
-const IFF_TUN_EXCL: u16   = 0x0800;
+const IFF_TUN: u16            = libc::IFF_TUN as _;
+pub const IFF_TAP: u16        = libc::IFF_TAP as _;
+const IFF_NO_PI: u16          = 0x0100;
+const IFF_ONE_QUEUE: u16      = 0x0200;
+const IFF_VNET_HDR: u16       = 0x0400;
+const IFF_TUN_EXCL: u16       = 0x0800;
 
 
 

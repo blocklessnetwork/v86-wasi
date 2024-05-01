@@ -19,6 +19,11 @@ pub struct Configuration {
 }
 
 impl Configuration {
+    
+    pub fn new() -> Self {
+        Default::default()
+    }
+
     /// Set the name.
     pub fn name<S: AsRef<str>>(&mut self, name: S) -> &mut Self {
         self.name = Some(name.as_ref().into());
