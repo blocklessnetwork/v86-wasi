@@ -112,8 +112,8 @@ ioctl!(bad write siocsifhwaddr with SIOCSIFHWADDR; ifreq);
 ioctl!(bad read siocgifhwaddr with SIOCGIFHWADDR; ifreq);
 ioctl!(bad write siocsifaddr with SIOCSIFADDR; ifreq);
 ioctl!(bad read siocgifaddr with SIOCGIFADDR; ifreq);
-ioctl!(bad read siocgifnetmask with SIOCSIFNETMASK; ifreq);
-ioctl!(bad write siocsifnetmask with SIOCGIFNETMASK; ifreq);
+ioctl!(bad read siocgifnetmask with SIOCGIFNETMASK; ifreq);
+ioctl!(bad write siocsifnetmask with SIOCSIFNETMASK; ifreq);
 
 ioctl!(bad read siocgifflags with SIOCGIFFLAGS; ifreq);
 ioctl!(bad write siocsifflags with SIOCSIFFLAGS; ifreq);

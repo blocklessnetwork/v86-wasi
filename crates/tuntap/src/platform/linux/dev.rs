@@ -123,6 +123,7 @@ impl Device for Tap {
 
     fn set_broadcast(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
         let mut req = ifreq::new(&self.name);
+        req.ifr_ifru.ifru_broadaddr = value.to_sockaddr();
         syscall!(siocsifbroadcast(self.sock4, &req));
         Ok(())
     }
