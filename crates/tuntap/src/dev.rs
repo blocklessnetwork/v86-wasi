@@ -10,7 +10,7 @@ pub trait Device: Read + Write {
     /// Reconfigure the device.
     fn configure(&mut self, config: &Configuration) -> Result<()> {
         let name = config.name.as_ref().map_or(String::new(), |n| n.to_string());
-        self.set_name(&name);
+        self.set_name(&name)?;
         if let Some(ip) = config.address {
             self.set_address(ip)?;
         }
@@ -86,6 +86,12 @@ pub trait Device: Read + Write {
 #[repr(transparent)]
 pub struct Tap {
     inner: platform::Tap
+}
+
+impl Tap {
+    pub fn new(cfg: Configuration) -> Result<Self> {
+        platform::Tap::new(cfg).map(|inner| Self {inner})
+    }
 }
 
 impl Device for Tap {

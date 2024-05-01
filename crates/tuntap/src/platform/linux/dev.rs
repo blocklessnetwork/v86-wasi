@@ -7,6 +7,7 @@ use crate::{Configuration, Fd};
 use crate::{Error, Result};
 use crate::dev::Device;
 
+
 use super::sys::*;
 
 
@@ -40,7 +41,6 @@ impl Tap {
             sock4,
             config,
         };
-        println!(">>>>");
         tap.configure(&cfg)?;
         Ok(tap)
     }
@@ -65,19 +65,23 @@ trait Ipv42Sockaddr {
 
 impl Sockaddr2Ipv4 for libc::sockaddr {
     fn to_ipv4(&self) -> Ipv4Addr {
-        let sa = self.sa_data;
-        Ipv4Addr::new(sa[0] as _, sa[1] as _, sa[2] as _, sa[3] as _)
+        let sockaddr_in: libc::sockaddr_in = unsafe { std::mem::transmute(*self) };
+
+        sockaddr_in.sin_addr.s_addr.to_le_bytes().into()
     }
 }
 
 impl Ipv42Sockaddr for Ipv4Addr {
     fn to_sockaddr(&self) -> libc::sockaddr {
-        let mut sockaddr = unsafe {std::mem::zeroed::<libc::sockaddr>()};
-        sockaddr.sa_family = libc::AF_INET as _;
-        for (i, v) in self.octets().iter().enumerate() {
-            sockaddr.sa_data[i] = *v as _;
-        }
-        sockaddr
+        let mut sockaddr_in: libc::sockaddr_in = unsafe { std::mem::zeroed() };
+
+        sockaddr_in.sin_family = libc::AF_INET as u16;
+        sockaddr_in.sin_addr = libc::in_addr {
+            s_addr: u32::from_le_bytes(self.octets()),
+        };
+        sockaddr_in.sin_port = 0;
+
+        unsafe { std::mem::transmute(sockaddr_in) }
     }
 }
 
@@ -128,14 +132,13 @@ impl Device for Tap {
 
     fn set_address(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
         let mut req = ifreq::new(&self.name);
-        println!("{}", self.name);
         req.ifr_ifru.ifru_addr = value.to_sockaddr();
+        
         unsafe {
             if siocsifaddr(self.sock4, &req) < 0 {
                 return Err(Error::Io(io::Error::last_os_error()));
             }
         }
-        println!("111");
         Ok(())
     }
 
@@ -257,17 +260,5 @@ impl Write for Tap {
     #[inline]
     fn flush(&mut self) -> io::Result<()> {
         self.file.flush()
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn test_open() {
-        let mut cfg = Configuration::new();
-        cfg.address("192.168.0.1");
-        let tap = Tap::new(cfg).unwrap();
-        println!("{}", tap.name());
     }
 }
