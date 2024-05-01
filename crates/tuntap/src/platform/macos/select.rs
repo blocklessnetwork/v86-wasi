@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap, io, mem::MaybeUninit, ptr, time::Duration 
+    collections::HashMap, io, mem::MaybeUninit, os::fd::RawFd, ptr, time::Duration 
 };
 
 use crate::{
@@ -33,7 +33,7 @@ impl Selector {
 
     /// registor the tap fd in to select fd bit set.
     pub fn register(&mut self, tap: &impl Device, token: Token, interest: Interest) -> io::Result<()> {
-        let fd = tap.fd().0;
+        let fd: RawFd = **tap.fd();
         unsafe {
             if self.nfds <= fd + 1 {
                 self.nfds = fd + 1
@@ -53,7 +53,7 @@ impl Selector {
 
     /// unregistor the tap fd.
     pub fn unregister(&mut self, tap: &impl Device) -> io::Result<()> {
-        let fd = tap.fd().0;
+        let fd = **tap.fd();
         self.tokens.remove(&fd);
         unsafe {
             libc::FD_CLR(fd, self.r_sets.as_mut_ptr());
