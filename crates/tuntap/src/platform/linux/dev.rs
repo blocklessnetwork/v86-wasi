@@ -6,7 +6,6 @@ use std::os::fd::AsRawFd;
 use crate::{Configuration, Fd};
 use crate::{Error, Result};
 use crate::dev::Device;
-use crate::platform::posix::IntoSockAddr;
 
 
 use super::sys::*;
@@ -60,10 +59,28 @@ trait Sockaddr2Ipv4 {
     fn to_ipv4(&self) -> Ipv4Addr;
 }
 
+trait Ipv42Sockaddr {
+    fn to_sockaddr(&self) -> libc::sockaddr;
+} 
+
 impl Sockaddr2Ipv4 for libc::sockaddr {
     fn to_ipv4(&self) -> Ipv4Addr {
         let sockaddr_in: libc::sockaddr_in = unsafe { std::mem::transmute(*self) };
         sockaddr_in.sin_addr.s_addr.to_le_bytes().into()
+    }
+}
+
+impl Ipv42Sockaddr for Ipv4Addr {
+    fn to_sockaddr(&self) -> libc::sockaddr {
+        let mut sockaddr_in: libc::sockaddr_in = unsafe { std::mem::zeroed() };
+
+        sockaddr_in.sin_family = libc::AF_INET as u16;
+        sockaddr_in.sin_addr = libc::in_addr {
+            s_addr: u32::from_le_bytes(self.octets()),
+        };
+        sockaddr_in.sin_port = 0;
+
+        unsafe { std::mem::transmute(sockaddr_in) }
     }
 }
 
