@@ -13,6 +13,8 @@ impl IntoSockAddr for Ipv4Addr {
             &mut *(&mut addr as *mut libc::sockaddr as * mut libc::sockaddr_in)
         };
         addr_in.sin_addr.s_addr = u32::from_ne_bytes(self.octets());
+        addr_in.sin_family = libc::AF_INET as _;
+        addr_in.sin_port = 0;
         addr
     }
 }
