@@ -16,7 +16,7 @@ use crate::{
 use crate::{Result, Error};
 use crate::platform::posix::IntoSockAddr;
 use std::ptr;
-
+#[allow(unused)]
 use super::sys::*;
 
 pub struct Tap {
