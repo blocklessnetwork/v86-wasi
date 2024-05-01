@@ -19,7 +19,7 @@ impl IntoSockAddr for Ipv4Addr {
     }
 }
 
-trait Sockaddr2Ipv4 {
+pub trait Sockaddr2Ipv4 {
     fn to_ipv4(&self) -> Ipv4Addr;
 }
 
