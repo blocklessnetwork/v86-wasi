@@ -26,7 +26,7 @@ impl Epoll {
             if libc::epoll_ctl(
                 self.fd, 
                 libc::EPOLL_CTL_ADD, 
-                tap.fd().0, 
+                **tap.fd(), 
                 &mut event
             ) < 0 {
                 return Err(io::Error::last_os_error());
@@ -40,7 +40,7 @@ impl Epoll {
             if libc::epoll_ctl(
                 self.fd, 
                 libc::EPOLL_CTL_DEL, 
-                tap.fd().0, 
+                **tap.fd(), 
                 ptr::null_mut(),
             ) < 0 {
                 return Err(io::Error::last_os_error());

@@ -56,13 +56,15 @@ pub struct ifmap {
 impl ifreq {
     pub fn new(name: &str) -> Self {
         let mut req: ifreq = unsafe { mem::zeroed() };
-        set_ifname!(self.ifr_ifrn.ifrn_name, name);
+        set_ifname!(req.ifr_ifrn.ifrn_name, name);
         req
     }
 
     pub fn name(&self) -> String {
         let mut name = String::new();
-        get_ifname!(self.ifr_ifrn.ifrn_name, name);
+        unsafe {
+            get_ifname!(self.ifr_ifrn.ifrn_name, name);
+        }
         name
     }
 }
