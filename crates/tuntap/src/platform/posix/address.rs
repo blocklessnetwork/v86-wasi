@@ -18,3 +18,14 @@ impl IntoSockAddr for Ipv4Addr {
         addr
     }
 }
+
+trait Sockaddr2Ipv4 {
+    fn to_ipv4(&self) -> Ipv4Addr;
+}
+
+impl Sockaddr2Ipv4 for libc::sockaddr {
+    fn to_ipv4(&self) -> Ipv4Addr {
+        let sockaddr_in: libc::sockaddr_in = unsafe { std::mem::transmute(*self) };
+        sockaddr_in.sin_addr.s_addr.to_le_bytes().into()
+    }
+}

@@ -6,7 +6,7 @@ use std::os::fd::AsRawFd;
 use crate::{Configuration, Fd};
 use crate::{Error, Result};
 use crate::dev::Device;
-use crate::platform::posix::IntoSockAddr;
+use crate::platform::posix::{IntoSockAddr, Sockaddr2Ipv4};
 
 
 use super::sys::*;
@@ -54,17 +54,6 @@ impl Tap {
         file.map_err(|e: io::Error| Error::Io(e))
     }
 
-}
-
-trait Sockaddr2Ipv4 {
-    fn to_ipv4(&self) -> Ipv4Addr;
-}
-
-impl Sockaddr2Ipv4 for libc::sockaddr {
-    fn to_ipv4(&self) -> Ipv4Addr {
-        let sockaddr_in: libc::sockaddr_in = unsafe { std::mem::transmute(*self) };
-        sockaddr_in.sin_addr.s_addr.to_le_bytes().into()
-    }
 }
 
 impl Device for Tap {
