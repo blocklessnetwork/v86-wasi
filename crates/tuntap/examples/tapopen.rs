@@ -1,4 +1,4 @@
-use tuntap::{IntoAddress, Configuration, Tap};
+use tuntap::{Configuration, Tap};
 
 fn main () {
     let mut cfg = Configuration::new();

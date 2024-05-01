@@ -43,7 +43,7 @@ impl Selector {
             if interest.is_readable() {
                 libc::FD_SET(fd, self.r_sets.as_mut_ptr());
             } 
-            if interest.is_writeable() {
+            if interest.is_writable() {
                 libc::FD_SET(fd, self.w_sets.as_mut_ptr());
             }
         }

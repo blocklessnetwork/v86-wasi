@@ -1,11 +1,11 @@
 use std::{net::Ipv4Addr, mem};
 
 pub trait IntoSockAddr {
-    fn to_addr(&self) -> libc::sockaddr;
+    fn to_sockaddr(&self) -> libc::sockaddr;
 }
 
 impl IntoSockAddr for Ipv4Addr {
-    fn to_addr(&self) -> libc::sockaddr {
+    fn to_sockaddr(&self) -> libc::sockaddr {
         let mut addr  = unsafe {
             mem::zeroed::<libc::sockaddr>()
         };

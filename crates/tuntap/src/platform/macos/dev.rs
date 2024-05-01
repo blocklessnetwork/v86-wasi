@@ -12,8 +12,8 @@ use crate::{
     configuration::Configuration
 };
 use crate::{Result, Error};
-use std::ptr;
 use crate::platform::posix::IntoSockAddr;
+use std::ptr;
 
 use super::sys::{
     ifreq, 
@@ -144,7 +144,7 @@ impl Device for Tap {
 
     fn set_broadcast(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
         let mut req = self.ifaliasreq();
-        req.broadaddr = value.to_addr();
+        req.broadaddr = value.to_sockaddr();
         req.broadaddr.sa_family = libc::AF_INET as _;
         req.broadaddr.sa_len = std::mem::size_of::<sockaddr>() as _;
         let rs = unsafe {
@@ -202,18 +202,18 @@ impl Device for Tap {
         
         let mut req = self.ifaliasreq();
         if let Some(ip) = config.address {
-            req.addr = ip.to_addr();
+            req.addr = ip.to_sockaddr();
             req.addr.sa_family = libc::AF_INET as _;
             req.addr.sa_len = std::mem::size_of::<sockaddr>() as _;
 
             config.netmask.map(|ip| {
-                req.mask = ip.to_addr();
+                req.mask = ip.to_sockaddr();
                 req.mask.sa_family = libc::AF_INET as _;
                 req.mask.sa_len = std::mem::size_of::<sockaddr>() as _;
             });
 
             config.broadcast.map(|ip| {
-                req.mask = ip.to_addr();
+                req.mask = ip.to_sockaddr();
                 req.mask.sa_family = libc::AF_INET as _;
                 req.mask.sa_len = std::mem::size_of::<sockaddr>() as _;
             });
