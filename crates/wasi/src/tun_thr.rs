@@ -154,7 +154,7 @@ impl TunThread {
             let writeable = if event.is_some() {
                 let (readable, writeable) = 
                     event.map_or((false, false), 
-                        |e| (e.is_readable(), e.is_writeable())
+                        |e| (e.is_readable(), e.is_writable())
                     );
                 if try_sent_buf.is_some() {
                     let sent = try_sent_buf.take().unwrap();
