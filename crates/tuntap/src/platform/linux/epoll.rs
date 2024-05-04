@@ -22,12 +22,16 @@ impl Epoll {
             events: interests_to_epoll(interest),
             u64: token.0 as u64,
         };
-        syscall!(libc::epoll_ctl(
-            self.fd, 
-            libc::EPOLL_CTL_ADD, 
-            **tap.fd(), 
-            &mut event
-        ));
+        unsafe {
+            if libc::epoll_ctl(
+                self.fd, 
+                libc::EPOLL_CTL_ADD, 
+                **tap.fd(), 
+                &mut event
+            ) < 0 {
+                return Err(io::Error::last_os_error());
+            }
+        }
         Ok(())
     }
 
@@ -36,22 +40,30 @@ impl Epoll {
             events: interests_to_epoll(interest),
             u64: token.0 as u64,
         };
-        syscall!(libc::epoll_ctl(
-            self.fd, 
-            libc::EPOLL_CTL_MOD, 
-            **tap.fd(), 
-            &mut event
-        ));
+        unsafe {
+            if libc::epoll_ctl(
+                self.fd, 
+                libc::EPOLL_CTL_MOD, 
+                **tap.fd(), 
+                &mut event
+            ) < 0 {
+                return Err(io::Error::last_os_error());
+            }
+        }
         Ok(())
     }
 
     pub fn unregister(&mut self, tap: &impl Device) -> io::Result<()> {
-        syscall!(libc::epoll_ctl(
-            self.fd, 
-            libc::EPOLL_CTL_DEL, 
-            **tap.fd(), 
-            ptr::null_mut(),
-        ));
+        unsafe {
+            if libc::epoll_ctl(
+                self.fd, 
+                libc::EPOLL_CTL_DEL, 
+                **tap.fd(), 
+                ptr::null_mut(),
+            ) < 0 {
+                return Err(io::Error::last_os_error());
+            }
+        }
         Ok(())
     }
 
