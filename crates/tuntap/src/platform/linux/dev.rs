@@ -74,7 +74,7 @@ impl Device for Tap {
 
     fn enabled(&mut self, value: bool) -> Result<()> {
         let mut req = ifreq::new(&self.name);
-        syscall!(siocgifflags(*self.sock4, &mut req));
+        syscall!(siocgifflags(self.sock4, &mut req));
         unsafe {
             if value {
                 req.ifr_ifru.ifru_flags |= (IFF_UP|IFF_RUNNING) as i16;
