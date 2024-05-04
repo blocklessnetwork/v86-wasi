@@ -27,9 +27,7 @@ pub struct Tap {
 }
 
 impl Tap {
-    pub fn set_nonblock(&mut self) -> Result<()> {
-        self.fd.set_nonblock().map_err(|e| Error::Io(e))
-    }
+ 
 
     fn ifmtu(&self) -> ifmtu {
         unsafe {
@@ -81,6 +79,12 @@ impl Tap {
 }
 
 impl Device for Tap {
+
+    fn set_nonblock(&mut self) -> Result<()> {
+        self.fd.set_nonblock().map_err(|e| Error::Io(e))
+    }
+
+
     fn name(&self) -> &str {
         &self.name
     }

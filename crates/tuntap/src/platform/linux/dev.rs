@@ -21,10 +21,6 @@ pub struct Tap {
 
 impl Tap {
 
-    pub fn set_nonblock(&mut self) -> Result<()> {
-        self.fd.set_nonblock().map_err(|e| Error::Io(e))
-    }
-
     pub fn new(config: Configuration) -> Result<Self> {
         let file = Self::try_open()?;
         
@@ -60,6 +56,10 @@ impl Tap {
 }
 
 impl Device for Tap {
+    fn set_nonblock(&mut self) -> Result<()> {
+        self.fd.set_nonblock().map_err(|e| Error::Io(e))
+    }
+
     fn name(&self) -> &str {
         &self.name
     }
