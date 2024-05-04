@@ -7,7 +7,8 @@ use crossbeam_channel::{
 };
 
 use tuntap::{
-    Tap, 
+    Tap,
+    Device, 
     Token,
     Events,
     Interest,
