@@ -7,6 +7,9 @@ use crate::{platform, Fd, Result};
 
 
 pub trait Device: Read + Write {
+
+    fn set_nonblock(&mut self) -> Result<()>;
+
     /// Configure the device.
     fn configure(&mut self, config: &Configuration) -> Result<()> {
         let name = config.name.as_ref().map_or(String::new(), |n| n.to_string());
@@ -81,6 +84,11 @@ impl Tap {
 }
 
 impl Device for Tap {
+
+    #[inline(always)]
+    fn set_nonblock(&mut self) -> Result<()> {
+        self.inner.set_nonblock()
+    }
     
     #[inline(always)]
     fn name(&self) -> &str {
