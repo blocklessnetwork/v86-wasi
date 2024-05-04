@@ -51,6 +51,27 @@ impl Selector {
         Ok(())
     }
 
+    /// reregistor the tap fd in to select fd bit set.
+    pub fn reregister(&mut self, tap: &impl Device, token: Token, interest: Interest) -> io::Result<()> {
+        let fd: RawFd = **tap.fd();
+        self.tokens.remove(&fd);
+        unsafe {
+            if self.nfds <= fd + 1 {
+                self.nfds = fd + 1
+            }
+            libc::FD_CLR(fd, self.r_sets.as_mut_ptr());
+            libc::FD_CLR(fd, self.w_sets.as_mut_ptr());
+            if interest.is_readable() {
+                libc::FD_SET(fd, self.r_sets.as_mut_ptr());
+            } 
+            if interest.is_writable() {
+                libc::FD_SET(fd, self.w_sets.as_mut_ptr());
+            }
+        }
+        self.tokens.insert(fd, token);
+        Ok(())
+    }
+
     /// unregistor the tap fd.
     pub fn unregister(&mut self, tap: &impl Device) -> io::Result<()> {
         let fd = **tap.fd();

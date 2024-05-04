@@ -31,6 +31,10 @@ impl Poll {
         self.inner.register(tap, token, interest)
     }
 
+    pub fn reregister(&mut self, tap: &impl Device, token: Token, interest: Interest) -> io::Result<()> {
+        self.inner.reregister(tap, token, interest)
+    }
+
     pub fn unregister(&mut self, tap: &impl Device) -> io::Result<()> {
         self.inner.unregister(tap)
     }

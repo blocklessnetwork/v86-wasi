@@ -139,8 +139,9 @@ impl TunThread {
         }
         let mut tap_sent_handle = None;
         let mut interests = Interest::READABLE;
+        tap_poll.register(&tap, tap_token, interests).unwrap();
         loop {
-            tap_poll.register(&tap, tap_token, interests).unwrap();
+            tap_poll.reregister(&tap, tap_token, interests).unwrap();
             let rs = tap_poll.poll(&mut events, Some(Duration::from_millis(1)));
             let mut event = None;
             if let Ok(_) = rs {

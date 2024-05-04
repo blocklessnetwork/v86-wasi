@@ -39,7 +39,7 @@ impl Epoll {
         unsafe {
             if libc::epoll_ctl(
                 self.fd, 
-                libc::EPOLL_CTL_DEL, 
+                libc::EPOLL_CTL_MOD, 
                 **tap.fd(), 
                 ptr::null_mut(),
             ) < 0 {
