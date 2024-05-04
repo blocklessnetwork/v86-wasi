@@ -22,7 +22,7 @@ pub struct Tap {
 impl Tap {
 
     pub fn set_nonblock(&mut self) -> io::Result<()> {
-        self.file.set_nonblock()
+        self.fd.set_nonblock()
     }
 
     pub fn new(config: Configuration) -> Result<Self> {
