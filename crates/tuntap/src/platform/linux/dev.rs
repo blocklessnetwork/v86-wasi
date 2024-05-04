@@ -16,12 +16,12 @@ pub struct Tap {
     sock4: i32,
     file: File,
     name: String,
-    config: Configuration,
+    _config: Configuration,
 }
 
 impl Tap {
 
-    pub fn new(config: Configuration) -> Result<Self> {
+    pub fn new(_config: Configuration) -> Result<Self> {
         let file = Self::try_open()?;
         
         let fd = Fd::new(file.as_raw_fd())
@@ -32,14 +32,14 @@ impl Tap {
         if sock4 < 0 {
             return Err(Error::Io(io::Error::last_os_error()))
         }
-        let name = config.name.as_ref().map_or(String::new(), |n| n.to_string());
-        let cfg = config.clone();
+        let name = _config.name.as_ref().map_or(String::new(), |n| n.to_string());
+        let cfg = _config.clone();
         let mut tap = Self {
             fd,
             file,
             name,
             sock4,
-            config,
+            _config,
         };
         tap.configure(&cfg)?;
         Ok(tap)
