@@ -15,10 +15,6 @@ pub trait Device: Read + Write {
             self.set_address(ip)?;
         }
 
-        if let Some(ip) = config.destination {
-            self.set_destination(ip)?;
-        }
-
         if let Some(ip) = config.broadcast {
             self.set_broadcast(ip)?;
         }
@@ -30,11 +26,7 @@ pub trait Device: Read + Write {
         if let Some(mtu) = config.mtu {
             self.set_mtu(mtu)?;
         }
-
-        if let Some(enabled) = config.enabled {
-            self.enabled(enabled)?;
-        }
-
+        self.enabled(config.enabled)?;
         Ok(())
     }
 
@@ -52,12 +44,6 @@ pub trait Device: Read + Write {
 
     /// Set the address.
     fn set_address(&mut self, value: Ipv4Addr) -> Result<()>;
-
-    /// Get the destination address.
-    fn destination(&self) -> Result<Ipv4Addr>;
-
-    /// Set the destination address.
-    fn set_destination(&mut self, value: Ipv4Addr) -> Result<()>;
 
     /// Get the broadcast address.
     fn broadcast(&self) -> Result<Ipv4Addr>;
@@ -116,16 +102,6 @@ impl Tap {
     #[inline(always)]
     pub fn set_address(&mut self, value: Ipv4Addr) -> Result<()> {
         self.inner.set_address(value)
-    }
-
-    #[inline(always)]
-    pub fn destination(&self) -> Result<Ipv4Addr> {
-        self.inner.destination()
-    }
-
-    #[inline(always)]
-    pub fn set_destination(&mut self, value: Ipv4Addr) -> Result<()> {
-        self.inner.set_destination(value)
     }
 
     #[inline(always)]

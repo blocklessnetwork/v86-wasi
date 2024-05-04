@@ -77,11 +77,15 @@ impl ifaliasreq {
     }
 }
 
+pub const IFF_UP: i32 = libc::IFF_UP;
+pub const IFF_RUNNING: i32 = libc::IFF_RUNNING;
+
 ioctl!(readwrite siocgifaddr with 'i', 33; ifreq);
 ioctl!(write siocsifaddr with 'i', 12; ifreq);
 ioctl!(write siocsifalias with 'i', 26; ifaliasreq);
 ioctl!(write siocsifaddr_eth with 'i', 60; ifreq);
-ioctl!(readwrite siocifmut with 'i', 51; ifmtu);
+ioctl!(readwrite siocgifmut with 'i', 51; ifmtu);
+ioctl!(write siocsifmut with 'i', 52; ifmtu);
 ioctl!(readwrite siocgifdestaddr with 'i', 34; ifreq);
 ioctl!(write siocsifdestaddr with 'i', 14; ifreq);
 
@@ -90,3 +94,7 @@ ioctl!(write siocsifbrdaddr with 'i', 19; ifreq);
 
 ioctl!(readwrite siocgifnetmask with 'i', 37; ifreq);
 ioctl!(write siocsifnetmask with 'i', 22; ifreq);
+
+
+ioctl!(readwrite siocgifflags with 'i', 17; ifreq);
+ioctl!(write siocsifflags with 'i', 16; ifreq);

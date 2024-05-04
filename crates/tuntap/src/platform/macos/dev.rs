@@ -31,18 +31,6 @@ impl Tap {
         self.fd.set_nonblock()
     }
 
-    fn ifreq(&self) -> ifreq {
-        unsafe {
-            let mut req: ifreq = std::mem::zeroed();
-            ptr::copy_nonoverlapping(
-                self.name.as_ptr(), 
-                req.ifr_name.as_mut_ptr() as _, 
-                self.name.len()
-            );
-            req
-        }
-    }
-
     fn ifmtu(&self) -> ifmtu {
         unsafe {
             let mut req: ifmtu = std::mem::zeroed();
@@ -101,7 +89,17 @@ impl Device for Tap {
         Ok(())
     }
 
-    fn enabled(&mut self, _value: bool) -> Result<()> {
+    fn enabled(&mut self, value: bool) -> Result<()> {
+        let mut req = ifreq::new(&self.name);
+        syscall!(siocgifflags(*self.ctl, &mut req));
+        unsafe {
+            if value {
+                req.ifr_ifru.ifru_flags |= (IFF_UP|IFF_RUNNING) as i16;
+            } else {
+                req.ifr_ifru.ifru_flags &= !(IFF_UP|IFF_RUNNING) as i16;
+            }
+        }
+        syscall!(siocsifflags(*self.ctl, &req));
         Ok(())
     }
 
@@ -117,21 +115,6 @@ impl Device for Tap {
         let mut req = ifreq::new(&self.name);
         req.ifr_ifru.ifru_addr = value.to_sockaddr();
         syscall!(siocsifaddr(*self.ctl, &req));
-        Ok(())
-    }
-
-    fn destination(&self) -> Result<std::net::Ipv4Addr> {
-        let mut req = ifreq::new(&self.name);
-        syscall!(siocgifdestaddr(*self.ctl, &mut req));
-        unsafe {
-            Ok((*req).ifr_ifru.ifru_dstaddr.to_ipv4())
-        }
-    }
-
-    fn set_destination(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
-        let mut req = ifreq::new(&self.name);
-        req.ifr_ifru.ifru_dstaddr = value.to_sockaddr();
-        syscall!(siocsifdestaddr(*self.ctl, &req));
         Ok(())
     }
 
@@ -167,21 +150,19 @@ impl Device for Tap {
 
     fn mtu(&self) -> Result<i32> {
         let mut imtu = self.ifmtu();
-        unsafe {
-            if siocifmut(*self.ctl, &mut imtu as *mut _) < 0 {
-                return Err(Error::Io(std::io::Error::last_os_error()));
-            }
-        }
-        let i = i32::from_ne_bytes(imtu.mtu);
-        Ok(i)
+        syscall!(siocgifmut(*self.ctl, &mut imtu));
+        Ok(i32::from_ne_bytes(imtu.mtu))
     }
 
-    fn set_mtu(&mut self, _value: i32) -> Result<()> {
+    fn set_mtu(&mut self, value: i32) -> Result<()> {
+        let mut imtu = self.ifmtu();
+        imtu.mtu = value.to_ne_bytes();
+        syscall!(siocsifmut(*self.ctl, &imtu));
         Ok(())
     }
 
     fn set_ether_address(&mut self, eth: EtherAddr) -> Result<()> {
-        let mut req = self.ifreq();
+        let mut req = ifreq::new(&self.name);
         (*req).ifr_ifru.ifru_addr.sa_len = ETHER_ADDR_LEN as _;
         (*req).ifr_ifru.ifru_addr.sa_family = libc::AF_LINK as _;
         unsafe {
@@ -190,12 +171,9 @@ impl Device for Tap {
                 (*req).ifr_ifru.ifru_addr.sa_data.as_mut_ptr() as _,
                 ETHER_ADDR_LEN,
             );
-            if siocsifaddr_eth(*self.ctl, &req) < 0 {
-                Err(Error::Io(io::Error::last_os_error()))
-            } else {
-                Ok(())
-            }
         }
+        syscall!(siocsifaddr_eth(*self.ctl, &req));
+        Ok(())
     }
 
     fn fd(&self) -> &Fd {

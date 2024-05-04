@@ -71,7 +71,7 @@ impl Device for Tap {
 
     fn enabled(&mut self, value: bool) -> Result<()> {
         let mut req = ifreq::new(&self.name);
-        syscall!(siocgifflags(*self.fd, &mut req));
+        syscall!(siocgifflags(*self.sock4, &mut req));
         unsafe {
             if value {
                 req.ifr_ifru.ifru_flags |= (IFF_UP|IFF_RUNNING) as i16;
@@ -95,21 +95,6 @@ impl Device for Tap {
         let mut req = ifreq::new(&self.name);
         req.ifr_ifru.ifru_addr = value.to_sockaddr();
         syscall!(siocsifaddr(self.sock4, &req));
-        Ok(())
-    }
-
-    fn destination(&self) -> Result<std::net::Ipv4Addr> {
-        let mut req = ifreq::new(&self.name);
-        syscall!(siocgifdestaddr(self.sock4, &mut req));
-        unsafe {
-            Ok(req.ifr_ifru.ifru_dstaddr.to_ipv4())
-        }
-    }
-
-    fn set_destination(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
-        let mut req = ifreq::new(&self.name);
-        req.ifr_ifru.ifru_dstaddr = value.to_sockaddr();
-        syscall!(siocsifdestaddr(self.sock4, &req));
         Ok(())
     }
 
