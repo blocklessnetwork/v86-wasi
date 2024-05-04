@@ -1,6 +1,5 @@
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
-use std::net::Ipv4Addr;
 use std::os::fd::AsRawFd;
 
 use crate::{Configuration, Fd};
