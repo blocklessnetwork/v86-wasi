@@ -26,5 +26,5 @@ pub use token::Token;
 
 pub use poll::Poll;
 
-pub use dev::Tap;
+pub use dev::{Tap, Device};
 

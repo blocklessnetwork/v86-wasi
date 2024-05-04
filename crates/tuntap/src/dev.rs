@@ -7,7 +7,7 @@ use crate::{platform, Fd, Result};
 
 
 pub trait Device: Read + Write {
-    /// Reconfigure the device.
+    /// Configure the device.
     fn configure(&mut self, config: &Configuration) -> Result<()> {
         let name = config.name.as_ref().map_or(String::new(), |n| n.to_string());
         self.set_name(&name)?;

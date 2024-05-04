@@ -1,4 +1,4 @@
-use tuntap::{Configuration, Tap};
+use tuntap::{Configuration, Tap, Device};
 
 fn main () {
     let mut cfg = Configuration::new();
