@@ -78,69 +78,72 @@ impl Tap {
     pub fn new(cfg: Configuration) -> Result<Self> {
         platform::Tap::new(cfg).map(|inner| Self {inner})
     }
+}
 
+impl Device for Tap {
+    
     #[inline(always)]
-    pub fn name(&self) -> &str {
+    fn name(&self) -> &str {
         self.inner.name()
     }
 
     #[inline(always)]
-    pub fn set_name(&mut self, name: &str) -> Result<()> {
+    fn set_name(&mut self, name: &str) -> Result<()> {
         self.inner.set_name(name)
     }
 
     #[inline(always)]
-    pub fn enabled(&mut self, value: bool) -> Result<()> {
+    fn enabled(&mut self, value: bool) -> Result<()> {
         self.inner.enabled(value)
     }
 
     #[inline(always)]
-    pub fn address(&self) -> Result<Ipv4Addr> {
+    fn address(&self) -> Result<Ipv4Addr> {
         self.inner.address()
     }
 
     #[inline(always)]
-    pub fn set_address(&mut self, value: Ipv4Addr) -> Result<()> {
+    fn set_address(&mut self, value: Ipv4Addr) -> Result<()> {
         self.inner.set_address(value)
     }
 
     #[inline(always)]
-    pub fn broadcast(&self) -> Result<Ipv4Addr> {
+    fn broadcast(&self) -> Result<Ipv4Addr> {
         self.inner.broadcast()
     }
 
     #[inline(always)]
-    pub fn set_broadcast(&mut self, value: Ipv4Addr) -> Result<()> {
+    fn set_broadcast(&mut self, value: Ipv4Addr) -> Result<()> {
         self.inner.set_broadcast(value)
     }
 
     #[inline(always)]
-    pub fn netmask(&self) -> Result<Ipv4Addr> {
+    fn netmask(&self) -> Result<Ipv4Addr> {
         self.inner.netmask()
     }
 
     #[inline(always)]
-    pub fn set_netmask(&mut self, value: Ipv4Addr) -> Result<()> {
+    fn set_netmask(&mut self, value: Ipv4Addr) -> Result<()> {
         self.inner.set_netmask(value)
     }
 
     #[inline(always)]
-    pub fn mtu(&self) -> Result<i32> {
+    fn mtu(&self) -> Result<i32> {
         self.inner.mtu()
     }
 
     #[inline(always)]
-    pub fn set_mtu(&mut self, value: i32) -> Result<()> {
+    fn set_mtu(&mut self, value: i32) -> Result<()> {
         self.inner.set_mtu(value)
     }
 
     #[inline(always)]
-    pub fn set_ether_address(&mut self, eth: EtherAddr) -> Result<()> {
+    fn set_ether_address(&mut self, eth: EtherAddr) -> Result<()> {
         self.inner.set_ether_address(eth)
     }
 
     #[inline(always)]
-    pub fn fd(&self) -> &Fd {
+    fn fd(&self) -> &Fd {
         self.inner.fd()
     }
 }
