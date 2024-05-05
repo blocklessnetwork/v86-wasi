@@ -74,7 +74,7 @@ impl Epoll {
             events.capacity() as i32,
             timeout,
         ));
-        events.set_len(n as _);
+        unsafe {events.set_len(n as _);}
         Ok(())
     }
 }

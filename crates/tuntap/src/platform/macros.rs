@@ -29,6 +29,7 @@ macro_rules! syscall {
             if n < 0 {
                 return Err(Error::Io(io::Error::last_os_error()));
             }
+            n
         }
     };
 }
