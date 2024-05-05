@@ -1,6 +1,7 @@
-use std::{io, time::Duration};
+use std::time::Duration;
 
 use crate::{
+    Result,
     Events,
     platform, 
     dev::Device, 
@@ -27,19 +28,19 @@ impl Poll {
         }
     }
 
-    pub fn register(&mut self, tap: &impl Device, token: Token, interest: Interest) -> io::Result<()> {
+    pub fn register(&mut self, tap: &impl Device, token: Token, interest: Interest) -> Result<()> {
         self.inner.register(tap, token, interest)
     }
 
-    pub fn reregister(&mut self, tap: &impl Device, token: Token, interest: Interest) -> io::Result<()> {
+    pub fn reregister(&mut self, tap: &impl Device, token: Token, interest: Interest) -> Result<()> {
         self.inner.reregister(tap, token, interest)
     }
 
-    pub fn unregister(&mut self, tap: &impl Device) -> io::Result<()> {
+    pub fn unregister(&mut self, tap: &impl Device) -> Result<()> {
         self.inner.unregister(tap)
     }
 
-    pub fn poll(&mut self, events: &mut Events, t: Option<Duration>) -> io::Result<()> {
+    pub fn poll(&mut self, events: &mut Events, t: Option<Duration>) -> Result<()> {
         self.inner.poll(&mut events.inner, t)
     }
 

@@ -17,57 +17,45 @@ impl Epoll {
         }
     }
     
-    pub fn register(&mut self, tap: &impl Device, token: Token, interest: Interest) -> io::Result<()> {
+    pub fn register(&mut self, tap: &impl Device, token: Token, interest: Interest) -> Result<()> {
         let mut event = libc::epoll_event {
             events: interests_to_epoll(interest),
             u64: token.0 as u64,
         };
-        unsafe {
-            if libc::epoll_ctl(
-                self.fd, 
-                libc::EPOLL_CTL_ADD, 
-                **tap.fd(), 
-                &mut event
-            ) < 0 {
-                return Err(io::Error::last_os_error());
-            }
-        }
+        syscall!(libc::epoll_ctl(
+            self.fd, 
+            libc::EPOLL_CTL_ADD, 
+            **tap.fd(), 
+            &mut event
+        ));
         Ok(())
     }
 
-    pub fn reregister(&mut self, tap: &impl Device, token: Token, interest: Interest) -> io::Result<()> {
+    pub fn reregister(&mut self, tap: &impl Device, token: Token, interest: Interest) -> Result<()> {
         let mut event = libc::epoll_event {
             events: interests_to_epoll(interest),
             u64: token.0 as u64,
         };
-        unsafe {
-            if libc::epoll_ctl(
-                self.fd, 
-                libc::EPOLL_CTL_MOD, 
-                **tap.fd(), 
-                &mut event
-            ) < 0 {
-                return Err(io::Error::last_os_error());
-            }
-        }
+        syscall!(libc::epoll_ctl(
+            self.fd, 
+            libc::EPOLL_CTL_MOD, 
+            **tap.fd(), 
+            &mut event
+        ));
         Ok(())
     }
 
     pub fn unregister(&mut self, tap: &impl Device) -> io::Result<()> {
-        unsafe {
-            if libc::epoll_ctl(
-                self.fd, 
-                libc::EPOLL_CTL_DEL, 
-                **tap.fd(), 
-                ptr::null_mut(),
-            ) < 0 {
-                return Err(io::Error::last_os_error());
-            }
-        }
+        syscall!(libc::epoll_ctl(
+            self.fd, 
+            libc::EPOLL_CTL_DEL, 
+            **tap.fd(), 
+            ptr::null_mut(),
+        ));
         Ok(())
     }
 
-    pub fn poll(&mut self, events: &mut super::event::Events, t: Option<Duration>) -> io::Result<()> {
+    pub fn poll(&mut self, events: &mut super::event::Events, t: Option<Duration>) -> Result<()> {
         let timeout = t
             .map(|to| {
                 // `Duration::as_millis` truncates, so round up. This avoids
@@ -80,18 +68,13 @@ impl Epoll {
             })
             .unwrap_or(-1);
         events.clear();
-        unsafe {
-            let n = libc::epoll_wait(
-                self.fd,
-                events.as_mut_ptr() as _,
-                events.capacity() as i32,
-                timeout,
-            );
-            if n < 0 {
-                return Err(io::Error::last_os_error());
-            }
-            events.set_len(n as _);
-        }
+        let n = syscall!(libc::epoll_wait(
+            self.fd,
+            events.as_mut_ptr() as _,
+            events.capacity() as i32,
+            timeout,
+        ));
+        events.set_len(n as _);
         Ok(())
     }
 }

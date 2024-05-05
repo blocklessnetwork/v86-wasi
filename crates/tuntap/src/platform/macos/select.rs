@@ -3,6 +3,8 @@ use std::{
 };
 
 use crate::{
+    Error,
+    Result,
     dev::Device, 
     token::Token,
     interest::Interest, 
@@ -32,7 +34,7 @@ impl Selector {
     }
 
     /// registor the tap fd in to select fd bit set.
-    pub fn register(&mut self, tap: &impl Device, token: Token, interest: Interest) -> io::Result<()> {
+    pub fn register(&mut self, tap: &impl Device, token: Token, interest: Interest) -> Result<()> {
         let fd: RawFd = **tap.fd();
         unsafe {
             if self.nfds <= fd + 1 {
@@ -52,7 +54,7 @@ impl Selector {
     }
 
     /// reregistor the tap fd in to select fd bit set.
-    pub fn reregister(&mut self, tap: &impl Device, token: Token, interest: Interest) -> io::Result<()> {
+    pub fn reregister(&mut self, tap: &impl Device, token: Token, interest: Interest) -> Result<()> {
         let fd: RawFd = **tap.fd();
         self.tokens.remove(&fd);
         unsafe {
@@ -73,7 +75,7 @@ impl Selector {
     }
 
     /// unregistor the tap fd.
-    pub fn unregister(&mut self, tap: &impl Device) -> io::Result<()> {
+    pub fn unregister(&mut self, tap: &impl Device) -> Result<()> {
         let fd = **tap.fd();
         self.tokens.remove(&fd);
         unsafe {
@@ -83,7 +85,7 @@ impl Selector {
         Ok(())
     }
 
-    pub fn poll(&mut self, events: &mut Events, t: Option<Duration>) -> io::Result<()> {
+    pub fn poll(&mut self, events: &mut Events, t: Option<Duration>) -> Result<()> {
         let mut timeval: MaybeUninit<libc::timeval> = MaybeUninit::zeroed();
         let timeout = t.map_or(ptr::null_mut(), |t| {
             let mircos = t.as_micros();
@@ -97,41 +99,37 @@ impl Selector {
         // inital the from r_sets, the select system call will change the context in r_sets.
         let mut r_sets = self.r_sets.clone();
         let mut w_sets = self.w_sets.clone();
-        unsafe {
-            let max_fd = libc::select(
-                self.nfds,
-                r_sets.as_mut_ptr(),
-                w_sets.as_mut_ptr(),
-                std::ptr::null_mut(), 
-                timeout,
-            );
-            let r_ptr = r_sets.as_ptr();
-            let w_ptr = w_sets.as_ptr();
-            if max_fd < 0 {
-                return Err(io::Error::last_os_error());
-            }
-            for n in 0..self.nfds {
-                let r = libc::FD_ISSET(n, r_ptr);
-                let w = libc::FD_ISSET(n, w_ptr);
-                if r || w {
-                    let mut interest = if r {
-                        Interest::READABLE
-                    } else {
-                        Interest::WRITEABLE
-                    };
-                    if r {
-                        interest = interest.add(Interest::READABLE);
-                    }
-                    if w {
-                        interest = interest.add(Interest::WRITEABLE);
-                    }
-                    self.tokens.get(&n).map(|t| {
-                        events.push(Event {
-                            token: *t,
-                            interest,
-                        });
-                    });
+        let max_fd = syscall!(libc::select(
+            self.nfds,
+            r_sets.as_mut_ptr(),
+            w_sets.as_mut_ptr(),
+            std::ptr::null_mut(), 
+            timeout,
+        ));
+        let r_ptr = r_sets.as_ptr();
+        let w_ptr = w_sets.as_ptr();
+        for n in 0..self.nfds {
+            let (r, w) = unsafe {
+                (libc::FD_ISSET(n, r_ptr), libc::FD_ISSET(n, w_ptr))
+            };
+            if r || w {
+                let mut interest = if r {
+                    Interest::READABLE
+                } else {
+                    Interest::WRITEABLE
+                };
+                if r {
+                    interest = interest.add(Interest::READABLE);
                 }
+                if w {
+                    interest = interest.add(Interest::WRITEABLE);
+                }
+                self.tokens.get(&n).map(|t| {
+                    events.push(Event {
+                        token: *t,
+                        interest,
+                    });
+                });
             }
         }
         Ok(())
