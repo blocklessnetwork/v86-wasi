@@ -120,8 +120,8 @@ impl InnerEmulator {
         self.net_term_adapter = Some(NetTermAdapter::new(store.clone(), rs));
         #[cfg(feature = "tap")]
         {
-            let (tun_tx1, tun_rx1) = crossbeam_channel::bounded(64);
-            let (tun_tx2, tun_rx2) = crossbeam_channel::bounded(64);
+            let (tun_tx1, tun_rx1) = crossbeam_channel::bounded(128);
+            let (tun_tx2, tun_rx2) = crossbeam_channel::bounded(128);
             store
                 .setting()
                 .tun_addr()

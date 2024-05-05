@@ -1,7 +1,19 @@
 #![allow(unused)]
-use crate::{bus::BusData, io::IO, log::LOG, pci::{GenericPCIDevice, PCIBar, PCIDevice}, ContextTrait, Dev, StoreT};
+use crate::{
+    bus::BusData, 
+    io::IO, 
+    log::LOG,
+     pci::{
+        GenericPCIDevice, 
+        PCIBar, 
+        PCIDevice
+    }, 
+     ContextTrait, 
+     Dev, 
+     StoreT
+};
 
-const NE2K_LOG_VERBOSE: bool = true;
+const NE2K_LOG_VERBOSE: bool = false;
 
 const E8390_CMD: u16 = 0x00; /* The command register (for all pages) */
 
@@ -54,6 +66,14 @@ const START_RX_PAGE: u8 = 0x40 + 12;
 const STOP_PAGE: u8 = 0x80;
 const PORT: u16 = 0x300;
 
+
+/// The ne2000 network adapter.
+/// Refer to https://wiki.osdev.org/Ne2000
+/// Two registers PSTART and PSTOP define a set of 256-byte pages in the buffer memory that will be used for the ring buffer. As soon as the DMA attempts to read/write to PSTOP, it will be sent back to PSTART
+/// PSTART                                                                       PSTOP
+/// ####+-8------+-9------+-a------+-b------+-c------+-d------+-e------+-f------+####
+/// ####| Packet 3 (cont) |########|########|Packet1#|   Packet  2#####|Packet 3|####
+////####+--------+--------+--------+--------+--------+--------+--------+--------+####
 pub(crate) struct Ne2k {
     store: StoreT,
     port: u16,
@@ -82,6 +102,7 @@ impl Ne2k {
     pub fn new(store: StoreT) -> Self {
         let pci_id = 0x05 << 3;
         let mac = vec![0x00, 0x22, 0x15,rand::random::<u8>(), rand::random::<u8>(), rand::random::<u8>()];
+        // An 8-page ring buffer with 3 packets and 2 free slots.
         let mut memory = vec![0u8; 256 * 0x80];
         let mar = vec![0xFF, 0xFF, 0xFF, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF];
         let cr = 1;
