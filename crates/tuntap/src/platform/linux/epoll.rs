@@ -1,6 +1,6 @@
 use std::{io, os::fd::RawFd, ptr};
 
-use crate::{dev::Device, Interest, Token};
+use crate::{Result, Error, dev::Device, Interest, Token};
 
 use std::time::Duration;
 
@@ -45,7 +45,7 @@ impl Epoll {
         Ok(())
     }
 
-    pub fn unregister(&mut self, tap: &impl Device) -> io::Result<()> {
+    pub fn unregister(&mut self, tap: &impl Device) -> Result<()> {
         syscall!(libc::epoll_ctl(
             self.fd, 
             libc::EPOLL_CTL_DEL, 
