@@ -6,7 +6,6 @@ mod platform;
 mod poll;
 mod token;
 mod event;
-mod r#async;
 mod interest;
 
 
