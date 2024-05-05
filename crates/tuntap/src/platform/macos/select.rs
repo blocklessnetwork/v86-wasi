@@ -99,7 +99,7 @@ impl Selector {
         // inital the from r_sets, the select system call will change the context in r_sets.
         let mut r_sets = self.r_sets.clone();
         let mut w_sets = self.w_sets.clone();
-        let max_fd = syscall!(libc::select(
+        let _max_fd = syscall!(libc::select(
             self.nfds,
             r_sets.as_mut_ptr(),
             w_sets.as_mut_ptr(),
