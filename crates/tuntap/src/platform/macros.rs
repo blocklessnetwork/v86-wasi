@@ -22,6 +22,7 @@ macro_rules! get_ifname {
     )};
 }
 
+/// syscall macro wrapper.
 macro_rules! syscall {
     ($call: expr) => {
         unsafe {

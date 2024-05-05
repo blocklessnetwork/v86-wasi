@@ -9,6 +9,7 @@ use libc::{self, fcntl, F_GETFL, F_SETFL, O_NONBLOCK};
 /// POSIX file descriptor support for `io` traits.
 pub struct Fd(RawFd);
 
+/// deref Fd for get rawfd.
 impl Deref for Fd {
     type Target = RawFd;
 
