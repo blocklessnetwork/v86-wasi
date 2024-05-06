@@ -3,14 +3,27 @@ mod configuration;
 mod dev;
 mod error;
 mod platform;
+mod poll;
+mod token;
+mod event;
+mod interest;
 
-pub(crate) use error::*;
 
-pub use platform::*;
+pub use error::{Error, Result};
 
-#[cfg(any(target_os="linux", target_os="macos"))]
-pub use platform::Selector;
+pub use platform::Fd;
 
-pub use address::*;
+pub use address::{EtherAddr, IntoAddress};
 
 pub use configuration::Configuration;
+
+pub use interest::Interest;
+
+pub use event::{Event, Events};
+
+pub use token::Token;
+
+pub use poll::Poll;
+
+pub use dev::{Tap, Device};
+

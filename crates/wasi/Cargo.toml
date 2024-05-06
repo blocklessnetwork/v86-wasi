@@ -11,18 +11,22 @@ repository = "https://github.com/blocklessnetwork/v86-wasi"
 
 [dependencies]
 wasmtime = "19.0.2"
-lazy_static = "1.4.0"
-chrono = "0.4"
-rand = "0.8"
-tokio = {version = "1", features = ["rt", "net", "time", "io-util", "sync"]}
+lazy_static = {workspace = true}
+chrono = {workspace = true}
+rand = {workspace = true}
+tokio = {workspace = true, features = ["rt", "net", "time", "io-util", "sync"]}
 tokio-tungstenite = "0.17.2"
-futures-util = "0.3"
+futures-util = {workspace = true}
 json = {workspace = true}
-crossbeam-channel = "0.5.6"
+crossbeam-channel = {workspace = true}
 tuntap = {workspace = true, optional = true}
-anyhow = "1.0.70"
+anyhow = {workspace = true}
+
 
 
 [features]
 default = []
 tap = ["tuntap"]
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+tuntap = {workspace = true}
