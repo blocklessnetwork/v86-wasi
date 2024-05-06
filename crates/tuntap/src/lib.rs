@@ -26,7 +26,7 @@ pub use poll::Poll;
 
 pub use dev::{Tap, Device};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub enum Model {
     Tap,
     Tun
