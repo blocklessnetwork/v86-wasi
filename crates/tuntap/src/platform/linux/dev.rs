@@ -2,6 +2,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::fd::AsRawFd;
 
+use crate::Model;
 use crate::{Configuration, Fd};
 use crate::{Error, Result};
 use crate::dev::Device;
