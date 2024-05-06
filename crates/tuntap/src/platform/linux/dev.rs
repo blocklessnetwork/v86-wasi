@@ -2,47 +2,44 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::fd::AsRawFd;
 
+use crate::Model;
 use crate::{Configuration, Fd};
 use crate::{Error, Result};
 use crate::dev::Device;
 use crate::platform::posix::{IntoSockAddr, Sockaddr2Ipv4};
 
-
 use super::sys::*;
-
 
 pub struct Tap {
     fd: Fd,
     sock4: i32,
     file: File,
     name: String,
-    _config: Configuration,
+    config: Configuration,
 }
 
 impl Tap {
 
-    pub fn new(_config: Configuration) -> Result<Self> {
+    pub fn new(config: Configuration) -> Result<Self> {
         let file = Self::try_open()?;
-        
         let fd = Fd::new(file.as_raw_fd())
             .map_err(|_| Error::Io(io::Error::last_os_error()))?;
-        let sock4 = unsafe { 
-            libc::socket(libc::AF_INET, libc::SOCK_DGRAM, libc::IPPROTO_IP) 
-        };
-        if sock4 < 0 {
-            return Err(Error::Io(io::Error::last_os_error()))
-        }
-        let name = _config.name.as_ref().map_or(String::new(), |n| n.to_string());
-        let cfg = _config.clone();
+        let sock4 = syscall! (libc::socket(libc::AF_INET, libc::SOCK_DGRAM, libc::IPPROTO_IP));
+        let name = config.name.as_ref().map_or(String::new(), |n| n.to_string());
+        let cfg = config.clone();
         let mut tap = Self {
             fd,
             file,
             name,
             sock4,
-            _config,
+            config,
         };
         tap.configure(&cfg)?;
         Ok(tap)
+    }
+
+    fn model(&self) -> Model {
+        self.config.model
     }
 
     fn try_open() -> Result<File> {
@@ -66,7 +63,10 @@ impl Device for Tap {
 
     fn set_name(&mut self, name: &str) -> Result<()> {
         let mut req = ifreq::new(name);
-        req.ifr_ifru.ifru_flags = super::sys::IFF_TAP as _;
+        req.ifr_ifru.ifru_flags = match self.model() {
+            Model::Tap => super::sys::IFF_TAP,
+            Model::Tun => super::sys::IFF_TUN,
+        } as _;
         syscall!(siocsifname(*self.fd, &req));
         self.name = req.name();
         Ok(())

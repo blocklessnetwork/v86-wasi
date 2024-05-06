@@ -72,7 +72,7 @@ impl ifreq {
 
 pub const IFF_UP: u16         = libc::IFF_UP as _;
 pub const IFF_RUNNING: u16    = libc::IFF_RUNNING as _;
-const IFF_TUN: u16            = libc::IFF_TUN as _;
+pub const IFF_TUN: u16            = libc::IFF_TUN as _;
 pub const IFF_TAP: u16        = libc::IFF_TAP as _;
 const IFF_NO_PI: u16          = 0x0100;
 const IFF_ONE_QUEUE: u16      = 0x0200;

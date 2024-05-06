@@ -1,6 +1,6 @@
 use std::net::Ipv4Addr;
 
-use crate::address::EtherAddr;
+use crate::{address::EtherAddr, Model};
 
 use super::address::IntoAddress;
 
@@ -8,6 +8,7 @@ use super::address::IntoAddress;
 /// Configuration builder for a TUN interface.
 #[derive(Clone, Default, Debug)]
 pub struct Configuration {
+    pub(crate) model: Model,
     pub(crate) name: Option<String>,
     pub(crate) address: Option<Ipv4Addr>,
     pub(crate) ether_address: Option<EtherAddr>,
@@ -25,6 +26,11 @@ impl Configuration {
             ..Default::default()
         }
 
+    }
+
+    pub fn model(&mut self, model: Model) -> &mut Self {
+        self.model = model;
+        self
     }
 
     /// Set the name.
