@@ -31,7 +31,6 @@ jobs:
         with:
           toolchain: stable
           target: ${{ matrix.target }}
-      - run: rustup target add ${{ matrix.target }}
       - name: Build v86-wasi
         uses: actions-rs/cargo@v1
         with:
