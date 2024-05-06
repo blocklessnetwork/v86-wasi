@@ -18,7 +18,7 @@ pub struct ifreq {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union ifreq_ifrn {
-    pub ifrn_name: [::std::os::raw::c_char; 16usize],
+    pub ifrn_name: [i8; 16usize],
     align: [u8; 16usize],
 }
 
@@ -72,7 +72,7 @@ impl ifreq {
 
 pub const IFF_UP: u16         = libc::IFF_UP as _;
 pub const IFF_RUNNING: u16    = libc::IFF_RUNNING as _;
-pub const IFF_TUN: u16            = libc::IFF_TUN as _;
+pub const IFF_TUN: u16        = libc::IFF_TUN as _;
 pub const IFF_TAP: u16        = libc::IFF_TAP as _;
 const IFF_NO_PI: u16          = 0x0100;
 const IFF_ONE_QUEUE: u16      = 0x0200;
