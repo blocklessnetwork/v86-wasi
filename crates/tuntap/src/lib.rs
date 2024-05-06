@@ -8,7 +8,6 @@ mod token;
 mod event;
 mod interest;
 
-
 pub use error::{Error, Result};
 
 pub use platform::Fd;
@@ -26,4 +25,16 @@ pub use token::Token;
 pub use poll::Poll;
 
 pub use dev::{Tap, Device};
+
+#[derive(Clone, Debug)]
+pub enum Model {
+    Tap,
+    Tun
+}
+
+impl Default for Model {
+    fn default() -> Self {
+        Self::Tap
+    }
+}
 
