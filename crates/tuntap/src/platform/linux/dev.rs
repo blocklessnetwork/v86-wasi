@@ -39,7 +39,7 @@ impl Tap {
     }
 
     fn model(&self) -> Model {
-        self._config.model
+        self.config.model
     }
 
     fn try_open() -> Result<File> {
