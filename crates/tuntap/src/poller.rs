@@ -10,14 +10,14 @@ use crate::{
 };
 
 
-pub struct Poll {
+pub struct Poller {
     #[cfg(target_os="macos")]
     inner: platform::Selector,
     #[cfg(target_os="linux")]
     inner: platform::Epoll,
 }
 
-impl Poll {
+impl Poller {
     pub fn new() -> Self {
         #[cfg(target_os="macos")]
         let inner = platform::Selector::new();

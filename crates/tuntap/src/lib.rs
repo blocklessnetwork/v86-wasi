@@ -1,12 +1,13 @@
-mod address;
-mod configuration;
 mod dev;
-mod error;
-mod platform;
-mod poll;
+mod poller;
 mod token;
 mod event;
+mod error;
+mod r#async;
+mod address;
 mod interest;
+mod platform;
+mod configuration;
 
 pub use error::{Error, Result};
 
@@ -22,7 +23,7 @@ pub use event::{Event, Events};
 
 pub use token::Token;
 
-pub use poll::Poll;
+pub use poller::Poller;
 
 pub use dev::{Tap, Device};
 
@@ -37,4 +38,3 @@ impl Default for Model {
         Self::Tap
     }
 }
-
