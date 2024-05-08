@@ -116,13 +116,13 @@ impl Selector {
                 let mut interest = if r {
                     Interest::READABLE
                 } else {
-                    Interest::WRITEABLE
+                    Interest::WRITABLE
                 };
                 if r {
                     interest = interest.add(Interest::READABLE);
                 }
                 if w {
-                    interest = interest.add(Interest::WRITEABLE);
+                    interest = interest.add(Interest::WRITABLE);
                 }
                 self.tokens.get(&n).map(|t| {
                     events.push(Event {
