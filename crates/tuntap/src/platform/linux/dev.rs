@@ -160,6 +160,10 @@ impl Device for Tap {
     fn fd(&self) -> &Fd {
         &self.fd
     }
+    
+    fn token(&self) -> Token {
+        Token(*self.fd as _)
+    }
 }
 
 impl Read for Tap {

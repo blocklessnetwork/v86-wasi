@@ -3,10 +3,12 @@ use std::net::Ipv4Addr;
 
 use crate::address::EtherAddr;
 use crate::configuration::Configuration;
-use crate::{platform, Fd, Result};
+use crate::{platform, Fd, Result, Token};
 
 
 pub trait Device: Read + Write {
+
+    fn token(&self) -> Token;
 
     fn set_nonblock(&mut self) -> Result<()>;
 
@@ -153,6 +155,11 @@ impl Device for Tap {
     #[inline(always)]
     fn fd(&self) -> &Fd {
         self.inner.fd()
+    }
+
+    #[inline(always)]
+    fn token(&self) -> Token {
+        self.inner.token()
     }
 }
 
