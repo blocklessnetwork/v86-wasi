@@ -13,7 +13,7 @@ use crate::{
     platform::posix::Fd, 
     configuration::Configuration
 };
-use crate::{Result, Error};
+use crate::{Error, Result, Token};
 use crate::platform::posix::IntoSockAddr;
 use std::ptr;
 #[allow(unused)]
@@ -182,6 +182,10 @@ impl Device for Tap {
 
     fn fd(&self) -> &Fd {
         &self.fd
+    }
+
+    fn token(&self) -> Token {
+        Token(*self.fd as _)
     }
 }
 

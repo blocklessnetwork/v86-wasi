@@ -11,5 +11,4 @@ fn main () {
     println!("tap broadcast {:?} ", tap.broadcast());
     println!("tap netmask {:?} ", tap.netmask());
     println!("tap mtu {:?} ", tap.mtu());
-    
 }
