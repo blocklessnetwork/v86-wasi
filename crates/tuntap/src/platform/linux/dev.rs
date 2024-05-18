@@ -4,7 +4,7 @@ use std::os::fd::AsRawFd;
 
 use crate::Model;
 use crate::{Configuration, Fd};
-use crate::{Error, Result};
+use crate::{Error, Result, Token};
 use crate::dev::Device;
 use crate::platform::posix::{IntoSockAddr, Sockaddr2Ipv4};
 
