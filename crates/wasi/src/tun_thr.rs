@@ -103,7 +103,7 @@ impl TunThread {
             },
         };
         tap.set_nonblock().unwrap();
-        let mut tap_poll = tuntap::Poll::new();
+        let mut tap_poll = tuntap::Poller::new();
         let mut events = Events::with_capacity(10);
         let tap_token = Token(0);
         
