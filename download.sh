@@ -11,8 +11,8 @@ function fail {
 	exit 1
 }
 
-function install_macos_driver {
-	echo "Install the driver".
+function install_macos_tap_driver {
+	echo "Install the tap driver".
 	URL="https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/third_party/macos-tuntap.tar.gz"
 	DRIVERS="$BIN_DIR/drivers"
 	mkdir $DRIVERS -p
@@ -149,15 +149,15 @@ function install {
 	chmod +x $OUT_DIR/$BIN_DIR/run.sh
 
 	echo "Installed $PROG $VERSION at $OUT_DIR/$BIN_DIR"
-
-	$BROWER_CMD $OUT_DIR/$BIN_DIR/term/term.html
-	cd $OUT_DIR/$BIN_DIR && ./run.sh
 	WHOAMI=`whoami`
 	if [[ "$WHOAMI" = "root" ]]; then
 		if [[ $OS = "darwin" ]]; then
-			install_macos_driver
+			install_macos_tap_driver
 		fi
 	fi
+	$BROWER_CMD $OUT_DIR/$BIN_DIR/term/term.html
+	cd $OUT_DIR/$BIN_DIR && ./run.sh
+	
 	#done
 	cleanup
 }
