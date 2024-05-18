@@ -10,6 +10,21 @@ function fail {
 	echo "Error: $msg" 1>&2
 	exit 1
 }
+
+function install_macos_driver {
+	echo "Install the driver".
+	URL="https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/feature/script_network/third_party/macos-tuntap.tar.gz"
+	DRIVERS="$BIN_DIR/drivers"
+	mkdir $DRIVERS -p
+	curl -s $URL -o $DRIVERS/macos-tuntap.tar.gz
+	cd $DRIVERS 
+	tar xzvf macos-tuntap.tar.gz
+	mv blockless-tap.kext /Library/Extensions/
+	mv blockless-tun.kext /Library/Extensions/
+	kextload /Library/Extensions/blockless-tap.kext
+	kextload /Library/Extensions/blockless-tun.kext
+}
+
 function install {
 	#settings
 	USER="blocklessnetwork"
@@ -137,7 +152,12 @@ function install {
 
 	$BROWER_CMD $OUT_DIR/$BIN_DIR/term/term.html
 	cd $OUT_DIR/$BIN_DIR && ./run.sh
-
+	WHOAMI=`whoami`
+	if [[ "$WHOAMI" = "root" ]]; then
+		if [[ $OS = "darwin" ]]; then
+			install_macos_driver
+		fi
+	fi
 	#done
 	cleanup
 }
