@@ -40,7 +40,7 @@ jobs:
         with:
           use-cross: ${{ matrix.cross }}
           command: build
-          args: --release  --target ${{ matrix.target }}
+          args: --release --features=tap  --target ${{ matrix.target }}
       - name: Remove File
         uses: JesseTG/rm@v1.0.3
         with:
