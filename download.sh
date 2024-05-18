@@ -13,7 +13,7 @@ function fail {
 
 function install_macos_driver {
 	echo "Install the driver".
-	URL="https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/feature/script_network/third_party/macos-tuntap.tar.gz"
+	URL="https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/third_party/macos-tuntap.tar.gz"
 	DRIVERS="$BIN_DIR/drivers"
 	mkdir $DRIVERS -p
 	curl -s $URL -o $DRIVERS/macos-tuntap.tar.gz
