@@ -18,11 +18,13 @@ function install_macos_tap_driver {
 	mkdir $DRIVERS -p
 	curl -s $URL -o $DRIVERS/macos-tuntap.tar.gz
 	cd $DRIVERS 
-	tar xzvf macos-tuntap.tar.gz
-	mv tunnelblick-tap.kext /Library/Extensions/
-	mv tunnelblick-tun.kext /Library/Extensions/
-	kextload /Library/Extensions/tunnelblick-tap.kext
-	kextload /Library/Extensions/tunnelblick-tun.kext
+	tar xzf macos-tuntap.tar.gz
+	chown -R root:wheel bls-tap.kext bls-tun.kext
+	mv bls-tap.kext /Library/Extensions/
+	mv bls-tun.kext /Library/Extensions/
+	kextload /Library/Extensions/bls-tap.kext
+	kextload /Library/Extensions/bls-tun.kext
+
 }
 
 function install {
