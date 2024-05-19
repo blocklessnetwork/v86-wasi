@@ -13,16 +13,16 @@ function fail {
 
 function install_macos_tap_driver {
 	echo "Install the tap driver".
-	URL="https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/third_party/macos-tuntap.tar.gz"
+	URL="https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/third_party/macos-taptun.tar.gz"
 	DRIVERS="$BIN_DIR/drivers"
 	mkdir $DRIVERS -p
 	curl -s $URL -o $DRIVERS/macos-tuntap.tar.gz
 	cd $DRIVERS 
 	tar xzvf macos-tuntap.tar.gz
-	mv blockless-tap.kext /Library/Extensions/
-	mv blockless-tun.kext /Library/Extensions/
-	kextload /Library/Extensions/blockless-tap.kext
-	kextload /Library/Extensions/blockless-tun.kext
+	mv tunnelblick-tap.kext /Library/Extensions/
+	mv tunnelblick-tun.kext /Library/Extensions/
+	kextload /Library/Extensions/tunnelblick-tap.kext
+	kextload /Library/Extensions/tunnelblick-tun.kext
 }
 
 function install {
