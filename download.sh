@@ -13,7 +13,7 @@ function fail {
 
 function install_macos_tap_driver {
 	echo "Install the tap driver".
-	URL="https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/third_party/macos-taptun.tar.gz"
+	URL="https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/third_party/macos-tuntap.tar.gz"
 	DRIVERS="$BIN_DIR/drivers"
 	mkdir $DRIVERS -p
 	curl -s $URL -o $DRIVERS/macos-tuntap.tar.gz
