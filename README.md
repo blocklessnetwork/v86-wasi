@@ -17,6 +17,22 @@ $ curl -s https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/downl
 $ curl -s https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/download.sh|sudo bash
 ```
 
+#### start the network interface.
+
+Use follow command start the network interface in the web terminal.
+
+```bash
+# /etc/network/if_up
+```
+
+Use the following command to verify whether the interface has started.
+
+
+```bash
+# ifconfig
+# ping 192.168.0.1
+```
+
 ## How to build.
 
 ### 1. Build wasm
