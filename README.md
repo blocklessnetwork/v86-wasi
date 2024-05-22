@@ -22,7 +22,7 @@ $ curl -s https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/downl
 Use follow command start the network interface in the web terminal.
 
 ```bash
-# /etc/network/if_up
+# /etc/init.d/network start
 ```
 
 Use the following command to verify whether the interface has started.
