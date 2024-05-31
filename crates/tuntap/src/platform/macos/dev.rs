@@ -1,9 +1,9 @@
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
+use std::ptr;
 
 use libc::{
     AF_INET, SOCK_DGRAM
 };
-use std::io;
 
 use crate::address::EtherAddr;
 use crate::platform::macos::sys::*;
@@ -15,7 +15,7 @@ use crate::{
 };
 use crate::{Error, Result, Token};
 use crate::platform::posix::IntoSockAddr;
-use std::ptr;
+
 #[allow(unused)]
 use super::sys::*;
 
@@ -27,7 +27,6 @@ pub struct Tap {
 }
 
 impl Tap {
- 
 
     fn ifmtu(&self) -> ifmtu {
         unsafe {

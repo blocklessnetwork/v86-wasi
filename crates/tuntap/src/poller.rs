@@ -3,7 +3,6 @@ use std::time::Duration;
 use crate::{
     Result,
     Events,
-    platform, 
     dev::Device, 
     token::Token, 
     interest::Interest, 
