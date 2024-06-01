@@ -3,6 +3,7 @@ use std::{io, ptr, mem};
 use winapi::shared::basetsd::ULONG_PTR;
 use winapi::shared::guiddef::GUID;
 use winapi::shared::minwindef::*;
+use winapi::shared::netioapi::ConvertInterfaceLuidToAlias;
 use winapi::shared::netioapi::ConvertInterfaceLuidToGuid;
 use winapi::shared::winerror::*;
 
@@ -55,6 +56,18 @@ fn class_name_from_guid(guid: &GUID) -> Result<Vec<WCHAR>> {
         ptr::null_mut(),
     ));
     Ok(class_name)
+}
+
+pub fn luid_to_alias(luid: &NET_LUID) -> Result<Vec<WCHAR>> {
+    // IF_MAX_STRING_SIZE + 1
+    let mut alias = vec![0; 257];
+
+    match unsafe {
+        ConvertInterfaceLuidToAlias(luid, alias.as_mut_ptr(), alias.len())
+    } {
+        0 => Ok(alias),
+        err => Err(Error::Io(io::Error::from_raw_os_error(err as _))),
+    }
 }
 
 fn create_device_info(

@@ -1,11 +1,13 @@
+use std::io::{Read, Write};
 use std::{time, io};
 
 use winapi::shared::ifdef::NET_LUID;
 
-use crate::Configuration;
+use crate::{Configuration, Device};
 use crate::{Result, Error};
 use super::fd::Fd;
-use super::ffi;
+use super::netsh;
+use super::{decode_utf16, ffi};
 
 
 winapi::DEFINE_GUID! {
@@ -17,8 +19,9 @@ winapi::DEFINE_GUID! {
 
 
 pub struct Tap {
-    luid: NET_LUID,
     fd: Fd,
+    name: String,
+    luid: NET_LUID,
 }
 
 impl Tap {
@@ -46,6 +49,95 @@ impl Tap {
             };
         };
 
-        Ok(Self { luid, fd: Fd::new(handle) })
+        let name = ffi::luid_to_alias(&luid)
+            .map(|name| decode_utf16(&name))?;
+
+        Ok(Self { 
+            luid, 
+            name,
+            fd: Fd::new(handle),
+        })
+    }
+}
+
+impl Device for Tap {
+    fn token(&self) -> crate::Token {
+        todo!()
+    }
+
+    fn set_nonblock(&mut self) -> Result<()> {
+        todo!()
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn set_name(&mut self, name: &str) -> Result<()> {
+        let ret = netsh::set_interface_name(&self.name, name);
+        if ret.is_ok() {
+            self.name = name.to_string();
+        }
+        ret
+    }
+
+    fn enabled(&mut self, value: bool) -> Result<()> {
+        todo!()
+    }
+
+    fn address(&self) -> Result<std::net::Ipv4Addr> {
+        todo!()
+    }
+
+    fn set_address(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
+        todo!()
+    }
+
+    fn broadcast(&self) -> Result<std::net::Ipv4Addr> {
+        todo!()
+    }
+
+    fn set_broadcast(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
+        todo!()
+    }
+
+    fn netmask(&self) -> Result<std::net::Ipv4Addr> {
+        todo!()
+    }
+
+    fn set_netmask(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
+        todo!()
+    }
+
+    fn mtu(&self) -> Result<i32> {
+        todo!()
+    }
+
+    fn set_mtu(&mut self, value: i32) -> Result<()> {
+        todo!()
+    }
+
+    fn set_ether_address(&mut self, eth: crate::EtherAddr) -> Result<()> {
+        todo!()
+    }
+
+    fn fd(&self) -> &Fd {
+        &self.fd
+    }
+}
+
+impl Read for Tap {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.fd.read(buf)
+    }
+}
+
+impl Write for Tap {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.fd.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.fd.flush()
     }
 }

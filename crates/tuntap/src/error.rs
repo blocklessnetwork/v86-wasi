@@ -31,6 +31,10 @@ pub enum Error {
     #[error("windows")]
     FakeRegister,
 
+    #[cfg(windows)]
+    #[error("netsh execute error")]
+    NetshExecError,
+
     #[error(transparent)]
     Io(#[from] io::Error),
 
