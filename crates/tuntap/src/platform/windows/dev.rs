@@ -2,6 +2,7 @@ use std::io::{Read, Write};
 use std::{time, io};
 
 use winapi::shared::ifdef::NET_LUID;
+use winapi::um::winioctl::{CTL_CODE, FILE_ANY_ACCESS, FILE_DEVICE_UNKNOWN, METHOD_BUFFERED};
 
 use crate::{Configuration, Device};
 use crate::{Result, Error};
@@ -16,8 +17,6 @@ winapi::DEFINE_GUID! {
     0xbf, 0xc1, 0x08, 0x00, 0x2b, 0xe1, 0x03, 0x18
 }
 
-
-
 pub struct Tap {
     fd: Fd,
     name: String,
@@ -27,7 +26,7 @@ pub struct Tap {
 impl Tap {
     pub fn new(_config: Configuration) -> Result<Self> {
         let luid = ffi::create_interface()?;
-
+        
         // Even after retrieving the luid, we might need to wait
         let start = time::Instant::now();
         let handle = loop {
@@ -82,7 +81,14 @@ impl Device for Tap {
     }
 
     fn enabled(&mut self, value: bool) -> Result<()> {
-        todo!()
+        let status: u32 = if value { 1 } else { 0 };
+
+        ffi::device_io_control(
+            *self.fd,
+            CTL_CODE(FILE_DEVICE_UNKNOWN, 6, METHOD_BUFFERED, FILE_ANY_ACCESS),
+            &status,
+            &mut (),
+        )
     }
 
     fn address(&self) -> Result<std::net::Ipv4Addr> {
@@ -106,19 +112,26 @@ impl Device for Tap {
     }
 
     fn set_netmask(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn mtu(&self) -> Result<i32> {
-        todo!()
+        let mut mtu = 0;
+        ffi::device_io_control(
+            *self.fd,
+            CTL_CODE(FILE_DEVICE_UNKNOWN, 3, METHOD_BUFFERED, FILE_ANY_ACCESS),
+            &(),
+            &mut mtu,
+        )
+        .map(|_| mtu)
     }
 
     fn set_mtu(&mut self, value: i32) -> Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn set_ether_address(&mut self, eth: crate::EtherAddr) -> Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn fd(&self) -> &Fd {
@@ -139,5 +152,24 @@ impl Write for Tap {
 
     fn flush(&mut self) -> io::Result<()> {
         self.fd.flush()
+    }
+}
+
+impl Drop for Tap {
+    fn drop(&mut self) {
+        ffi::delete_interface(&self.luid).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::Configuration;
+
+    use super::Tap;
+
+    #[test]
+    fn test_create() {
+        let config = Configuration::new();
+        Tap::new(config).unwrap();
     }
 }

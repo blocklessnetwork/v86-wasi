@@ -14,6 +14,7 @@ use winapi::um::fileapi::ReadFile;
 use winapi::um::fileapi::WriteFile;
 use winapi::um::fileapi::OPEN_EXISTING;
 use winapi::um::handleapi::*;
+use winapi::um::ioapiset::DeviceIoControl;
 use winapi::um::setupapi::*;
 use winapi::um::synchapi::*;
 use winapi::um::winreg::*;
@@ -198,6 +199,7 @@ pub fn create_interface() -> Result<NET_LUID> {
     let devinfo = syscall_handle!(
         SetupDiCreateDeviceInfoList(&GUID_NETWORK_ADAPTER, ptr::null_mut())
     )?;
+    
     let _guard = guard((), |_| {
         unsafe {
             SetupDiDestroyDeviceInfoList(devinfo);
@@ -207,6 +209,7 @@ pub fn create_interface() -> Result<NET_LUID> {
     let devinfo_data = create_device_info(devinfo, &class_name, &GUID_NETWORK_ADAPTER, &encode_utf16(""), DICD_GENERATE_ID)?;
     syscall!(SetupDiSetSelectedDevice(devinfo, &devinfo_data as *const _ as _));
     let hardware_id = &encode_utf16(HARDWARE_ID);
+    
     syscall!(SetupDiSetDeviceRegistryPropertyW(
         devinfo, 
         &devinfo_data as *const _ as _,
@@ -219,6 +222,7 @@ pub fn create_interface() -> Result<NET_LUID> {
         &devinfo_data as *const _ as _,
         SPDIT_COMPATDRIVER,
     ));
+    
     let mut driver_version = 0;
     let mut member_index = 0;
     while let Some(drv_info) = enum_driver_info(
@@ -243,11 +247,13 @@ pub fn create_interface() -> Result<NET_LUID> {
             Ok(drvinfo_detail) => drvinfo_detail,
             _ => continue,
         };
+        
         let is_compatible = drvinfo_detail
             .HardwareID
             .split(|b| *b == 0)
             .map(|id| decode_utf16(id))
             .any(|id| id.eq_ignore_ascii_case(HARDWARE_ID));
+        
         if !is_compatible {
             continue;
         }
@@ -257,6 +263,7 @@ pub fn create_interface() -> Result<NET_LUID> {
         }
         driver_version = drvinfo_data.DriverVersion;
     }
+    
     if driver_version == 0 {
         return Err(Error::Io(io::Error::new(io::ErrorKind::NotFound, "No driver found")));
     }
@@ -266,10 +273,16 @@ pub fn create_interface() -> Result<NET_LUID> {
         }
     });
     syscall!(SetupDiCallClassInstaller(
+        DIF_REGISTERDEVICE,
+        devinfo,
+        &devinfo_data as *const _ as _,
+    ));
+    syscall!(SetupDiCallClassInstaller(
         DIF_REGISTER_COINSTALLERS,
         devinfo,
         &devinfo_data as *const _ as _,
     ));
+    
     syscall!(SetupDiCallClassInstaller(
         DIF_INSTALLINTERFACES,
         devinfo,
@@ -281,7 +294,7 @@ pub fn create_interface() -> Result<NET_LUID> {
         devinfo,
         &devinfo_data   as *const _ as _,
     ));
-
+    
     let key = open_dev_reg_key(
         devinfo,
         &devinfo_data,
@@ -320,6 +333,31 @@ pub fn create_interface() -> Result<NET_LUID> {
     luid.set_NetLuidIndex(luid_index as _);
 
     Ok(luid)
+}
+
+pub fn device_io_control(
+    handle: HANDLE,
+    io_control_code: DWORD,
+    in_buffer: &impl Copy,
+    out_buffer: &mut impl Copy,
+) -> Result<()> {
+    let mut junk = 0;
+
+    match unsafe {
+        DeviceIoControl(
+            handle,
+            io_control_code,
+            in_buffer as *const _ as _,
+            mem::size_of_val(in_buffer) as _,
+            out_buffer as *mut _ as _,
+            mem::size_of_val(out_buffer) as _,
+            &mut junk,
+            ptr::null_mut(),
+        )
+    } {
+        0 => Err(Error::Io(io::Error::last_os_error())),
+        _ => Ok(()),
+    }
 }
 
 pub fn enum_device_info(
@@ -509,7 +547,7 @@ fn check_interface(luid: &NET_LUID) -> Result<()> {
     Err(Error::Io(io::Error::new(io::ErrorKind::NotFound, "Device not found")))
 }
 
-fn delete_interface(luid: &NET_LUID) -> Result<()> {
+pub fn delete_interface(luid: &NET_LUID) -> Result<()> {
     let devinfo = syscall_handle!(SetupDiGetClassDevsW(
         &GUID_NETWORK_ADAPTER, 
         ptr::null(), 
@@ -611,4 +649,9 @@ pub fn write_file(handle: HANDLE, buffer: &[u8]) -> io::Result<usize> {
         0 => Err(io::Error::last_os_error()),
         _ => Ok(ret as _),
     }
+}
+
+pub fn close_handle(handle: HANDLE) -> Result<()> {
+    syscall!(CloseHandle(handle));
+    Ok(())
 }

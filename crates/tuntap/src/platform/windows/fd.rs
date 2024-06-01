@@ -35,3 +35,9 @@ impl Write for Fd {
         Ok(())
     }
 }
+
+impl Drop for Fd {
+    fn drop(&mut self) {
+        let _ = ffi::close_handle(self.0);
+    }
+}
