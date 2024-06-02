@@ -1,13 +1,16 @@
 use std::io::{Read, Write};
-use std::{time, io};
+use std::{io, ptr, time};
 
 use winapi::shared::ifdef::NET_LUID;
-use winapi::um::winioctl::{CTL_CODE, FILE_ANY_ACCESS, FILE_DEVICE_UNKNOWN, METHOD_BUFFERED};
+use winapi::um::minwinbase::OVERLAPPED;
+use winapi::um::winioctl::{
+    CTL_CODE, FILE_ANY_ACCESS, FILE_DEVICE_UNKNOWN, METHOD_BUFFERED
+};
 
 use crate::{Configuration, Device};
 use crate::{Result, Error};
 use super::fd::Fd;
-use super::netsh;
+use super::{encode_utf16, netsh};
 use super::{decode_utf16, ffi};
 
 
@@ -19,11 +22,36 @@ winapi::DEFINE_GUID! {
 
 pub struct Tap {
     fd: Fd,
+    dev_index: u32,
+    is_open: bool,
+    read_overlapped: Option<OVERLAPPED>,
+    write_overlapped: Option<OVERLAPPED>,
     name: String,
     luid: NET_LUID,
 }
 
 impl Tap {
+
+    pub fn open(name: &str) -> Result<Self> {
+        let name_string = name.to_string();
+        let name = encode_utf16(name);
+
+        let luid = ffi::alias_to_luid(&name)?;
+        ffi::check_interface(&luid)?;
+
+        let handle = ffi::open_interface(&luid)?;
+        let dev_index = ffi::luid_to_index(&luid).unwrap() as _;
+        Ok(Self { 
+            luid, 
+            dev_index,
+            is_open: true,
+            fd: Fd::new(handle),
+            name: name_string,
+            read_overlapped: None,
+            write_overlapped: None,
+        })
+    }
+
     pub fn new(_config: Configuration) -> Result<Self> {
         let luid = ffi::create_interface()?;
         
@@ -50,10 +78,15 @@ impl Tap {
 
         let name = ffi::luid_to_alias(&luid)
             .map(|name| decode_utf16(&name))?;
+        let dev_index = ffi::luid_to_index(&luid).unwrap() as _;
 
         Ok(Self { 
-            luid, 
+            luid,
             name,
+            dev_index,
+            is_open: false,
+            read_overlapped: None,
+            write_overlapped: None,
             fd: Fd::new(handle),
         })
     }
@@ -63,9 +96,8 @@ impl Device for Tap {
     fn token(&self) -> crate::Token {
         todo!()
     }
-
     fn set_nonblock(&mut self) -> Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn name(&self) -> &str {
@@ -92,11 +124,26 @@ impl Device for Tap {
     }
 
     fn address(&self) -> Result<std::net::Ipv4Addr> {
-        todo!()
+        let dev_index = self.dev_index;
+        let mut ip = Vec::new();
+        ffi::visit_adapters_info(|dev_info| {
+            if dev_index == dev_info.Index {
+                ip = dev_info
+                        .IpAddressList
+                        .IpAddress
+                        .String
+                        .iter()
+                        .filter_map(|i| if *i == 0 {None} else {Some(*i as _)})
+                        .collect::<Vec<u8>>();
+                
+            }
+        }).unwrap();
+        let ip: String = String::from_utf8(ip).unwrap();
+        ip.parse().map_err(|_| Error::InvalidAddress)
     }
 
     fn set_address(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
-        todo!()
+        netsh::set_ip(&self.name, &value.to_string())
     }
 
     fn broadcast(&self) -> Result<std::net::Ipv4Addr> {
@@ -112,7 +159,7 @@ impl Device for Tap {
     }
 
     fn set_netmask(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
-        Ok(())
+        netsh::set_mask(&self.name, &value.to_string())
     }
 
     fn mtu(&self) -> Result<i32> {
@@ -157,19 +204,27 @@ impl Write for Tap {
 
 impl Drop for Tap {
     fn drop(&mut self) {
-        ffi::delete_interface(&self.luid).unwrap();
+        if !self.is_open {
+            ffi::delete_interface(&self.luid).unwrap();
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::Configuration;
+    use std::time::Duration;
+
+    use crate::{platform::windows::netsh, Configuration, Device};
 
     use super::Tap;
 
-    #[test]
     fn test_create() {
-        let config = Configuration::new();
-        Tap::new(config).unwrap();
+        let mut config = Configuration::new();
+        let ip = "192.168.0.1";
+        config.address(ip);
+        let tap = Tap::new(config).unwrap();
+        println!("{}", tap.name());
+        netsh::set_ip(tap.name(), ip).unwrap();
+        assert_eq!(tap.address().unwrap().to_string(), ip);
     }
 }

@@ -6,11 +6,11 @@ use crate::{
 
 
 pub struct Poller {
-    #[cfg(macos)]
+    #[cfg(target_os="macos")]
     inner: platform::Selector,
-    #[cfg(linux)]
+    #[cfg(target_os="linux")]
     inner: platform::Epoll,
-    #[cfg(windows)]
+    #[cfg(target_os="windows")]
     inner: platform::FakePoller,
 }
 
@@ -20,7 +20,7 @@ impl Poller {
         let inner = platform::Selector::new();
         #[cfg(target_os="linux")]
         let inner =  platform::Epoll::new();
-        #[cfg(windows)]
+        #[cfg(target_os="windows")]
         let inner =  platform::FakePoller::new();
         Self {
             inner

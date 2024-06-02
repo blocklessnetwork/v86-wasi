@@ -1,10 +1,16 @@
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+#![allow(dead_code)]
 use std::{io, ptr, mem};
 
 use winapi::shared::basetsd::ULONG_PTR;
 use winapi::shared::guiddef::GUID;
+use winapi::shared::ifdef::NET_IFINDEX;
 use winapi::shared::minwindef::*;
+use winapi::shared::netioapi::ConvertInterfaceAliasToLuid;
 use winapi::shared::netioapi::ConvertInterfaceLuidToAlias;
 use winapi::shared::netioapi::ConvertInterfaceLuidToGuid;
+use winapi::shared::netioapi::ConvertInterfaceLuidToIndex;
 use winapi::shared::winerror::*;
 
 use winapi::um::combaseapi::StringFromGUID2;
@@ -15,6 +21,7 @@ use winapi::um::fileapi::WriteFile;
 use winapi::um::fileapi::OPEN_EXISTING;
 use winapi::um::handleapi::*;
 use winapi::um::ioapiset::DeviceIoControl;
+use winapi::um::minwinbase::OVERLAPPED;
 use winapi::um::setupapi::*;
 use winapi::um::synchapi::*;
 use winapi::um::winreg::*;
@@ -31,8 +38,8 @@ use super::dev::GUID_NETWORK_ADAPTER;
 use super::{encode_utf16, decode_utf16};
 use super::HARDWARE_ID;
 
-#[allow(non_camel_case_types)]
-#[allow(non_snake_case)]
+pub type time_t = std::ffi::c_uint;
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 /// Custom type to handle variable size SP_DRVINFO_DETAIL_DATA_W
@@ -47,6 +54,79 @@ pub struct SP_DRVINFO_DETAIL_DATA_W2 {
     pub DrvDescription: [WCHAR; 256],
     pub HardwareID: [WCHAR; 512],
 }
+
+#[allow(non_camel_case_types)]
+#[allow(non_snake_case)]
+#[repr(C)]
+pub struct IP_ADDRESS_STRING {
+    pub String: [CHAR; 16]
+}
+impl Copy for IP_ADDRESS_STRING {}
+impl Clone for IP_ADDRESS_STRING {
+    #[inline]
+    fn clone(&self) -> IP_ADDRESS_STRING { *self }
+}
+
+
+#[repr(C)]
+pub struct IP_MASK_STRING {
+    pub String: [CHAR; 16]
+}
+impl Copy for IP_MASK_STRING {}
+impl Clone for IP_MASK_STRING {
+    #[inline]
+    fn clone(&self) -> IP_MASK_STRING { *self }
+}
+
+#[repr(C)]
+pub struct IP_ADDR_STRING {
+    pub Next: PIP_ADDR_STRING,
+    pub IpAddress: IP_ADDRESS_STRING,
+    pub IpMask: IP_MASK_STRING,
+    pub Context: DWORD
+}
+impl Copy for IP_ADDR_STRING {}
+impl Clone for IP_ADDR_STRING {
+    #[inline]
+    fn clone(&self) -> IP_ADDR_STRING { *self }
+}
+
+pub type PIP_ADDR_STRING = *mut IP_ADDR_STRING;
+
+#[repr(C)]
+pub struct IP_ADAPTER_INFO {
+    pub next: PIP_ADAPTER_INFO,
+    pub ComboIndex: DWORD,
+    pub AdapterName: [CHAR; (MAX_ADAPTER_NAME_LENGTH + 4) as usize],
+    pub Description: [CHAR; (MAX_ADAPTER_DESCRIPTION_LENGTH + 4) as usize],
+    pub AddressLength: UINT,
+    pub Address: [BYTE; MAX_ADAPTER_ADDRESS_LENGTH as usize],
+    pub Index: DWORD,
+    pub Type: UINT,
+    pub DhcpEnabled: UINT,
+    pub IpAddressList: IP_ADDR_STRING,
+    pub GatewayList: IP_ADDR_STRING,
+    pub DhcpServer: IP_ADDR_STRING,
+    pub HaveWins: BOOL,
+    pub PrimaryWinsServer: IP_ADDR_STRING,
+    pub SecondaryWinsServer: IP_ADDR_STRING,
+    pub LeaseObtained: time_t,
+    pub LeaseExpires: time_t
+}
+
+pub type PIP_ADAPTER_INFO = *mut IP_ADAPTER_INFO;
+
+#[link(name = "Iphlpapi")]
+extern "stdcall" {
+    pub fn GetAdaptersInfo(pAdapterInfo: PIP_ADAPTER_INFO, pOutBufLen: PULONG) -> DWORD;
+}
+	
+pub const MAX_ADAPTER_NAME_LENGTH: u32 = 256;
+pub const MAX_ADAPTER_DESCRIPTION_LENGTH: u32 = 128;
+pub const MAX_ADAPTER_ADDRESS_LENGTH: u32 = 8;
+pub const ERROR_BUFFER_OVERFLOW: u32 = 111;
+pub const NO_ERROR: DWORD = 0;
+
 
 fn class_name_from_guid(guid: &GUID) -> Result<Vec<WCHAR>> {
     let mut class_name = vec![0; 32];
@@ -67,6 +147,17 @@ pub fn luid_to_alias(luid: &NET_LUID) -> Result<Vec<WCHAR>> {
         ConvertInterfaceLuidToAlias(luid, alias.as_mut_ptr(), alias.len())
     } {
         0 => Ok(alias),
+        err => Err(Error::Io(io::Error::from_raw_os_error(err as _))),
+    }
+}
+
+pub fn luid_to_index(luid: &NET_LUID) -> Result<NET_IFINDEX> {
+    // IF_MAX_STRING_SIZE + 1
+    let mut index: NET_IFINDEX = -1 as _;
+    match unsafe {
+        ConvertInterfaceLuidToIndex(luid, &mut index)
+    } {
+        0 => Ok(index),
         err => Err(Error::Io(io::Error::from_raw_os_error(err as _))),
     }
 }
@@ -475,7 +566,7 @@ pub fn open_interface(luid: &NET_LUID) -> Result<HANDLE> {
     )
 }
 
-fn check_interface(luid: &NET_LUID) -> Result<()> {
+pub fn check_interface(luid: &NET_LUID) -> Result<()> {
     let devinfo = syscall_handle!(SetupDiGetClassDevsW(
         &GUID_NETWORK_ADAPTER, 
         ptr::null(), 
@@ -617,7 +708,7 @@ pub fn delete_interface(luid: &NET_LUID) -> Result<()> {
     Err(Error::Io(io::Error::new(io::ErrorKind::NotFound, "Device not found")))
 }
 
-pub fn read_file(handle: HANDLE, buffer: &mut [u8]) -> io::Result<usize> {
+pub fn read_file(handle: HANDLE, buffer: &mut [u8], overlapped: *mut OVERLAPPED) -> io::Result<usize> {
     let mut ret = 0;
 
     match unsafe {
@@ -626,7 +717,7 @@ pub fn read_file(handle: HANDLE, buffer: &mut [u8]) -> io::Result<usize> {
             buffer.as_mut_ptr() as _,
             buffer.len() as _,
             &mut ret,
-            ptr::null_mut(),
+            overlapped,
         )
     } {
         0 => Err(io::Error::last_os_error()),
@@ -634,7 +725,7 @@ pub fn read_file(handle: HANDLE, buffer: &mut [u8]) -> io::Result<usize> {
     }
 }
 
-pub fn write_file(handle: HANDLE, buffer: &[u8]) -> io::Result<usize> {
+pub fn write_file(handle: HANDLE, buffer: &[u8], overlapped: *mut OVERLAPPED) -> io::Result<usize> {
     let mut ret = 0;
 
     match unsafe {
@@ -643,7 +734,7 @@ pub fn write_file(handle: HANDLE, buffer: &[u8]) -> io::Result<usize> {
             buffer.as_ptr() as _,
             buffer.len() as _,
             &mut ret,
-            ptr::null_mut(),
+            overlapped,
         )
     } {
         0 => Err(io::Error::last_os_error()),
@@ -654,4 +745,59 @@ pub fn write_file(handle: HANDLE, buffer: &[u8]) -> io::Result<usize> {
 pub fn close_handle(handle: HANDLE) -> Result<()> {
     syscall!(CloseHandle(handle));
     Ok(())
+}
+
+pub fn alias_to_luid(alias: &[WCHAR]) -> Result<NET_LUID> {
+    let mut luid = unsafe { mem::zeroed() };
+
+    match unsafe { ConvertInterfaceAliasToLuid(alias.as_ptr(), &mut luid) } {
+        0 => Ok(luid),
+        err => Err(Error::Io(io::Error::from_raw_os_error(err as _))),
+    }
+}
+
+pub fn visit_adapters_info<F>(mut visitor: F) -> Result<()> 
+where
+    F: FnMut(& IP_ADAPTER_INFO) -> ()
+{
+    let info_size = mem::size_of::<IP_ADAPTER_INFO>();
+    let mut info_mem = Vec::with_capacity(info_size);
+    let mut info_size = info_size as u32;
+    let rs = unsafe {
+        GetAdaptersInfo(info_mem.as_mut_ptr(), &mut info_size)
+    };
+    
+    if rs == ERROR_BUFFER_OVERFLOW {
+        info_mem = Vec::with_capacity(info_size as usize);
+    }
+    
+    let rs = unsafe {
+        GetAdaptersInfo(info_mem.as_mut_ptr(), &mut info_size)
+    };
+    if rs != 0 {
+        return Err(Error::Io(io::Error::last_os_error()));
+    }
+
+    let mut info: *const IP_ADAPTER_INFO = unsafe {
+        mem::transmute(info_mem.as_ptr())
+    };
+    while info != ptr::null() {
+        unsafe {
+            visitor(&*info);
+            info = (*info).next;	
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::visit_adapters_info;
+
+    fn test_visit_adapters_info() {
+        visit_adapters_info(|info| {
+            println!("{:}", info.Index);
+        }).unwrap();
+    }
 }
