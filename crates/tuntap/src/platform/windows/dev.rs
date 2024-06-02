@@ -125,7 +125,7 @@ impl Device for Tap {
 
     fn address(&self) -> Result<std::net::Ipv4Addr> {
         let dev_index = self.dev_index;
-        let mut ip = Vec::new();
+        let mut ip = String::new();
         ffi::visit_adapters_info(|dev_info| {
             if dev_index == dev_info.Index {
                 ip = dev_info
@@ -133,12 +133,11 @@ impl Device for Tap {
                         .IpAddress
                         .String
                         .iter()
-                        .filter_map(|i| if *i == 0 {None} else {Some(*i as _)})
-                        .collect::<Vec<u8>>();
+                        .filter_map(|i| if *i == 0 {None} else {Some(*i as u8 as char)})
+                        .collect::<String>();
                 
             }
         }).unwrap();
-        let ip: String = String::from_utf8(ip).unwrap();
         ip.parse().map_err(|_| Error::InvalidAddress)
     }
 
