@@ -1,12 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-    Result,
-    Events,
-    platform, 
-    dev::Device, 
-    token::Token, 
-    interest::Interest, 
+    dev::Device, interest::Interest, platform, token::Token, Events, Result 
 };
 
 
@@ -15,6 +10,8 @@ pub struct Poller {
     inner: platform::Selector,
     #[cfg(target_os="linux")]
     inner: platform::Epoll,
+    #[cfg(target_os="windows")]
+    inner: platform::FakePoller,
 }
 
 impl Poller {
@@ -23,6 +20,8 @@ impl Poller {
         let inner = platform::Selector::new();
         #[cfg(target_os="linux")]
         let inner =  platform::Epoll::new();
+        #[cfg(target_os="windows")]
+        let inner =  platform::FakePoller::new();
         Self {
             inner
         }

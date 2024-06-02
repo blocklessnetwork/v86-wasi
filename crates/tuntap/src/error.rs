@@ -27,6 +27,14 @@ pub enum Error {
     #[error("invalid queues number")]
     InvalidQueuesNumber,
 
+    #[cfg(windows)]
+    #[error("windows")]
+    FakeRegister,
+
+    #[cfg(windows)]
+    #[error("netsh execute error")]
+    NetshExecError,
+
     #[error(transparent)]
     Io(#[from] io::Error),
 

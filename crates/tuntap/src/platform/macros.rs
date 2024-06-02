@@ -23,11 +23,39 @@ macro_rules! get_ifname {
 }
 
 /// syscall macro wrapper.
+#[cfg(any(target_os="linux", target_os="macos"))]
 macro_rules! syscall {
     ($call: expr) => {
         unsafe {
             let n = $call as i32;
             if n < 0 {
+                return Err(Error::Io(io::Error::last_os_error()));
+            }
+            n
+        }
+    };
+}
+
+/// syscall macro wrapper for windows.
+#[cfg(target_os="windows")]
+macro_rules! syscall_handle {
+    ($call: expr) => {
+        unsafe {
+            match $call {
+                INVALID_HANDLE_VALUE => Err(Error::Io(io::Error::last_os_error())),
+                d => Ok(d)
+            }
+        }
+    };
+}
+
+/// syscall macro wrapper for windows.
+#[cfg(target_os="windows")]
+macro_rules! syscall {
+    ($call: expr) => {
+        unsafe {
+            let n = $call;
+            if n == 0 {
                 return Err(Error::Io(io::Error::last_os_error()));
             }
             n
