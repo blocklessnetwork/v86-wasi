@@ -7,9 +7,6 @@ publish = false
 default = []
 profiler = []
 
-[build]
-rustflags = [ "-Z", "" ]
-
 [lib]
 crate-type = ["cdylib"]
 path = "src/lib.rs"

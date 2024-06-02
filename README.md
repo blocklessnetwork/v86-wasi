@@ -3,6 +3,36 @@
 Blockless WASI-v86 Extension is an emulated v86 machine inside the Blockless
 Runtime Environment.
 
+## How to Run with release binary file
+
+### 1. Running without network.
+
+```bash
+$ curl -s https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/download.sh|bash
+```
+
+### 2. Running with network.
+
+```bash
+$ curl -s https://raw.githubusercontent.com/blocklessnetwork/v86-wasi/main/download.sh|sudo bash
+```
+
+#### start the network interface.
+
+Use follow command start the network interface in the web terminal.
+
+```bash
+# /etc/init.d/network start
+```
+
+Use the following command to verify whether the interface has started.
+
+
+```bash
+# ifconfig
+# ping 192.168.0.1
+```
+
 ## How to build.
 
 ### 1. Build wasm
@@ -25,7 +55,7 @@ The follow is the configure file
 
 ```json
 {
-  "cdrom": "arch/linux4.iso",
+  "cdrom": "arch/blockless.iso",
   "bios_file": "arch/seabios.bin",
   "vga_bios_file": "arch/vgabios.bin",
   "wasm_file": "target/v86.wasm",
@@ -47,25 +77,25 @@ The follow is the configure file
 
 ### 3. Run the test linux
 
-use the follow command to run the linux with the configure file.
+use the following command to run the linux with the configure file.
 
 ```bash
-$ cargo run -p v86-wasi --release ./boot.json
+$ cargo run --release ./boot.json
 ```
 
 After run the VM, you can open the "term.html" file for control the VM.
 
 ![](term/Screen.png)
 
-### 4. DIY the linux iso
+## DIY the linux iso
 
-If you wanna DIY the linux by your self, please see the document
-"https://github.com/txlabs/v86-linux"
+If you wanna DIY the linux by yourself, please see the document
+"[https://github.com/blocklessnetwork/build-blockless-linux](https://github.com/blocklessnetwork/build-blockless-linux)"
 
-## v86 Lib compilation
+## V86 Lib compilation
 
 ```sh
-cargo build --release -p v86-lib
+cargo build --release
 ```
 
 This will generate a `libv86_lib.dylib` file for your machine arch (which can be packaged in the car format to be run in the runtime)

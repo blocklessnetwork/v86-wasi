@@ -1,5 +1,5 @@
 {
-    "cdrom": "/Users/join/Downloads/blockless.iso",
+    "cdrom": "arch/blockless.iso",
     "bios_file": "arch/seabios.bin",
     "vga_bios_file": "arch/vgabios.bin",
     "wasm_file": "target/v86.wasm",

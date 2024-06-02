@@ -194,7 +194,7 @@ impl PCI {
                 },
             );
 
-            io.register_write8(
+            io.register_write(
                 PCI_CONFIG_DATA + 2,
                 crate::Dev::Emulator(self.store.clone()),
                 |dev: &Dev, _port: u32, w8: u8| {
@@ -202,6 +202,12 @@ impl PCI {
                         pci.pci_write8(pci.pci_addr32() + 2 | 0, w8);
                     });
                 },
+                |dev: &Dev, _port: u32, w16: u16| {
+                    dev.pci_mut().map(|pci| {
+                        pci.pci_write16(pci.pci_addr32() + 2 | 0, w16);
+                    });
+                },
+                IO::empty_write32,
             );
 
             io.register_write8(
@@ -276,11 +282,10 @@ impl PCI {
             1 << 3,
             vec![
                 // 00:01.0 ISA bridge: Intel Corporation 82371SB PIIX3 ISA [Natoma/Triton II]
-                0x86, 0x80, 0x00, 0x70, 0x07, 0x00, 0x00, 0x02, 0x00, 0x00, 0x01, 0x06, 0x00, 0x00,
-                0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x86, 0x80, 0x00, 0x70, 0x07, 0x00, 0x00, 0x02, 0x00, 0x00, 0x01, 0x06, 0x00, 0x00, 0x80, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             ],
             vec![],
             "82371SB PIIX3 ISA",
@@ -293,7 +298,7 @@ impl PCI {
         let device_id: usize = dev.pci_id() as _;
         dbg_log!(
             LOG::PCI,
-            "PCI register bdf=0x{:x} ({})",
+            "PCI register bdf={:#X} ({})",
             device_id,
             dev.name()
         );
@@ -386,7 +391,7 @@ impl PCI {
 
         dbg_log!(
             LOG::PCI,
-            "PCI writ16 dev=0x{:02x} ({}) addr={:#x} value={:#X}",
+            "PCI writ16 dev={:02x} ({}) addr={:#x} value={:#X}",
             bdf,
             device.unwrap().name(),
             addr,
@@ -417,7 +422,7 @@ impl PCI {
             let bar_yn = if bar.is_some() { "y" } else { "n" };
             dbg_log!(
                 LOG::PCI,
-                "BAR {} exists={} changed to 0x{:#x} dev=0x{:#02x} ({})",
+                "BAR {} exists={} changed to {:#x} dev={:#02x} ({})",
                 bar_nr,
                 bar_yn,
                 written,
@@ -477,7 +482,7 @@ impl PCI {
                     let to = written & 0xfffffffe & 0xFFFF;
                     dbg_log!(
                         LOG::PCI,
-                        "io bar changed from {:x} to {:x} size={}",
+                        "io bar changed from {:#08X} to {:#08X} size={}",
                         from >> 0,
                         to >> 0,
                         bar.size
@@ -496,11 +501,11 @@ impl PCI {
                 .as_ref()
                 .map(|s| s.read_u32((addr >> 2) as usize))
                 .unwrap();
-            dbg_log!(LOG::PCI, "BAR effective value: {:x}", sp_val >> 0);
+            dbg_log!(LOG::PCI, "BAR effective value: {:X}", sp_val >> 0);
         } else if addr == 0x30 {
             dbg_log!(
                 LOG::PCI,
-                "PCI write rom address dev=0x{:02x}, ({}) value=0x{:X}",
+                "PCI write rom address dev={:#02X}, ({}) value={:#X}",
                 bdf >> 3,
                 device.name(),
                 written >> 0
@@ -594,7 +599,7 @@ impl PCI {
             let dev = self.devices[bdf as usize].as_ref().unwrap();
             dbg_log!(LOG::PCI, "{} ({})", dbg_line, dev.name());
         } else {
-            self.pci_response = (0xFFFF_FFFFu32).to_le_bytes(); //-1i32
+            self.pci_response = (-1i32).to_le_bytes(); //-1i32
             self.pci_status = [0; 4];
         }
     }
@@ -612,24 +617,38 @@ impl PCI {
             for i in 0..count {
                 let empty_iops = crate::io::IO::default_iops();
                 let old_idx = (from + i) as usize;
-                let old_entry = mem::replace(&mut io.ports[old_idx], empty_iops);
+                let mut _old_entry_handle;
+                let old_entry = if from + i > 0x1000 {
+                    _old_entry_handle = mem::replace(&mut io.ports[old_idx], empty_iops);
+                    &_old_entry_handle
+                } else {
+                    &io.ports[old_idx]
+                };
+                
 
                 if old_entry.read8 as *const () == IO::empty_read8 as *const ()
                     && old_entry.read16 as *const () == IO::empty_read16 as *const ()
                     && old_entry.read32 as *const () == IO::empty_read32 as *const ()
-                    && old_entry.write32 as *const () == IO::empty_write32 as *const ()
-                    && old_entry.write16 as *const () == IO::empty_write16 as *const ()
                     && old_entry.write8 as *const () == IO::empty_write8 as *const ()
+                    && old_entry.write16 as *const () == IO::empty_write16 as *const ()
+                    && old_entry.write32 as *const () == IO::empty_write32 as *const ()
                 {
                     dbg_log!(
                         LOG::PCI,
-                        "Warning: Bad IO bar: Source not mapped, port=0x{:#X}",
+                        "Warning: Bad IO bar: Source not mapped, port={:#04X}",
                         from + i
                     );
                 }
                 let to_idx = (to + i) as usize;
                 let entry = bar.entries[i as usize].clone();
-                let empty_entry = mem::replace(&mut io.ports[to_idx], entry);
+                let _empty_entry_handle;
+                let empty_entry = if to + i >= 0x1000 {
+                    _empty_entry_handle = mem::replace(&mut io.ports[to_idx], entry);
+                    &_empty_entry_handle
+                } else {
+                    &io.ports[to_idx]
+                };
+                
 
                 if empty_entry.read8 as *const () == IO::empty_read8 as *const ()
                     || empty_entry.read16 as *const () == IO::empty_read16 as *const ()

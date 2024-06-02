@@ -1,11 +1,16 @@
 #![allow(unused)]
 use crate::{
-    StoreT, 
-    pci::{PCIDevice, GenericPCIDevice, PCIBar}, 
-    log::LOG, 
-    ContextTrait, 
-    Dev, 
-    bus::BusData
+    bus::BusData, 
+    io::IO, 
+    log::LOG,
+     pci::{
+        GenericPCIDevice, 
+        PCIBar, 
+        PCIDevice
+    }, 
+     ContextTrait, 
+     Dev, 
+     StoreT
 };
 
 const NE2K_LOG_VERBOSE: bool = false;
@@ -61,6 +66,14 @@ const START_RX_PAGE: u8 = 0x40 + 12;
 const STOP_PAGE: u8 = 0x80;
 const PORT: u16 = 0x300;
 
+
+/// The ne2000 network adapter.
+/// Refer to https://wiki.osdev.org/Ne2000
+/// Two registers PSTART and PSTOP define a set of 256-byte pages in the buffer memory that will be used for the ring buffer. As soon as the DMA attempts to read/write to PSTOP, it will be sent back to PSTART
+/// PSTART                                                                       PSTOP
+/// ####+-8------+-9------+-a------+-b------+-c------+-d------+-e------+-f------+####
+/// ####| Packet 3 (cont) |########|########|Packet1#|   Packet  2#####|Packet 3|####
+////####+--------+--------+--------+--------+--------+--------+--------+--------+####
 pub(crate) struct Ne2k {
     store: StoreT,
     port: u16,
@@ -80,6 +93,7 @@ pub(crate) struct Ne2k {
     pstart: u8,
     boundary: u8,
     mac: Vec<u8>,
+    mar: Vec<u8>,
     pci_id : u16,
     memory: Vec<u8>,
 }
@@ -88,7 +102,9 @@ impl Ne2k {
     pub fn new(store: StoreT) -> Self {
         let pci_id = 0x05 << 3;
         let mac = vec![0x00, 0x22, 0x15,rand::random::<u8>(), rand::random::<u8>(), rand::random::<u8>()];
+        // An 8-page ring buffer with 3 packets and 2 free slots.
         let mut memory = vec![0u8; 256 * 0x80];
+        let mar = vec![0xFF, 0xFF, 0xFF, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF];
         let cr = 1;
         let imr = 0;
         let tsr = 1;
@@ -122,6 +138,7 @@ impl Ne2k {
 
         Self {
             cr,
+            mar,
             mac,
             isr,
             imr,
@@ -171,31 +188,57 @@ impl Ne2k {
                 (self.port | EN0_COUNTER0) as u32, 
                 Dev::Emulator(self.store.clone()), 
                 |dev: &Dev, _addr: u32| {
-                    dev.ne2k().map_or(0, |_ne2k| {
-                        dbg_log!(LOG::NET, "Read counter0");
-                        0
+                    dev.ne2k().map_or(0, |ne2k| {
+                        let pg = ne2k.get_page();
+                        if pg == 1 {
+                            dbg_log!(LOG::NET, "Read mar5");
+                            return ne2k.mar[5];
+                        } else {
+                            dbg_log!(LOG::NET, "Read counter0 pg={pg}");
+                            return 0;
+                        }
                     })
                 }
             );
 
-            io.register_read8(
+            io.register_read(
                 (self.port | EN0_COUNTER1) as u32, 
                 Dev::Emulator(self.store.clone()), 
                 |dev: &Dev, _addr: u32| {
-                    dev.ne2k().map_or(0, |_ne2k| {
-                        dbg_log!(LOG::NET, "Read counter1");
-                        0
+                    dev.ne2k().map_or(0, |ne2k| {
+                        let pg = ne2k.get_page();
+                        if pg == 1 {
+                            dbg_log!(LOG::NET, "Read mar6");
+                            return ne2k.mar[6];
+                        } else {
+                            dbg_log!(LOG::NET, "Read8 counter1 pg={pg}");
+                            return 0;
+                        }
                     })
-                }
+                },
+                |dev: &Dev, _addr: u32| {
+                    dev.ne2k().map_or(0, |ne2k| {
+                        let pg = ne2k.get_page();
+                        dbg_log!(LOG::NET, "Read16 counter1 pg={pg}");
+                        return 0;
+                    })
+                },
+                IO::empty_read32
             );
 
             io.register_read8(
                 (self.port | EN0_COUNTER2) as u32, 
                 Dev::Emulator(self.store.clone()), 
                 |dev: &Dev, _addr: u32| {
-                    dev.ne2k().map_or(0, |_ne2k| {
-                        dbg_log!(LOG::NET, "Read counter2");
-                        0
+                    dev.ne2k().map_or(0, |ne2k| {
+                        let pg = ne2k.get_page();
+                        if pg == 1 {
+                            dbg_log!(LOG::NET, "Read mar7");
+                            return ne2k.mar[7];
+                        } else {
+                            dbg_log!(LOG::NET, "Read counter2 pg={pg}");
+                            return 0;
+                        }
                     })
                 }
             );
@@ -205,14 +248,9 @@ impl Ne2k {
                 Dev::Emulator(self.store.clone()), 
                 |dev: &Dev, _addr: u32| {
                     dev.ne2k_mut().map_or(0, |ne2k| {
-                        let pg = ne2k.get_page();
-                        if pg == 0{
-                            dbg_log!(LOG::NET, "Read reset");
-                            ne2k.do_interrupt(ENISR_RESET);
-                        } else {
-                            dbg_log!(LOG::NET, "Read pg{}/1f", pg);
-                            assert!(false);
-                        }
+                        let _pg = ne2k.get_page();
+                        dbg_log!(LOG::NET, "Read reset");
+                        ne2k.do_interrupt(ENISR_RESET);
                         return 0;
                     })
                 }
@@ -224,13 +262,8 @@ impl Ne2k {
                 |dev: &Dev, _addr: u32, data_byte: u8| {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
-                        if pg == 0 {
-                            dbg_log!(LOG::NET, "Write reset: {:#X}", data_byte);
-                            //this.isr &= ~ENISR_RESET;
-                        } else {
-                            dbg_log!(LOG::NET, "Write pg{}/1f: {:#X}", pg, data_byte);
-                            assert!(false);
-                        }
+                        dbg_log!(LOG::NET, "Write reset: {data_byte:#X}");
+                        //this.isr &= ~ENISR_RESET;
                     });
                 }
             );
@@ -249,7 +282,7 @@ impl Ne2k {
                         } else if pg == 2 {
                             return ne2k.pstart;
                         } else {
-                            dbg_log!(LOG::NET, "Read pg{}/01", pg);
+                            dbg_log!(LOG::NET, "Read pg{pg}/01");
                             assert!(false);
                             return 0;
                         }
@@ -264,10 +297,10 @@ impl Ne2k {
                     dev.ne2k_mut().map(|ne2k| {
                         let pg = ne2k.get_page();
                         if pg == 0 {
-                            dbg_log!(LOG::NET, "start page: {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "start page: {data_byte:#X}");
                             ne2k.pstart = data_byte;
                         } else if pg == 1 {
-                            dbg_log!(LOG::NET, "mac[0] = {:#X}", data_byte);
+                            dbg_log!(LOG::NET, "mac[0] = {data_byte:#X}");
                             ne2k.mac[0] = data_byte;
                         } else if pg == 3 {
                             dbg_log!(LOG::NET, "Unimplemented: Write pg3/01 (9346CR): {:#X}", data_byte);
@@ -408,6 +441,9 @@ impl Ne2k {
                         if pg == 0 {
                             dbg_log!(LOG::NET, "Read pg0/0a");
                             0x50
+                        } else if pg == 1 {
+                            dbg_log!(LOG::NET, "Read mar2");
+                            return ne2k.mar[2];
                         } else {
                             assert!(false, "TODO");
                             0
@@ -424,7 +460,7 @@ impl Ne2k {
                         let pg = ne2k.get_page();
                         if pg == 0 {
                             dbg_log!(LOG::NET, "Write remote byte count low: {:#2X}", data_byte);
-                            ne2k.rcnt = ne2k.rcnt & 0xFF00 | data_byte as u16 & 0xFF;
+                            ne2k.rcnt = ne2k.rcnt & 0xFF00 | (data_byte & 0xFF) as u16;
                         } else {
                             dbg_log!(LOG::NET, "Unimplemented: Write pg{}/0a {:#X}", pg, data_byte);
                         }
@@ -441,6 +477,9 @@ impl Ne2k {
                         if pg == 0 {
                             dbg_log!(LOG::NET, "Read pg0/0b");
                             return 0x43;
+                        } else if pg == 1 {
+                            dbg_log!(LOG::NET, "Read mar3");
+                            return ne2k.mar[3];
                         } else {
                             assert!(false, "TODO");
                             return 0;
@@ -474,6 +513,9 @@ impl Ne2k {
                         if pg == 0 {
                             dbg_log!(LOG::NET, "Read remote start address low");
                             return (ne2k.rsar & 0xFF) as u8;
+                        } else if pg == 1 {
+                            dbg_log!(LOG::NET, "Read mar0");
+                            return ne2k.mar[0];
                         } else {
                             dbg_log!(LOG::NET, "Unimplemented: Read pg{}/08", pg);
                             assert!(false);
@@ -508,6 +550,9 @@ impl Ne2k {
                         if pg == 0 {
                             dbg_log!(LOG::NET, "Read remote start address high");
                             return (ne2k.rsar >> 8 & 0xFF) as u8;
+                        } else if pg == 1 {
+                            dbg_log!(LOG::NET, "Read mar1");
+                            return ne2k.mar[1];
                         } else {
                             dbg_log!(LOG::NET, "Unimplemented: Read pg{}/09", pg);
                             assert!(false);
@@ -914,7 +959,7 @@ impl Ne2k {
         let data_start = offset + 4;
         let mut next = self.curpg as usize + 1 + (total_length >> 8);
 
-        let end = offset as usize + total_length;
+        let end = offset + total_length;
 
         let needed = 1 + (total_length >> 8);
 

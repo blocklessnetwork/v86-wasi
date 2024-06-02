@@ -38,8 +38,8 @@ pub fn run_with_setting(setting: Setting) {
 
 #[inline]
 fn create_table(store: &mut Store<Emulator>) -> Table {
-    let ty = TableType::new(ValType::FuncRef, WASM_TABLE_SIZE + WASM_TABLE_OFFSET, None);
-    let table = Table::new(store.as_context_mut(), ty, Val::FuncRef(None)).unwrap();
+    let ty = TableType::new(RefType::FUNCREF, WASM_TABLE_SIZE + WASM_TABLE_OFFSET, None);
+    let table = Table::new(store.as_context_mut(), ty, Ref::Func(None)).unwrap();
     table
 }
 

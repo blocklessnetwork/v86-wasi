@@ -1,6 +1,6 @@
 [package]
 name = "tuntap"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 authors = ["Join.Gong<joinhack@gmail.com>", "Derek Anderson<derek@txlabs.org>"]
 description = "This crate is the v86 emulator the tun implement."
@@ -10,7 +10,24 @@ repository = "https://github.com/blocklessnetwork/v86-wasi"
 [dependencies]
 libc = "0.2"
 thiserror = "1"
+futures = { workspace = true, features= ["thread-pool"]}
 
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 ioctl = { version = "0.6", package = "ioctl-sys" }
+
+[target.'cfg(any(target_os = "windows"))'.dependencies]
+scopeguard = "1.2.0"
+winreg = "0.7"
+[dependencies.winapi]
+version = "0.3"
+features = [
+    "errhandlingapi",
+    "combaseapi",
+    "ioapiset",
+    "winioctl",
+    "setupapi",
+    "synchapi",
+    "netioapi",
+    "fileapi"
+]

@@ -1,11 +1,22 @@
 use std::io::{self, Read, Write};
+use std::ops::Deref;
 use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 
 use crate::error::*;
 use libc::{self, fcntl, F_GETFL, F_SETFL, O_NONBLOCK};
 
+
 /// POSIX file descriptor support for `io` traits.
-pub struct Fd(pub RawFd);
+pub struct Fd(RawFd);
+
+/// deref Fd for get rawfd.
+impl Deref for Fd {
+    type Target = RawFd;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl Fd {
     pub fn new(value: RawFd) -> Result<Self> {

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #[macro_use]
 mod log;
 
@@ -34,6 +35,7 @@ mod virtio;
 mod ws_thr;
 mod floppy;
 mod kernel;
+#[cfg(feature = "tap")]
 mod tun_thr;
 mod adapter;
 mod storage;
@@ -70,6 +72,7 @@ pub use run::run_with_setting;
 
 pub use log::set_log_file_name;
 pub use log::set_log_mask;
+
 
 
 trait ContextTrait {
@@ -658,7 +661,7 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, store: &mut Store<Emulat
             "env",
             "jit_clear_func",
             move |mut caller: Caller<'_, Emulator>, index: u32| {
-                let func = Val::FuncRef(None);
+                let func = Ref::Func(None);
                 let emu: &'static Emulator = unsafe {
                     std::mem::transmute(caller.data())
                 };
@@ -673,7 +676,7 @@ pub fn add_x86_to_linker(linker: &mut Linker<Emulator>, store: &mut Store<Emulat
             "env",
             "jit_clear_all_funcs",
             move |mut caller: Caller<'_, Emulator>| {
-                let func = Val::FuncRef(None);
+                let func = Ref::Func(None);
                 let emu: &'static Emulator = unsafe {
                     std::mem::transmute(caller.data())
                 };

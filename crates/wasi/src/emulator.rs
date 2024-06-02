@@ -29,14 +29,12 @@ use crate::{
     adapter::{NetAdapter, NetTermAdapter},
     floppy::FloppyController,
     jit::{JitMsg, JitWorker},
-    ContextTrait, 
-    Setting, 
-    StoreT, 
-    CPU, 
-    WASM_TABLE_OFFSET, 
-    tun_thr::TunThread, 
+    ContextTrait, Setting, StoreT, CPU, WASM_TABLE_OFFSET, 
     virtio::VirtIO, virtio9p::Virtio9p,
 };
+
+#[cfg(feature = "tap")]
+use crate::tun_thr::TunThread;
 
 pub(crate) struct InnerEmulator {
     start_time: time::Instant,
@@ -122,31 +120,33 @@ impl InnerEmulator {
             });
         
         self.net_term_adapter = Some(NetTermAdapter::new(store.clone(), rs));
-
-        let (tun_tx1, tun_rx1) = crossbeam_channel::bounded(64);
-        let (tun_tx2, tun_rx2) = crossbeam_channel::bounded(64);
-        store
-            .setting()
-            .tun_addr()
-            .map(String::clone)
-            .zip(
-                store
-                    .setting()
-                    .tun_netmask()
-                    .map(String::clone)
-            )
-            .map(|(addr, netmask)| {
-                let tun_ether_addess = store.setting()
-                    .tun_ether_addr()
-                    .map(|addr| addr.clone());
-                std::thread::Builder::new()
-                    .name("tap thread".to_string())
-                    .spawn(move || {
-                        let tun_thr = TunThread::new(addr, netmask, tun_ether_addess, tun_tx1, tun_rx2);
-                        tun_thr.start();
-                    });
-            });
-        self.net_adapter = Some(NetAdapter::new(store.clone(), tun_rx1, tun_tx2));
+        #[cfg(feature = "tap")]
+        {
+            let (tun_tx1, tun_rx1) = crossbeam_channel::bounded(128);
+            let (tun_tx2, tun_rx2) = crossbeam_channel::bounded(128);
+            store
+                .setting()
+                .tun_addr()
+                .map(String::clone)
+                .zip(
+                    store
+                        .setting()
+                        .tun_netmask()
+                        .map(String::clone)
+                )
+                .map(|(addr, netmask)| {
+                    let tun_ether_addess = store.setting()
+                        .tun_ether_addr()
+                        .map(|addr| addr.clone());
+                    std::thread::Builder::new()
+                        .name("tap thread".to_string())
+                        .spawn(move || {
+                            let tun_thr = TunThread::new(addr, netmask, tun_ether_addess, tun_tx1, tun_rx2);
+                            tun_thr.start();
+                        });
+                });
+                self.net_adapter = Some(NetAdapter::new(store.clone(), tun_rx1, tun_tx2));
+        }
         self.cpu = Some(CPU::new(&mut inst, store.clone()));
         self.net_term_adapter.as_mut().map(|t| t.init());
         self.net_adapter.as_mut().map(|t| t.init());
@@ -170,6 +170,7 @@ impl InnerEmulator {
     }
 
     fn start(&mut self, store: StoreT) {
+        println!("v86-wasi started.");
         self.cpu.as_mut().map(|c| {
             c.init();
             let mut t = c.main_run();

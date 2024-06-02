@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
 
 use crate::{StoreT, bus::BusData, ContextTrait};

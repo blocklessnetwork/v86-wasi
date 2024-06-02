@@ -1,7 +1,20 @@
-use std::{mem, io::{Read, Write}, time::Duration};
-use crossbeam_channel::{Receiver, Sender, TryRecvError};
+#![allow(dead_code)]
+use std::{
+    mem, io::{Read, Write}, time::Duration
+};
+use crossbeam_channel::{
+    Receiver, Sender, TryRecvError, TrySendError
+};
 
-use tuntap::{Tap, Configuration, EtherAddr};
+use tuntap::{
+    Tap,
+    Device, 
+    Token,
+    Events,
+    Interest,
+    EtherAddr,
+    Configuration, 
+};
 
 #[allow(unused_imports)]
 use crate::ContextTrait;
@@ -31,8 +44,8 @@ struct ArpHdr {
 pub struct TunThread {
     address: String,
     netmask: String,
-    vm_eth0_mac: Option<[u8; 6]>,
     ether_addr: EtherAddr,
+    vm_eth0_mac: Option<[u8; 6]>,
     vm_channel_rx: Receiver<Vec<u8>>,
     vm_channel_tx: Sender<Vec<u8>>,
 }
@@ -90,28 +103,106 @@ impl TunThread {
             },
         };
         tap.set_nonblock().unwrap();
-        let mut tap_sel = tuntap::Selector::new();
-        tap_sel.register(&tap);
-        loop {
-            let mut buf = vec![0; 1024];
-            let rs = tap_sel.poll(Duration::from_millis(1));
-            if rs > 0 {
-                let l = tap.read(&mut buf);
-                if let Ok(l) = l {
-                    self.vm_channel_tx.try_send(buf[0..l].to_vec()).unwrap();
-                } else {
-                    break;
+        let mut tap_poll = tuntap::Poller::new();
+        let mut events = Events::with_capacity(10);
+        let tap_token = Token(0);
+        
+        // the ethernet frame size is 1514. so change to 2048 is sufficient.
+        let mut buf = [0; 2048];
+        let mut try_sent_buf: Option<Vec<u8>> = None;
+
+        macro_rules! try_channel_send {
+            ($sent: ident) => {
+                try_sent_buf = match self.vm_channel_tx.try_send($sent) {
+                    Err(TrySendError::Full(b)) => {
+                        Some(b)
+                    },
+                    Err(e) => {
+                        eprintln!("{}", e);
+                        break;
+                    },
+                    _ => None
                 }
             }
-            let rs = self.vm_channel_rx.try_recv();
-            match rs {
-                Ok(buf) => tap.write(&buf).unwrap(),
-                Err(TryRecvError::Empty) => continue,
-                Err(e) => {
-                    eprintln!("recv from tap error:{}", e);
-                    break;
+        }
+        macro_rules! recv_from_vm_channel {
+            () => {
+                match self.vm_channel_rx.try_recv() {
+                    Ok(buf) => Some(buf),
+                    Err(TryRecvError::Empty) => None,
+                    Err(e) => {
+                        eprintln!("recv from vm error:{}", e);
+                        break;
+                    }
                 }
+            }
+        }
+        let mut tap_sent_handle = None;
+        let mut interests = Interest::READABLE;
+        tap_poll.register(&tap, tap_token, interests).unwrap();
+        loop {
+            tap_poll.reregister(&tap, tap_token, interests).unwrap();
+            let rs = tap_poll.poll(&mut events, Some(Duration::from_millis(1)));
+            let mut event = None;
+            if let Ok(_) = rs {
+                for e in &events {
+                    if e.token() == tap_token {
+                        event = Some(e);
+                        break;
+                    }
+                };
+            }
+            
+            let writeable = if event.is_some() {
+                let (readable, writeable) = 
+                    event.map_or((false, false), 
+                        |e| (e.is_readable(), e.is_writable())
+                    );
+                if try_sent_buf.is_some() {
+                    let sent = try_sent_buf.take().unwrap();
+                    try_channel_send!(sent);
+                } else {
+                    if readable {
+                        let l = tap.read(&mut buf);
+                        if let Ok(l) = l {
+                            let sent = buf[0..l].to_vec();
+                            try_channel_send!(sent);
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                writeable
+            } else {
+                false
             };
+
+            // no data sent to tap, recv it from vm
+            if tap_sent_handle.is_none() {
+                tap_sent_handle = recv_from_vm_channel!();
+            }
+
+            // if the tap is writeable, write the data tap which from vm
+            // write success reset the handle.
+            if writeable && tap_sent_handle.is_some() {
+                let mut max_send_limited: u8 = 16;
+                while max_send_limited > 0 {
+                    match tap_sent_handle {
+                        Some(ref b) => tap.write(b).unwrap(),
+                        None => break,
+                    };
+                    tap_sent_handle = recv_from_vm_channel!();
+                    max_send_limited -= 1;
+                } 
+                tap_sent_handle = None;
+            }
+
+            if tap_sent_handle.is_some() {
+                interests = Interest::RDWR;
+            } else {
+                interests = Interest::READABLE;
+            }
+
         }
     }
 
