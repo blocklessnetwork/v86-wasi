@@ -391,7 +391,7 @@ impl CPU {
             idle: true,
             a20_byte: 0,
             fw_pointer: 0,
-            virtio9p: None,
+            virtio9p: Some(virtio9p),
             tick_counter: 0,
             store: store.clone(),
             mmap_fn: MMapFn::new(),
@@ -844,6 +844,7 @@ impl CPU {
         self.ne2k.init();
         self.ps2.init();
         self.fdc.init();
+        self.virtio9p.as_mut().map(|virtio9p| virtio9p.init());
         self.cdrom_init();
     }
 

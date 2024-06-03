@@ -107,9 +107,9 @@ impl VirtQueue {
         let mask = size - 1;
         let notify_offset = options.notify_offset;
         Self {
+            idx,
             store,
             size,
-            idx,
             size_supported,
             enabled: false,
             notify_offset,
@@ -271,6 +271,9 @@ impl VirtQueue {
         bufchain
     }
 
+    /// Stage a buffer chain into the used ring.
+    /// Can call push_reply many times before flushing to batch replies together.
+    /// Note: this reply is not visible to driver until flush_replies is called.
     fn push_reply(&mut self, bufchain: VirtQueueBufferChain) {
         assert!(self.used_addr > 0, 
             "VirtQueue addresses must be configured before use");
@@ -286,6 +289,8 @@ impl VirtQueue {
         self.num_staged_replies += 1;
     }
 
+    /// Makes replies visible to driver by updating the used ring idx and
+    /// firing appropriate interrupt if needed.
     fn flush_replies(&mut self) {
         assert!(self.used_addr > 0, 
             "VirtQueue addresses must be configured before use");
@@ -329,6 +334,10 @@ impl VirtQueue {
         }
     }
 
+    /// If using VIRTIO_F_RING_EVENT_IDX, device must tell driver when
+    /// to get notifications or else driver won't notify regularly.
+    /// If not using VIRTIO_F_RING_EVENT_IDX, driver will ignore avail_event
+    /// and notify every request regardless unless NO_NOTIFY is set (TODO implement when needed).
     pub fn notify_me_after(&mut self, num_skipped_requests: i32) {
         assert!(num_skipped_requests >= 0, "Must skip a non-negative number of requests");
 
@@ -1084,7 +1093,8 @@ impl VirtIO {
                 "VirtIO device<{}> capability port should be aligned to pci bar size",
                 self.name
             );
-            pci_bars[cap.bar as usize] =  PCIBar::new(bar_size);
+            // cap.bar from 0..4
+            pci_bars.push(PCIBar::new(bar_size));
             let cap_ptr = cap_ptr as usize;
             pci_space[cap_ptr] = VIRTIO_PCI_CAP_VENDOR;
             pci_space[cap_ptr + 1] = cap_next as u8;
@@ -1379,6 +1389,8 @@ impl VirtQueueBufferChain {
     }
 
     pub fn init(&mut self) {
+        // Traverse chain to discover buffers.
+        // There shouldn't be an excessive amount of descriptor elements.
         let mut table_address = self.queue().desc_addr;
         let mut desc_idx = self.head_idx;
         let mut chain_length = 0;
@@ -1438,6 +1450,7 @@ impl VirtQueueBufferChain {
         dbg_log!(LOG::VIRTIO, "Descriptor chain end >>>");
     }
 
+    /// Reads the next blob of memory represented by the buffer chain into dest_buffer.
     pub fn get_next_blob(&mut self, dest_buffer: &mut Vec<u8>) -> u32 {
         let mut dest_offset = 0;
         let mut remaining = dest_buffer.len();
@@ -1460,8 +1473,7 @@ impl VirtQueueBufferChain {
             if read_length > remaining {
                 read_length = remaining;
                 self.read_buffer_offset += remaining ;
-            }
-            else {
+            } else {
                 self.read_buffer_idx += 1;
                 self.read_buffer_offset = 0;
             }
@@ -1476,6 +1488,7 @@ impl VirtQueueBufferChain {
         dest_offset as u32
     }
 
+    /// Appends contents of src_buffer into the memory represented by the buffer chain.
     fn set_next_blob(&mut self, src_buffer: Vec<u8>) -> u32 {
         let mut src_offset = 0;
         let mut remaining = src_buffer.len();
@@ -1484,7 +1497,7 @@ impl VirtQueueBufferChain {
             if self.write_buffer_idx == self.write_buffers.len() {
                 self.store.virtio().map(|vr| {
                     dbg_log!(LOG::VIRTIO, 
-                        "Device{} Write more than device-writable capacity",
+                        "Device<{}> Write more than device-writable capacity",
                         vr.name,
                     );
                 });

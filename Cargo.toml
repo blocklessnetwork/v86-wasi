@@ -6,7 +6,6 @@ members = [
     "crates/v86",
     "crates/v86-lib",
     "crates/tuntap",
-    "crates/v86",
 ]
 default-members = ["crates/wasi"]
 

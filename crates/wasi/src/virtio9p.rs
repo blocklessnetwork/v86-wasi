@@ -83,7 +83,7 @@ impl Virtio9p {
         self.virtio.as_mut()
     }
 
-    fn init(&mut self) {
+    pub fn init(&mut self) {
         let notification = VirtIONotificationCapabilityOptions {
             initial_port: 0xA900,
             single_handler: false,
@@ -100,6 +100,7 @@ impl Virtio9p {
                                 v9p.receive_request(bufchain);
                             });
                             virtqueue.notify_me_after(0);
+                            // Don't flush replies here: async replies are not completed yet.
                         }
                     });
                 });
@@ -117,7 +118,7 @@ impl Virtio9p {
                 VIRTIO_F_RING_EVENT_IDX,
                 VIRTIO_F_RING_INDIRECT_DESC,
             ],
-            on_driver_ok: |_store| {},
+            on_driver_ok: |_| {},
         };
         let mut device_specific_struct = vec![VirtIOCapabilityInfoStruct { 
             bytes: 2, 
@@ -167,6 +168,9 @@ impl Virtio9p {
         };
         let virtio = VirtIO::new(self.store.clone(), options);
         self.virtio = Some(virtio);
+        self.virtio.as_mut().map(|virtio| {
+            virtio.init();
+        });
     }
 
     fn receive_request(&mut self, mut bufchain: VirtQueueBufferChain) {
