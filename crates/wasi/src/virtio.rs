@@ -1093,7 +1093,7 @@ impl VirtIO {
                 "VirtIO device<{}> capability port should be aligned to pci bar size",
                 self.name
             );
-            // cap.bar from 0..4
+            // cap.bar from 0..4, raw code is pci_bars[cap.bar] = ...
             pci_bars.push(PCIBar::new(bar_size));
             let cap_ptr = cap_ptr as usize;
             pci_space[cap_ptr] = VIRTIO_PCI_CAP_VENDOR;
