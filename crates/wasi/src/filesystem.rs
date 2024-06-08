@@ -211,7 +211,6 @@ impl FS {
             Self::is_forwarder(inode),
             "Filesystem follow_fs: inode should be a forwarding inode"
         );
-
         &mount.fs
     }
 
@@ -246,22 +245,20 @@ impl FS {
     }
 
     fn follow_fs_mut(&mut self, idx: usize) -> &mut FS {
-        unsafe {
-            let inode = self.inodes[idx].clone();
-            let mount = self.mounts.get_mut(inode.mount_id as usize);
-            assert!(
-                mount.is_some(),
-                "Filesystem follow_fs: inode<id={}> should point to valid mounted FS",
-                inode.fid
-            );
-            let mount = mount.unwrap();
-            assert!(
-                Self::is_forwarder(&inode),
-                "Filesystem follow_fs: inode should be a forwarding inode"
-            );
+        let inode = self.inodes[idx].clone();
+        let mount = self.mounts.get_mut(inode.mount_id as usize);
+        assert!(
+            mount.is_some(),
+            "Filesystem follow_fs: inode<id={}> should point to valid mounted FS",
+            inode.fid
+        );
+        let mount = mount.unwrap();
+        assert!(
+            Self::is_forwarder(&inode),
+            "Filesystem follow_fs: inode should be a forwarding inode"
+        );
 
-            &mut mount.fs
-        }
+        &mut mount.fs
     }
 
     pub fn get_inode(&self, idx: usize) -> Option<&Inode> {
@@ -826,9 +823,9 @@ impl FS {
             
             // Fast-forward to requested position, and try merging with previous region.
             while i < inode.locks.len() {
-                let mut cl_inode = inode.clone();
-                let cl_inode_ = Rc::make_mut(&mut cl_inode);
                 if new_region.may_merge_after(&inode.locks[i]) {
+                    let mut cl_inode = inode.clone();
+                    let cl_inode_ = Rc::get_mut(&mut cl_inode).unwrap();
                     let mut l = cl_inode.locks[i].clone();
                     let l_ = Rc::make_mut(&mut l);
                     l_.length += (*request).length;
