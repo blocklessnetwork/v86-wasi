@@ -274,7 +274,7 @@ impl VirtQueue {
     /// Stage a buffer chain into the used ring.
     /// Can call push_reply many times before flushing to batch replies together.
     /// Note: this reply is not visible to driver until flush_replies is called.
-    fn push_reply(&mut self, bufchain: VirtQueueBufferChain) {
+    pub fn push_reply(&mut self, bufchain: VirtQueueBufferChain) {
         assert!(self.used_addr > 0, 
             "VirtQueue addresses must be configured before use");
         assert!(self.num_staged_replies < self.size, 
@@ -1489,7 +1489,7 @@ impl VirtQueueBufferChain {
     }
 
     /// Appends contents of src_buffer into the memory represented by the buffer chain.
-    fn set_next_blob(&mut self, src_buffer: Vec<u8>) -> u32 {
+    pub fn set_next_blob(&mut self, src_buffer: Vec<u8>) -> u32 {
         let mut src_offset = 0;
         let mut remaining = src_buffer.len();
 
