@@ -216,7 +216,7 @@ fn get_mut_unchecked<T>(raw: &mut Rc<T>) -> &mut T {
 impl FS {
     #[inline(always)]
     fn is_forwarder(inode: &Inode) -> bool {
-        return (*inode).status == STATUS_FORWARDING; 
+        return inode.status == STATUS_FORWARDING; 
     }
 
     fn follow_fs(&self, inode: &Inode) -> &FS {
@@ -428,10 +428,10 @@ impl FS {
         let id = id as usize;
         let id = id as usize;
         let inode = self.inodes[id].clone();
-        if Self::is_forwarder(&*inode) {
-            return self.follow_fs_mut(id).open_inode((*inode).foreign_id as u32, mode);
+        if Self::is_forwarder(&inode) {
+            return self.follow_fs_mut(id).open_inode(inode.foreign_id as u32, mode);
         }
-        if (*inode).mode & S_IFMT == S_IFDIR {
+        if inode.mode & S_IFMT == S_IFDIR {
             self.fill_directory(id as _);
         }
         return true;
@@ -440,17 +440,17 @@ impl FS {
     fn fill_directory(&mut self, dirid: u32) {
         let dirid = dirid as usize;
         let mut inode: Rc<Inode> = self.inodes[dirid].clone();
-        if Self::is_forwarder(&*inode) {
-            self.follow_fs_mut(dirid as _).fill_directory((*inode).foreign_id as _)
+        if Self::is_forwarder(&inode) {
+            self.follow_fs_mut(dirid as _).fill_directory(inode.foreign_id as _)
         }
         let mut size = 0;
-        for name in (*inode).direntries.keys() {
+        for name in inode.direntries.keys() {
             size += 13 + 8 + 1 + 2 + UTF8::utf8_length(name);
         }
         self.inodedata.insert(dirid as i64, vec![0u8; size as usize]);
         get_mut_unchecked(&mut inode).size = size as _;
         let mut offset = 0x0u32;
-        for (name, id) in (*inode).direntries.iter() {
+        for (name, id) in inode.direntries.iter() {
             let (child_mode, child_qid) = {
                 let child = self.get_inode(*id as _).unwrap();
                 (child.mode, child.qid)
@@ -488,7 +488,7 @@ impl FS {
     fn set_forwarder(&mut self, idx: usize, mount_id: MountIdType, foreign_id: ForeignIdType) {
         let mut inode = self.inodes[idx].clone();
         assert!(
-            (*inode).nlinks == 0,
+            inode.nlinks == 0,
             "Filesystem: attempted to convert an inode into forwarder before unlinking the inode"
         );
         if Self::is_forwarder(&inode) {
@@ -732,7 +732,7 @@ impl FS {
 
         self.unlink_from_dir(parentid as _, name);
 
-        if (*inode).nlinks == 0 {
+        if inode.nlinks == 0 {
             // don't delete the content. The file is still accessible
             get_mut_unchecked(&mut inode).status = STATUS_UNLINKED;
             // self.notify_listeners(idx, "delet");
@@ -747,42 +747,42 @@ impl FS {
 
     pub fn lock(&mut self, id: i64, request: FSLockRegion, flags: u32) -> u8 {
         let mut inode = self.inodes[id as usize].clone();
-        if Self::is_forwarder(&*inode) {
-            return self.follow_fs_mut(id as _).lock((*inode).foreign_id, request, flags);
+        if Self::is_forwarder(&inode) {
+            return self.follow_fs_mut(id as _).lock(inode.foreign_id, request, flags);
         }
         let request = Rc::new(request.clone());
         
         // (1) Check whether lock is possible before any modification.
-        if (*request).type_ != P9_LOCK_TYPE_UNLCK && self.get_lock(id, &(*request)).is_some() {
+        if request.type_ != P9_LOCK_TYPE_UNLCK && self.get_lock(id, &request).is_some() {
             return P9_LOCK_BLOCKED;
         }
 
         // (2) Subtract requested region from locks of the same owner.
         let mut i = 0;
         
-        while i < (*inode).locks.len() {
-            let region = (*inode).locks[i].clone();
-            assert!((*region).length > 0,
-                "Filesystem: Found non-positive lock region length: {}", (*region).length);
-            assert!((*region).type_ == P9_LOCK_TYPE_RDLCK || (*region).type_ == P9_LOCK_TYPE_WRLCK,
-                "Filesystem: Found invalid lock type: {}", (*region).type_);
-            assert!((*inode).locks.get(i-1).is_none() || (*(*inode).locks[i-1]).start <= (*region).start,
+        while i < inode.locks.len() {
+            let region = inode.locks[i].clone();
+            assert!(region.length > 0,
+                "Filesystem: Found non-positive lock region length: {}", region.length);
+            assert!(region.type_ == P9_LOCK_TYPE_RDLCK || region.type_ == P9_LOCK_TYPE_WRLCK,
+                "Filesystem: Found invalid lock type: {}", region.type_);
+            assert!(inode.locks.get(i-1).is_none() || inode.locks[i-1].start <= region.start,
                 "Filesystem: Locks should be sorted by starting offset");
 
             // Skip to requested region.
-            if (*region).start + (*region).length <= (*request).start {
+            if region.start + region.length <= request.start {
                 i += 1;
                 continue;
             }
                 
             // Check whether we've skipped past the requested region.
-            if (*request).start + (*request).length <= (*region).start {
+            if request.start + request.length <= region.start {
                 break;
             } 
 
             // Skip over locks of different owners.
-            if (*region).proc_id != (*request).proc_id || &(*region).client_id != &(*request).client_id {
-                assert!(!(*region).conflicts_with(&(*request)),
+            if region.proc_id != request.proc_id || &region.client_id != &request.client_id {
+                assert!(!region.conflicts_with(&request),
                     "Filesytem: Found conflicting lock region, despite already checked for conflicts");
                 i += 1;
                 continue;
@@ -794,33 +794,32 @@ impl FS {
             let length1 = request.start - start1;
             let length2 = region.start + region.length - start2;
 
-            if(length1 > 0 && length2 > 0 && (*region).type_ == (*request).type_) {
+            if(length1 > 0 && length2 > 0 && region.type_ == request.type_) {
                 // Requested region is already locked with the required type.
                 // Return early - no need to modify anything.
                 return P9_LOCK_SUCCESS;
             }
-            
+
+            //hold the memory count with the var region_cl.
+            let mut region = region;
+            let region_ = get_mut_unchecked(&mut region);
             if length1 > 0 {
-                let mut region_cl = region.clone();
-                let region_ = get_mut_unchecked(&mut region_cl);
                 // Shrink from right / first half of the split.
                 region_.length = length1;
 
             }
 
             if length1 <= 0 && length2 > 0 {
-                let mut region_cl = region.clone();
-                let region_ = get_mut_unchecked(&mut region_cl);
                 // Shrink from left.
                 region_.start = start2;
                 region_.length = length2;
             } else if length2 > 0 {
                 // Add second half of the split.
                 // Fast-forward to correct location.
-                while i < (*inode).locks.len() && (*(*inode).locks[i]).start < start2 {
+                while i < inode.locks.len() && inode.locks[i].start < start2 {
                     i+=1;
                 }
-                let lock = self.describe_lock((*region).type_, start2, length2, region.proc_id as _, &region.client_id);
+                let lock = self.describe_lock(region_.type_, start2, length2, region_.proc_id as _, &region_.client_id);
                 let inode_ = get_mut_unchecked(&mut inode);
                 inode_.locks.insert(i, Rc::new(lock));
             } else if length1 <= 0 {
@@ -848,11 +847,11 @@ impl FS {
                     let cl_inode_ = get_mut_unchecked(&mut cl_inode);
                     let mut l = cl_inode.locks[i].clone();
                     let l_ = get_mut_unchecked(&mut l);
-                    l_.length += (*request).length;
-                    new_region = (*inode).locks[i].clone();
+                    l_.length += request.length;
+                    new_region = inode.locks[i].clone();
                     has_merged = true;
                 }
-                if (*request).start <= (*(*inode).locks[i]).start {
+                if request.start <= inode.locks[i].start {
                     break;
                 }
                 i += 1
@@ -875,7 +874,7 @@ impl FS {
                     continue;
                 }
                 if inode.locks[i].may_merge_after(&new_region) {
-                    new_region_.length += (*(*inode).locks[i]).length;
+                    new_region_.length += inode.locks[i].length;
                     inode_.locks.remove(i);
                 }
                 // No more mergable regions after this.
@@ -1146,12 +1145,12 @@ impl FS {
         assert!(
             self.is_directory(old_idx as usize) || old_inode.nlinks <= 1,
             "Filesystem: can't divert hardlinked file '{filename}' with nlinks={}",
-            (*old_inode).nlinks
+            old_inode.nlinks
         );
 
         let old_inode_forward = Self::is_forwarder(&old_inode);
         let old_inode_should_be_linked = Self::should_be_linked(&old_inode);
-        let old_inode_mount_id = (*old_inode).foreign_id;
+        let old_inode_mount_id = old_inode.foreign_id;
         let mut new_inode = old_inode.clone();
 
         let idx = self.inodes.len();
@@ -1206,10 +1205,10 @@ impl FS {
             let mut x = self.create_inode();
             x.mode = 0x01FF | S_IFDIR;
             if parentid >= 0 {
-                self.inodes.get(parentid as usize).map(|parent_node| unsafe {
-                    x.uid = (&**parent_node).uid;
-                    x.gid = (&**parent_node).gid;
-                    x.mode = ((**parent_node).mode & 0x1FF) | S_IFDIR;
+                self.inodes.get(parentid as usize).map(|parent_node| {
+                    x.uid = parent_node.uid;
+                    x.gid = parent_node.gid;
+                    x.mode = (parent_node.mode & 0x1FF) | S_IFDIR;
                 });
             }
             x.qid.type_ = (S_IFDIR >> 8) as u8;
