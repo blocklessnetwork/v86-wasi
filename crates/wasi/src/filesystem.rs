@@ -1,5 +1,8 @@
 #![allow(unused, dead_code)]
+use std::cell::Cell;
 use std::collections::{HashMap, VecDeque};
+use std::mem;
+use std::ptr::NonNull;
 use std::rc::Rc;
 use std::time::{self, Duration};
 
@@ -193,6 +196,23 @@ struct RecursiveInfo {
     name: String,
 }
 
+#[repr(C)]
+struct RcBoxHacker<T: ?Sized> {
+    strong: Cell<usize>,
+    weak: Cell<usize>,
+    value: T,
+}
+struct RcHacker<T>(NonNull<RcBoxHacker<T>>);
+
+/// if get_mut_unchecked release, will release use get_mut_unchecked api.
+#[inline(always)]
+fn get_mut_unchecked<T>(raw: &mut Rc<T>) -> &mut T {
+    unsafe {
+        let rc: &mut RcHacker<T> = mem::transmute(raw);
+        &mut (*rc.0.as_ptr()).value
+    }
+}
+
 impl FS {
     #[inline(always)]
     fn is_forwarder(inode: &Inode) -> bool {
@@ -296,7 +316,7 @@ impl FS {
         if is_forwarder {
             self.follow_fs_mut(idx).inode_mut(foreign_id as usize, f);
         } else {
-            f(Rc::make_mut(inode))
+            f(get_mut_unchecked(inode))
         }
     }
 
@@ -428,7 +448,7 @@ impl FS {
             size += 13 + 8 + 1 + 2 + UTF8::utf8_length(name);
         }
         self.inodedata.insert(dirid as i64, vec![0u8; size as usize]);
-        Rc::make_mut(&mut inode).size = size as _;
+        get_mut_unchecked(&mut inode).size = size as _;
         let mut offset = 0x0u32;
         for (name, id) in (*inode).direntries.iter() {
             let (child_mode, child_qid) = {
@@ -476,7 +496,7 @@ impl FS {
                 .backtrack
                 .remove(&inode.foreign_id);
         }
-        let inode_ = Rc::make_mut(&mut inode);
+        let inode_ = get_mut_unchecked(&mut inode);
         inode_.status = STATUS_FORWARDING;
         inode_.mount_id = mount_id;
         inode_.foreign_id = foreign_id;
@@ -645,8 +665,8 @@ impl FS {
             !Self::is_forwarder(&*parent_inode),
             "Filesystem: Can't unlink from forwarders"
         );
-        let inode_ = Rc::make_mut(&mut inode);
-        let parent_inode_ = Rc::make_mut(&mut parent_inode);
+        let inode_ = get_mut_unchecked(&mut inode);
+        let parent_inode_ = get_mut_unchecked(&mut parent_inode);
 
         assert!(
             self.is_directory(parentid),
@@ -714,7 +734,7 @@ impl FS {
 
         if (*inode).nlinks == 0 {
             // don't delete the content. The file is still accessible
-            Rc::make_mut(&mut inode).status = STATUS_UNLINKED;
+            get_mut_unchecked(&mut inode).status = STATUS_UNLINKED;
             // self.notify_listeners(idx, "delet");
         }
         return 0;
@@ -782,7 +802,7 @@ impl FS {
             
             if length1 > 0 {
                 let mut region_cl = region.clone();
-                let region_ = Rc::make_mut(&mut region_cl);
+                let region_ = get_mut_unchecked(&mut region_cl);
                 // Shrink from right / first half of the split.
                 region_.length = length1;
 
@@ -790,7 +810,7 @@ impl FS {
 
             if length1 <= 0 && length2 > 0 {
                 let mut region_cl = region.clone();
-                let region_ = Rc::make_mut(&mut region_cl);
+                let region_ = get_mut_unchecked(&mut region_cl);
                 // Shrink from left.
                 region_.start = start2;
                 region_.length = length2;
@@ -801,10 +821,10 @@ impl FS {
                     i+=1;
                 }
                 let lock = self.describe_lock((*region).type_, start2, length2, region.proc_id as _, &region.client_id);
-                let inode_ = Rc::make_mut(&mut inode);
+                let inode_ = get_mut_unchecked(&mut inode);
                 inode_.locks.insert(i, Rc::new(lock));
             } else if length1 <= 0 {
-                let inode_ = Rc::make_mut(&mut inode);
+                let inode_ = get_mut_unchecked(&mut inode);
                 // Requested region completely covers this region. Delete.
                 inode_.locks.remove(i);
                 i -= 1;
@@ -827,7 +847,7 @@ impl FS {
                     let mut cl_inode = inode.clone();
                     let cl_inode_ = Rc::get_mut(&mut cl_inode).unwrap();
                     let mut l = cl_inode.locks[i].clone();
-                    let l_ = Rc::make_mut(&mut l);
+                    let l_ = get_mut_unchecked(&mut l);
                     l_.length += (*request).length;
                     new_region = (*inode).locks[i].clone();
                     has_merged = true;
@@ -840,14 +860,14 @@ impl FS {
 
             if !has_merged {
                 let mut cl_inode = inode.clone();
-                let cl_inode_ = Rc::make_mut(&mut cl_inode);
+                let cl_inode_ = get_mut_unchecked(&mut cl_inode);
                 cl_inode_.locks.insert(i, new_region.clone());
                 i += 1
             }
             let mut inode_cl = inode.clone();
-            let inode_ = Rc::make_mut(&mut inode_cl);
+            let inode_ = get_mut_unchecked(&mut inode_cl);
             let mut new_region_cl = new_region.clone();
-            let new_region_ = Rc::make_mut(&mut new_region_cl);
+            let new_region_ = get_mut_unchecked(&mut new_region_cl);
             // Try merging with the subsequent alike region.
             while i < inode.locks.len() {
                 if !inode.locks[i].is_alike(&new_region) {
@@ -976,8 +996,8 @@ impl FS {
             !parent_inode.direntries.contains_key(name),
             "Filesystem: Name '{name}' is already taken"
         );
-        let parent_inode_ = Rc::make_mut(&mut parent_inode);
-        let inode_ = Rc::make_mut(&mut inode);
+        let parent_inode_ = get_mut_unchecked(&mut parent_inode);
+        let inode_ = get_mut_unchecked(&mut inode);
         parent_inode_.direntries.insert(name.to_string(), idx as _);
         inode_.nlinks += 1;
 
@@ -1135,7 +1155,7 @@ impl FS {
         let mut new_inode = old_inode.clone();
 
         let idx = self.inodes.len();
-        let old_inode_ = Rc::make_mut(&mut old_inode);
+        let old_inode_ = get_mut_unchecked(&mut old_inode);
         old_inode_.fid = idx as _;
         self.inodes.push(new_inode.clone());
 
@@ -1158,7 +1178,7 @@ impl FS {
                 }
                 if(self.is_directory(*child_id as _)) {
                     let mut cid_inode = self.inodes[*child_id as usize].clone();
-                    Rc::make_mut(&mut cid_inode).direntries.insert("..".to_string(), idx as _);
+                    get_mut_unchecked(&mut cid_inode).direntries.insert("..".to_string(), idx as _);
                 }
             }
         }
@@ -1167,7 +1187,7 @@ impl FS {
         self.inodedata
             .remove(&old_idx)
             .map(|d| self.inodedata.insert(idx as i64, d));
-        let old_inode_ = Rc::make_mut(&mut old_inode);
+        let old_inode_ = get_mut_unchecked(&mut old_inode);
         old_inode_.direntries = HashMap::new();
         old_inode_.nlinks = 0;
         return idx;
@@ -1248,7 +1268,7 @@ impl FS {
         // Current scheme: Save all modified buffers into local inodedata.
         self.inodedata.insert(idx, buffer);
         let mut inode = self.inodes[idx as usize].clone();
-        let inode = Rc::make_mut(&mut inode);
+        let inode = get_mut_unchecked(&mut inode);
         if inode.status == STATUS_ON_STORAGE {
             inode.status = STATUS_OK;
             todo!()
@@ -1280,7 +1300,7 @@ impl FS {
         let buf_len = buffer.len();
         self.set_data(id, buffer);
         let mut inode = self.inodes[id as usize].clone();
-        let x = Rc::make_mut(&mut inode);
+        let x = get_mut_unchecked(&mut inode);
         x.size = buf_len as u64;
         return id;
     }
