@@ -845,7 +845,7 @@ impl FS {
             while i < inode.locks.len() {
                 if new_region.may_merge_after(&inode.locks[i]) {
                     let mut cl_inode = inode.clone();
-                    let cl_inode_ = Rc::get_mut(&mut cl_inode).unwrap();
+                    let cl_inode_ = get_mut_unchecked(&mut cl_inode);
                     let mut l = cl_inode.locks[i].clone();
                     let l_ = get_mut_unchecked(&mut l);
                     l_.length += (*request).length;
