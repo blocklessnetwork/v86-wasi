@@ -1,11 +1,31 @@
 #![allow(dead_code)]
-use crate::{filesystem::{EPERM, FS, S_IFDIR}, virtio::{
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::{filesystem::{FS, P9_LOCK_TYPE_UNLCK, STATUS_UNLINKED, S_IFDIR}, virtio::{
         VirtIO, VirtIOCapabilityInfoStruct, VirtIOCommonCapabilityOptions, 
         VirtIODeviceSpecificCapabilityOptions, VirtIOISRCapabilityOptions, 
         VirtIONotificationCapabilityOptions, VirtIOptions, VirtQueue, 
         VirtQueueBufferChain, VirtQueueOptions
     }, BufferHodler, ContextTrait, MarVal, Marshall, State, StoreT, LOG,
 };
+
+const EPERM: i8 = 1;       /* Operation not permitted */
+const ENOENT: i8 = 2;      /* No such file or directory */
+const EEXIST: i8 = 17;      /* File exists */
+const EINVAL: i8 = 22;     /* Invalid argument */
+const EOPNOTSUPP: i8 = 95;  /* Operation is not supported */
+const ENOTEMPTY: i8 = 39;  /* Directory not empty */
+const EPROTO: i8    = 71;  /* Protocol error */
+
+const P9_SETATTR_MODE: u32 = 0x00000001;
+const P9_SETATTR_UID: u32 = 0x00000002;
+const P9_SETATTR_GID: u32 = 0x00000004;
+const P9_SETATTR_SIZE: u32 = 0x00000008;
+const P9_SETATTR_ATIME: u32 = 0x00000010;
+const P9_SETATTR_MTIME: u32 = 0x00000020;
+const P9_SETATTR_CTIME: u32 = 0x00000040;
+const P9_SETATTR_ATIME_SET: u32 = 0x00000080;
+const P9_SETATTR_MTIME_SET: u32 = 0x00000100;
 
 const CONFIGSPACENAME: [u8; 6] = [0x68, 0x6F, 0x73, 0x74, 0x39, 0x70];
 const VIRTIO9PVERSION: &str = "9P2000.L";
@@ -196,9 +216,9 @@ impl Virtio9p {
                 size = self.fs.get_total_size();
                 let space = self.fs.get_space();
                 let mut req = vec![MarVal::U32(0x01021997), MarVal::U32(self.blocksize)];
-                let req2 = ((space as f64)/(self.blocksize as f64)).floor() as u32;
+                let req2 = (space/self.blocksize) as u32;
                 req.push(MarVal::U32(req2));
-                let req3 = req2 - ((size as f64)/ (self.blocksize as f64).floor()) as u32;
+                let req3 = req2 - (size / self.blocksize) as u32;
                 req.push(MarVal::U32(req3));
                 req.push(MarVal::U32(req3));
                 let node_count = self.fs.count_used_inodes() as u32;
@@ -368,7 +388,168 @@ impl Virtio9p {
                 let client_id = req[6].as_str().unwrap();
                 let lock_request = self.fs.describe_lock(type_, start, lock_length, proc_id, client_id);
                 dbg_log!(LOG::P9, "[lock] fid={fid}, type={type_}, start={start}, length={lock_length}, proc_id={proc_id}");
-
+                let ret = self.fs.lock(self.fids[fid as usize].inodeid as _, lock_request, flags);
+                Marshall::marshall(
+                    &["b"],
+                    &[MarVal::U8(ret), MarVal::U32(self.msize - 24)], 
+                    BufferHodler::new(&mut self.reply_buffer, 7)
+                );
+                self.build_reply(id, tag, 1);
+                self.send_reply(bufchain);
+            }
+            54 => { // getlock
+                let req = Marshall::unmarshall(&["w", "b", "d", "d", "w", "s"], &buffer, &mut state);
+                let fid = req[0].as_u32().unwrap();
+                let type_ = req[1].as_u8().unwrap();
+                let start = req[2].as_u32().unwrap();
+                let lock_length = req[3].as_u32().unwrap();
+                let proc_id = req[4].as_u32().unwrap();
+                let client_id = req[5].as_str().unwrap();
+                let lock_length = if lock_length == 0 {
+                    u32::MAX //Infinity
+                } else  {
+                    lock_length
+                };
+                let lock_request = self.fs.describe_lock(type_, start, lock_length, proc_id, client_id);
+                dbg_log!(LOG::P9, "[lock] fid={fid}, type={type_}, start={start}, length={lock_length}, proc_id={proc_id}");
+                let ret = self.fs.get_lock(self.fids[fid as usize].inodeid as _, &lock_request);
+                let (ret_type, ret_start, ret_length, proc_id, client_id) = if ret.is_none() {
+                    (P9_LOCK_TYPE_UNLCK, lock_request.start, lock_request.length, lock_request.proc_id, lock_request.client_id.clone())
+                } else {
+                    let r = ret.unwrap();
+                    (r.type_, r.start, r.length, r.proc_id, r.client_id.clone())
+                };
+                let mar_vals = &[
+                    MarVal::U8(ret_type),
+                    MarVal::U32(ret_start),
+                    MarVal::U32(ret_length),
+                    MarVal::U32(proc_id as _),
+                    MarVal::String(client_id),
+                ];
+                let size = Marshall::marshall(&["b", "d", "d", "w", "s"], mar_vals, BufferHodler::new(&mut self.reply_buffer, 7));
+                self.build_reply(id, tag, size);
+                self.send_reply(bufchain);
+            }
+            24 => { // getattr
+                let req = Marshall::unmarshall(&["w", "d"], &buffer, &mut state);
+                let fid = req[0].as_u32().unwrap();
+                let req1 = req[1].as_u32().unwrap();
+                let inode = self.fs.get_inode(self.fids[fid as usize].inodeid as _);
+                dbg_log!(LOG::P9, "[getattr]: fid={fid}, name={},  request mask={}", self.fids[fid as usize].dbg_name, req1);
+                if inode.is_none() || inode.unwrap().status == STATUS_UNLINKED {
+                    dbg_log!(LOG::P9, "getattr: unlinked");
+                    self.send_error(tag, ENOENT as _);
+                    self.send_reply(bufchain);
+                } else {
+                    let inode_ = inode.unwrap();
+                    let val = &[
+                        MarVal::U32(req1),
+                        MarVal::QID(inode_.qid),
+                        MarVal::U32(inode_.mode),
+                        MarVal::U32(inode_.uid),
+                        MarVal::U32(inode_.gid),
+                        MarVal::U32(inode_.nlinks), // number of hard links
+                        MarVal::U32(inode_.major<<8| inode_.minor),
+                        MarVal::U32(inode_.size as _),
+                        MarVal::U32(self.blocksize),
+                        MarVal::U32((inode_.size/512 + 1) as u32),// blk size low
+                        MarVal::U32(inode_.atime as _), // atime
+                        MarVal::U32(0),
+                        MarVal::U32(inode_.mtime as _),// mtime
+                        MarVal::U32(0),
+                        MarVal::U32(inode_.ctime as _), // ctime
+                        MarVal::U32(0),
+                        MarVal::U32(0), // btime
+                        MarVal::U32(0),
+                        MarVal::U32(0), // st_gen
+                        MarVal::U32(0), // data_version
+                    ];
+                    Marshall::marshall(&[ 
+                        "d", "Q",
+                        "w",
+                        "w", "w",
+                        "d", "d",
+                        "d", "d", "d",
+                        "d", "d", // atime
+                        "d", "d", // mtime
+                        "d", "d", // ctime
+                        "d", "d", // btime
+                        "d", "d",
+                    ], val, BufferHodler::new(&mut self.reply_buffer, 7));
+                    self.build_reply(id, tag, 8 + 13 + 4 + 4+ 4 + 8*15);
+                    self.send_reply(bufchain);
+                }
+            }
+            26 => { // setattr
+                let req = Marshall::unmarshall(&["w", "w",
+                    "w", // mode
+                    "w", "w", // uid, gid
+                    "d", // size
+                    "d", "d", // atime
+                    "d", "d", // mtime
+                ], &buffer, &mut state);
+                let fid = req[0].as_u32().unwrap();
+                let inodeid = self.fids[fid as usize].inodeid as _;
+                let req1 = req[1].as_u32().unwrap();
+                let req2 = req[2].as_u32().unwrap();
+                let req3 = req[3].as_u32().unwrap();
+                let req4 = req[4].as_u32().unwrap();
+                let req5 = req[5].as_u32().unwrap();
+                let req6 = req[6].as_u32().unwrap();
+                let req7 = req[7].as_u32().unwrap();
+                let req8 = req[8].as_u32().unwrap();
+                dbg_log!(LOG::P9, "[setattr]: fid={fid},  request mask={} name={}", req1, self.fids[fid as usize].dbg_name);
+                self.fs.inode_mut(inodeid, |inode| {
+                    if req1 & P9_SETATTR_MODE > 0 {
+                        inode.mode = req2;
+                    }
+                    if req1 & P9_SETATTR_UID > 0 {
+                        inode.uid = req3;
+                    }
+                    if req1 & P9_SETATTR_GID > 0 {
+                        inode.gid = req4 as _;
+                    }
+                    if req1 & P9_SETATTR_ATIME > 0 {
+                        let t = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis()); 
+                        inode.atime = (t/1000) as _;
+                    }
+                    if req1 & P9_SETATTR_MTIME > 0 {
+                        let t = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis()); 
+                        inode.mtime = (t/1000) as _;
+                    }
+                    if req1 & P9_SETATTR_CTIME > 0 {
+                        let t = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis()); 
+                        inode.ctime = (t/1000) as _;
+                    }
+                    if req1 & P9_SETATTR_ATIME_SET > 0 {
+                        inode.atime = req6 as _;
+                    }
+                    if req1 & P9_SETATTR_MTIME_SET > 0 {
+                        inode.mtime = req8 as _;
+                    }
+                    if req1 & P9_SETATTR_SIZE > 0 {
+                        todo!()
+                        //this.fs.ChangeSize(this.fids[fid].inodeid, req5);
+                    }
+                });
+                self.build_reply(id, tag, 0);
+                self.send_reply(bufchain);
+            }
+            50 => {
+                let req = Marshall::unmarshall(&["w", "d"], &buffer, &mut state);
+                let fid = req[0].as_u32().unwrap();
+                self.build_reply(id, tag, 0);
+                self.send_reply(bufchain);   
+            }
+            40|116 => { // TREADDIR,read
+                let req = Marshall::unmarshall(&["w", "d", "w"], &buffer, &mut state);
+                let fid = req[0].as_u32().unwrap();
+                let offset = req[1].as_u32().unwrap();
+                let count = req[2].as_u32().unwrap();
+                let inode = self.fs.get_inode(self.fids[fid as _].inodeid as _);
+                if id == 40 {
+                    dbg_log!(LOG::P9, "[setattr]: fid={fid},  request mask={} name={}", req1, self.fids[fid as usize].dbg_name);
+                }
 
             }
             _ => {

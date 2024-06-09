@@ -11,16 +11,16 @@ use crate::virtio::VirtQueueBufferChain;
 use crate::virtio9p::{P9_LOCK_BLOCKED, P9_LOCK_SUCCESS};
 use crate::{BufferHodler, MarVal, Marshall, Qid, StoreT, UTF8};
 
-const STATUS_INVALID: i8 = -0x1;
-const STATUS_OK: i8 = 0x0;
-const STATUS_ON_STORAGE: i8 = 0x2;
-const STATUS_UNLINKED: i8 = 0x4;
-const STATUS_FORWARDING: i8 = 0x5;
+pub const STATUS_INVALID: i8 = -0x1;
+pub const STATUS_OK: i8 = 0x0;
+pub const STATUS_ON_STORAGE: i8 = 0x2;
+pub const STATUS_UNLINKED: i8 = 0x4;
+pub const STATUS_FORWARDING: i8 = 0x5;
 
 
-const P9_LOCK_TYPE_RDLCK: u8 = 0;
-const P9_LOCK_TYPE_WRLCK: u8 = 1;
-const P9_LOCK_TYPE_UNLCK: u8 = 2;
+pub const P9_LOCK_TYPE_RDLCK: u8 = 0;
+pub const P9_LOCK_TYPE_WRLCK: u8 = 1;
+pub const P9_LOCK_TYPE_UNLCK: u8 = 2;
 
 pub const S_IRWXUGO: u32 = 0x1FF;
 pub const S_IFMT: u32 = 0xF000;
@@ -41,11 +41,11 @@ const ENOTEMPTY: i8 = 39; /* Directory not empty */
 
 #[derive(Clone)]
 struct FSLockRegion {
-    type_: u8,
-    start: u32,
-    length: u32,
-    proc_id: i64,
-    client_id: String,
+    pub type_: u8,
+    pub start: u32,
+    pub length: u32,
+    pub proc_id: i64,
+    pub client_id: String,
 }
 
 impl FSLockRegion {
@@ -885,7 +885,7 @@ impl FS {
         return P9_LOCK_SUCCESS;
     }
 
-    fn get_lock(&self, id: i64, request: &FSLockRegion) -> Option<Rc<FSLockRegion>> {
+    pub fn get_lock(&self, id: i64, request: &FSLockRegion) -> Option<Rc<FSLockRegion>> {
         let inode = self.inodes[id as usize].clone();
         if Self::is_forwarder(&inode) {
             let foreign_id = inode.foreign_id;
