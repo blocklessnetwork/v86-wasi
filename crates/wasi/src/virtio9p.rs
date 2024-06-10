@@ -44,7 +44,9 @@ pub const P9_LOCK_BLOCKED: u8 = 1;
 pub const P9_LOCK_ERROR: u8 = 2;
 pub const P9_LOCK_GRACE: u8 = 3;
 
-const FID_INODE: u8 = 1;
+const FID_INODE: i8 = 1;
+const FID_NONE: i8 = -1;
+const FID_XATTR: i8 = 2;
 
 struct Fid {
     inodeid: u32,
@@ -545,16 +547,192 @@ impl Virtio9p {
                 let req = Marshall::unmarshall(&["w", "d", "w"], &buffer, &mut state);
                 let fid = req[0].as_u32().unwrap();
                 let offset = req[1].as_u32().unwrap();
-                let count = req[2].as_u32().unwrap();
-                let inode = self.fs.get_inode(self.fids[fid as _].inodeid as _);
+                let mut count = req[2].as_u32().unwrap();
+                let inode = self.fs.get_inode(self.fids[fid as usize].inodeid as _);
                 if id == 40 {
-                    dbg_log!(LOG::P9, "[setattr]: fid={fid},  request mask={} name={}", req1, self.fids[fid as usize].dbg_name);
+                    dbg_log!(LOG::P9, "[treaddir]: fid={fid} offset={offset} count={count}");
                 }
-
+                if id == 116 {
+                    dbg_log!(LOG::P9, 
+                        "[read]: fid={fid} ({}) offset={offset} count={count} fidtype={}",
+                        self.fids[fid as usize].dbg_name,
+                        self.fids[fid as usize].type_,
+                    );
+                }
+                if inode.is_none() || inode.unwrap().status == STATUS_UNLINKED {
+                    dbg_log!(LOG::P9, "read/treaddir: unlinked");
+                    self.send_error(tag, ENOENT as _);
+                    self.send_reply(bufchain);
+                } else {
+                    let inode = inode.unwrap();
+                    if self.fids[fid as usize].type_ == FID_XATTR as _ {
+                        if inode.caps.len() < (offset+count) as usize  {
+                             count = (inode.caps.len() - offset as _) as u32;
+                        }
+                        let bh = BufferHodler::new(&mut self.reply_buffer, 7+4);
+                        for i in 0..count {
+                            bh.push(inode.caps[(offset+i) as usize]);
+                        }
+                        Marshall::marshall(&["w"], &[MarVal::U32(count)], BufferHodler::new(&mut self.reply_buffer, 7));
+                        self.build_reply(id, tag, 4 + count);
+                        self.send_reply(bufchain);
+                    } else {
+                        self.fs.open_inode(self.fids[fid as usize].inodeid, 0);
+                        let inodeid = self.fids[fid as usize].inodeid;
+        
+                        count = count.min(self.reply_buffer.len() as u32 - (7 + 4));
+        
+                        if inode.size < (offset+count) as _ {
+                            count = (inode.size - offset as _) as u32;
+                        } else if id == 40 {
+                            // for directories, return whole number of dir-entries.
+                            count = (self.fs.round_to_direntry(inodeid, offset + count) - offset as _) as _;
+                        } if offset > inode.size as _  {
+                            // offset can be greater than available - should return count of zero.
+                            // See http://ericvh.github.io/9p-rfc/rfc9p2000.html#anchor30
+                            count = 0;
+                        }
+                        //self.bus.send("9p-read-start", [this.fids[fid].dbg_name]);
+                        //const data = await this.fs.Read(inodeid, offset, count);
+                        todo!();
+        
+                        //this.bus.send("9p-read-end", [this.fids[fid].dbg_name, count]);
+                        // if(data) {
+                        //     this.replybuffer.set(data, 7 + 4);
+                        // }
+                        // marshall.Marshall(["w"], [count], this.replybuffer, 7);
+                        // this.BuildReply(id, tag, 4 + count);
+                        // this.SendReply(bufchain);
+                    }
+                }
+            }
+            100 => { // version
+                let version = Marshall::unmarshall(&["w", "s"], &buffer, &mut state);
+                let ver0 = version[0].as_u32().unwrap();
+                let ver1 = version[0].as_str().unwrap();
+                dbg_log!(LOG::P9, "[version]: msize={ver0},  version={ver1}");
+                self.msize = ver0;
+                size = Marshall::marshall(
+                    &["w", "s"], 
+                    &[MarVal::U32(self.msize), MarVal::String(self.version.to_string())], 
+                    BufferHodler::new(&mut self.reply_buffer, 7)
+                );
+                self.build_reply(id, tag, size);
+                self.send_reply(bufchain);
+            }
+            104 => { // attach
+                let req = Marshall::unmarshall(&["w", "w", "s", "s", "w"], &buffer, &mut state);
+                let fid = req[0].as_u32().unwrap();
+                let req1 = req[1].as_u32().unwrap();
+                let req2 = req[2].as_str().unwrap();
+                let req3 = req[3].as_str().unwrap();
+                let uid = req[4].as_u32().unwrap();
+                dbg_log!(LOG::P9, "[attach]: fid={fid},  afid={req1:x}  uname={req2} aname={req3}");
+                self.fids[fid as usize] =  Self::create_fid(0, FID_INODE as _, uid, "");
+                let inode = self.fs.get_inode(self.fids[fid as usize].inodeid as _).unwrap();
+                Marshall::marshall(&["Q"], &[MarVal::QID(inode.qid)], BufferHodler::new(&mut self.reply_buffer, 7));
+                self.build_reply(id, tag, 13);
+                self.send_reply(bufchain);
+                todo!()
+            }
+            108 => { // tflush
+                let req = Marshall::unmarshall(&["h"], &buffer, &mut state);
+                let oldtag = req[0].as_u16().unwrap();
+                dbg_log!(LOG::P9, "[flush] {tag}");
+                self.build_reply(id, tag, 0);
+                self.send_reply(bufchain);
+            }
+            110 => { //walk
+                let req = Marshall::unmarshall(&["w", "w", "h"], &buffer, &mut state);
+                let fid = req[0].as_u32().unwrap();
+                let nwfid = req[1].as_u32().unwrap();
+                let nwname = req[2].as_u16().unwrap();
+                dbg_log!(LOG::P9, "[walk]: fid={fid}  nwfid={nwfid} nwname={nwname}");
+                if nwname == 0 {
+                    let fid = &self.fids[fid as usize];
+                    self.fids[nwfid as usize] = Self::create_fid(
+                        fid.inodeid, 
+                        FID_INODE as _, 
+                        fid.uid, 
+                        &fid.dbg_name
+                    );
+                    Marshall::marshall(&["h"], &[MarVal::U16(0)], BufferHodler::new(&mut self.reply_buffer, 7));
+                    self.build_reply(id, tag, 2);
+                    self.send_reply(bufchain);
+                } else {
+                    let wnames = (0..nwname).map(|_| "s").collect::<Vec<_>>();
+                    let walk = Marshall::unmarshall(&wnames, &self.reply_buffer, &mut state);
+                    let mut idx = self.fids[fid as usize].inodeid;
+                    let mut offset = 7+2;
+                    let nwidx = 0;
+                    dbg_log!(LOG::P9, "walk in dir {}  to: {walk:?} ", self.fids[fid as usize].dbg_name);
+                    for walki in walk.iter() {
+                        let i = self.fs.search(idx as _, walki.as_str().unwrap());
+                        if i < 0 {
+                            dbg_log!(LOG::P9, "Could not find: {walki:?}");
+                            break;
+                        }
+                        idx = i as _;
+                        offset += Marshall::marshall(
+                            &["Q"], 
+                            &[MarVal::QID(self.fs.get_inode(idx as _).unwrap().qid)], 
+                            BufferHodler::new(&mut self.reply_buffer, offset)
+                        ) as _;
+                        nwidx += 1;
+                        self.fids[nwfid as usize] = Self::create_fid(
+                            idx, 
+                            FID_INODE as _, 
+                            self.fids[fid as usize].uid, 
+                            walki.as_str().unwrap(),
+                        );
+                    }
+                    Marshall::marshall(&["h"], &[MarVal::U16(nwidx)], BufferHodler::new(&mut self.reply_buffer, 7));
+                    self.build_reply(id, tag, (offset-7) as u32);
+                    self.send_reply(bufchain);
+                }
+            }
+            120 => { //clunk
+                let req = Marshall::unmarshall(&["w"], &buffer, &mut state);
+                let req0 = req[0].as_u32().unwrap();
+                dbg_log!(LOG::P9, "[clunk]: fid={req0}");
+                if self.fids.get(req0 as _).is_some() && self.fids[req0 as usize].inodeid >= 0 {
+                    todo!()
+                }
+                self.build_reply(id, tag, 0);
+                self.send_reply(bufchain);
+            }
+            32 => { //txattrcreate
+                let req = Marshall::unmarshall(&["w", "s", "d", "w"], &buffer, &mut state);
+                let fid = req[0].as_u32().unwrap();
+                let name = req[1].as_str().unwrap();
+                let attr_size = req[2].as_u32().unwrap();
+                let flags = req[3].as_u32().unwrap();
+                dbg_log!(LOG::P9, "[txattrcreate]: fid={fid} name={name} attr_size={attr_size} flags={flags}");
+                self.fids[fid as usize].type_ = FID_XATTR as _;
+                self.build_reply(id, tag, 0);
+                self.send_reply(bufchain);
+            }
+            30 => { //xattrwalk
+                let req = Marshall::unmarshall(&["w", "w", "s"], &buffer, &mut state);
+                let fid = req[0].as_u32().unwrap();
+                let newfid = req[1].as_u32().unwrap();
+                let name = req[2].as_str().unwrap();
+                dbg_log!(LOG::P9, "[xattrwalk]: fid={fid} newfid={newfid} name={name}");
+                self.send_error(tag, EOPNOTSUPP as _);
+                self.send_reply(bufchain);
             }
             _ => {
                 panic!("Error in Virtio9p: Unknown id {id} received");
             }
+        }
+    }
+
+    fn create_fid(inodeid: u32, type_: u8, uid: u32, dbg_name: &str) -> Fid {
+        Fid {
+            inodeid,
+            type_,
+            uid,
+            dbg_name: dbg_name.to_owned(),
         }
     }
 

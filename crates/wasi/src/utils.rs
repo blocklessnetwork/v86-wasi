@@ -160,13 +160,14 @@ pub fn unicode_to_utf8stream(key: i32) -> Option<Utf8S> {
     return None;
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Qid {
     pub type_: u8,
     pub version: u32,
     pub path: u32,
 }
 
+#[derive(Debug)]
 pub enum MarVal  {
     String(String),
     U32(u32),

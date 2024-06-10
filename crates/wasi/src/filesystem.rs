@@ -9,7 +9,7 @@ use std::time::{self, Duration};
 use crate::log::LOG;
 use crate::virtio::VirtQueueBufferChain;
 use crate::virtio9p::{P9_LOCK_BLOCKED, P9_LOCK_SUCCESS};
-use crate::{BufferHodler, MarVal, Marshall, Qid, StoreT, UTF8};
+use crate::{BufferHodler, MarVal, Marshall, Qid, State, StoreT, UTF8};
 
 pub const STATUS_INVALID: i8 = -0x1;
 pub const STATUS_OK: i8 = 0x0;
@@ -465,6 +465,29 @@ impl FS {
         }
     }
 
+    pub fn round_to_direntry(&mut self, dirid: u32, offset_target: u32) -> usize {
+        let dirid = dirid as _;
+        let data = self.inodedata.get(&dirid);
+        assert!(data.is_some(), "FS directory data for dirid={dirid} should be generated");
+        let data = data.unwrap();
+        assert!(data.len() > 0, "FS directory should have at least an entry");
+    
+        if offset_target as usize >= data.len() {
+            return data.len();
+        }
+    
+        let mut offset = 0;
+        loop {
+            let next_offset = &Marshall::unmarshall(&["Q", "d"], &data, &mut State {offset: offset})[1];
+            let next_offset = next_offset.as_u32().unwrap();
+            if next_offset > offset_target {
+                break;
+            }
+            offset = next_offset as _;
+        }
+        return offset;
+    }
+
     fn get_forwarder(&mut self, mount_id: MountIdType, foreign_id: ForeignIdType) -> u64 {
         let mount = self.mounts.get(mount_id as usize);
         assert!(
@@ -508,7 +531,7 @@ impl FS {
             });
     }
 
-    fn search(&mut self, parentid: i64, name: &str) -> i64 {
+    pub fn search(&mut self, parentid: i64, name: &str) -> i64 {
         let mut parent_inode = self.inodes[parentid as usize].clone();
         if Self::is_forwarder(&parent_inode) {
             let foreign_parentid = parent_inode.foreign_id;
