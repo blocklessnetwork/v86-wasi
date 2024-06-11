@@ -356,7 +356,7 @@ impl Virtio9p {
                 let uid = {
                     let fid = &mut self.fids[fid as usize];
                     fid.inodeid = idx as _;
-                    fid.type_ = FID_INODE;
+                    fid.type_ = FID_INODE as _;
                     fid.dbg_name = name.to_string();
                     fid.uid
                 };
@@ -564,12 +564,12 @@ impl Virtio9p {
                     self.send_error(tag, ENOENT as _);
                     self.send_reply(bufchain);
                 } else {
-                    let inode = inode.unwrap();
-                    if self.fids[fid as usize].type_ == FID_XATTR as _ {
+                    if self.fids[fid as usize].type_ == FID_XATTR as u8 {
+                        let inode = inode.unwrap();
                         if inode.caps.len() < (offset+count) as usize  {
-                             count = (inode.caps.len() - offset as _) as u32;
+                             count = (inode.caps.len() - offset as usize) as u32;
                         }
-                        let bh = BufferHodler::new(&mut self.reply_buffer, 7+4);
+                        let mut bh = BufferHodler::new(&mut self.reply_buffer, 7+4);
                         for i in 0..count {
                             bh.push(inode.caps[(offset+i) as usize]);
                         }
@@ -577,17 +577,19 @@ impl Virtio9p {
                         self.build_reply(id, tag, 4 + count);
                         self.send_reply(bufchain);
                     } else {
+                        let inode_size = inode.map(|inode| inode.size).unwrap();
                         self.fs.open_inode(self.fids[fid as usize].inodeid, 0);
                         let inodeid = self.fids[fid as usize].inodeid;
+                        
         
                         count = count.min(self.reply_buffer.len() as u32 - (7 + 4));
         
-                        if inode.size < (offset+count) as _ {
-                            count = (inode.size - offset as _) as u32;
+                        if inode_size < (offset+count) as _ {
+                            count = (inode_size - offset as u64) as u32;
                         } else if id == 40 {
                             // for directories, return whole number of dir-entries.
-                            count = (self.fs.round_to_direntry(inodeid, offset + count) - offset as _) as _;
-                        } if offset > inode.size as _  {
+                            count = (self.fs.round_to_direntry(inodeid, offset + count) - offset as usize) as _;
+                        } if offset > inode_size as _  {
                             // offset can be greater than available - should return count of zero.
                             // See http://ericvh.github.io/9p-rfc/rfc9p2000.html#anchor30
                             count = 0;
@@ -663,8 +665,8 @@ impl Virtio9p {
                     let wnames = (0..nwname).map(|_| "s").collect::<Vec<_>>();
                     let walk = Marshall::unmarshall(&wnames, &self.reply_buffer, &mut state);
                     let mut idx = self.fids[fid as usize].inodeid;
-                    let mut offset = 7+2;
-                    let nwidx = 0;
+                    let mut offset: usize = 7+2;
+                    let mut nwidx = 0;
                     dbg_log!(LOG::P9, "walk in dir {}  to: {walk:?} ", self.fids[fid as usize].dbg_name);
                     for walki in walk.iter() {
                         let i = self.fs.search(idx as _, walki.as_str().unwrap());
@@ -677,7 +679,7 @@ impl Virtio9p {
                             &["Q"], 
                             &[MarVal::QID(self.fs.get_inode(idx as _).unwrap().qid)], 
                             BufferHodler::new(&mut self.reply_buffer, offset)
-                        ) as _;
+                        ) as usize;
                         nwidx += 1;
                         self.fids[nwfid as usize] = Self::create_fid(
                             idx, 
@@ -695,7 +697,7 @@ impl Virtio9p {
                 let req = Marshall::unmarshall(&["w"], &buffer, &mut state);
                 let req0 = req[0].as_u32().unwrap();
                 dbg_log!(LOG::P9, "[clunk]: fid={req0}");
-                if self.fids.get(req0 as _).is_some() && self.fids[req0 as usize].inodeid >= 0 {
+                if self.fids.get(req0 as usize).is_some() && self.fids[req0 as usize].inodeid >= 0 {
                     todo!()
                 }
                 self.build_reply(id, tag, 0);
