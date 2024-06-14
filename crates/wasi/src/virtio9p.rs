@@ -218,7 +218,7 @@ impl Virtio9p {
                 size = self.fs.get_total_size();
                 let space = self.fs.get_space();
                 let mut req = vec![MarVal::U32(0x01021997), MarVal::U32(self.blocksize)];
-                let req2 = (space/self.blocksize) as u32;
+                let req2 = ((space as u64)/(self.blocksize as u64)) as u32;
                 req.push(MarVal::U32(req2));
                 let req3 = req2 - (size / self.blocksize) as u32;
                 req.push(MarVal::U32(req3));

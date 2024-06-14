@@ -391,8 +391,10 @@ pub struct VirtIOptions {
     pub device_specific: Option<VirtIODeviceSpecificCapabilityOptions>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct AddrRW {
+    cap_type: u8,
+    field_name: String,
     read: StructRead,
     write: StructWrite,
 }
@@ -1065,7 +1067,7 @@ impl VirtIO {
         let mut cap_next: i32 = pci_space[0x34] as _;
         // Current offset.
         let mut cap_ptr = cap_next;
-
+        println!("capabilities len {}", capabilities.len());
         let mut pci_bars: Vec<PCIBar> = Vec::new(); 
         for cap in capabilities.iter() {
             let cap_len = VIRTIO_PCI_CAP_LENGTH as i32 + cap.extra.len() as i32;
@@ -1128,6 +1130,7 @@ impl VirtIO {
                 1
             };
             pci_space[bar_offset] = ((cap.port & 0xFE) | mmio) as u8;
+
             pci_space[bar_offset + 1] = ((cap.port >> 8) & 0xFF) as u8;
             pci_space[bar_offset + 2] = ((cap.port >> 16) & 0xFF) as u8;
             pci_space[bar_offset + 3] = ((cap.port >> 24) & 0xFF) as u8;
@@ -1135,8 +1138,11 @@ impl VirtIO {
             for field in cap.struct_.iter() {
                 let read = field.read;
                 let write = field.write;
-                self.addr_rw.insert(port, AddrRW{
+                println!("{} {} {}", port, cap.port, cap.offset);
+                self.addr_rw.insert(port, AddrRW {
                     read,
+                    cap_type: cap.type_,
+                    field_name: field.name.clone(),
                     write
                 });
                 if cap.use_mmio {
@@ -1239,6 +1245,16 @@ impl VirtIO {
                             );
                         },
                     }
+                    self.store.io_mut().map(|io| {
+                        io.register_io_bar_callback(port, |store, new, old| {
+                            store.virtio_mut().map(|virt| {
+                                let old_entry = virt.addr_rw.remove(&old);
+                                old_entry.map(|old_entry| {
+                                    virt.addr_rw.insert(new, old_entry);
+                                });
+                            });
+                        })
+                    });
                 }
                 port += field.bytes as u32;
             }
@@ -1290,15 +1306,19 @@ impl VirtIO {
     }
 
     fn read32(&self, addr: u32) -> u32 {
-        self.addr_rw.get(&addr).map_or(0, |rw| 
-            (rw.read)(self.store.clone()) as u32
-        )
+        self.addr_rw.get(&addr).map_or(0, |rw|  {
+            let val = (rw.read)(self.store.clone()) as u32;
+            dbg_log!(LOG::VIRTIO, "Device<{}> cap[{}] read[{}] <= {val}", self.name, rw.cap_type, &rw.field_name);
+            val
+        })
     }
 
     fn write32(&mut self, addr: u32, val: i32) {
-        self.addr_rw.get_mut(&addr).map(|rw| 
+        println!("111 {} {}",addr, self.addr_rw.contains_key(&addr));
+        self.addr_rw.get_mut(&addr).map(|rw|  {
+            dbg_log!(LOG::VIRTIO, "Device<{}> cap[{}] write[{}] <= {val}", self.name, rw.cap_type, &rw.field_name);
             (rw.write)(self.store.clone(), val)
-        );
+        });
     }
 
     pub fn init(&mut self) {

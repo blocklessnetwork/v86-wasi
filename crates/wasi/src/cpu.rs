@@ -11,31 +11,7 @@ use std::{
 };
 
 use crate::{
-    bus::BUS,
-    consts::*,
-    debug::Debug,
-    dev::OptionRom,
-    dma::DMA,
-    floppy::FloppyController,
-    io::{MMapFn, MemAccess, MemAccessTrait, IO},
-    kernel::load_kernel,
-    log::LOG,
-    pci::PCI,
-    pic::PIC,
-    pit::PIT,
-    ps2::PS2,
-    rtc::RTC,
-    uart::UART,
-    vga::VGAScreen,
-    ContextTrait, Dev, 
-    Emulator, StoreT, 
-    FLAG_INTERRUPT, 
-    MMAP_BLOCK_SIZE, 
-    TIME_PER_FRAME, 
-    ne2k::Ne2k, 
-    ide::{self, IDEDevice}, 
-    storage::SyncFileBuffer, 
-    virtio::VirtIO, virtio9p::{Virtio9p, self},
+    bus::BUS, consts::*, debug::Debug, dev::OptionRom, dma::DMA, filesystem::FS, floppy::FloppyController, ide::{self, IDEDevice}, io::{MMapFn, MemAccess, MemAccessTrait, IO}, kernel::load_kernel, log::LOG, ne2k::Ne2k, pci::PCI, pic::PIC, pit::PIT, ps2::PS2, rtc::RTC, storage::SyncFileBuffer, uart::UART, vga::VGAScreen, virtio::VirtIO, virtio9p::{self, Virtio9p}, ContextTrait, Dev, Emulator, StoreT, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME
 };
 use chrono::Duration;
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
@@ -372,7 +348,7 @@ impl CPU {
         let fdc = FloppyController::new(store.clone());
         let vga_mem_size = store.setting().vga_memory_size;
         let vga = VGAScreen::new(store.clone(), vga_mem_size);
-        let virtio9p = Virtio9p::new(store.clone());
+        let virtio9p = Virtio9p::new(store.clone(), FS::new(store.clone()));
         let uart0 = UART::new(store.clone(), 0x3F8);
         let ne2k = Ne2k::new(store.clone());
         let ide = None;

@@ -643,6 +643,7 @@ impl PCI {
                 let entry = bar.entries[i as usize].clone();
                 let _empty_entry_handle;
                 let empty_entry = if to + i >= 0x1000 {
+                    entry.io_bar_callback.map(|cb| (cb)(&io.store ,to_idx as u32, old_idx as u32));
                     _empty_entry_handle = mem::replace(&mut io.ports[to_idx], entry);
                     &_empty_entry_handle
                 } else {

@@ -262,7 +262,7 @@ impl Marshall {
                     struct_.push(0);
                     size += 2;
                     let s = item.as_str().unwrap();
-                    let mut slen = 0;
+                    let mut slen: u32 = 0;
                     for c in s.chars() {
                         let utf8 = unicode_to_utf8stream(c as _);
                         match utf8 {
@@ -280,7 +280,7 @@ impl Marshall {
                             _ => {}
                         }
                     }
-                    struct_.put(lengthoffset, slen & 0xFF);
+                    struct_.put(lengthoffset, (slen & 0xFF) as u8);
                     struct_.put(lengthoffset+1, ((slen >> 8) & 0xFF) as u8);
 
                 }

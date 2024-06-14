@@ -40,7 +40,7 @@ const ENOTEMPTY: i8 = 39; /* Directory not empty */
 
 
 #[derive(Clone)]
-struct FSLockRegion {
+pub struct FSLockRegion {
     pub type_: u8,
     pub start: u32,
     pub length: u32,
@@ -93,7 +93,7 @@ type ForeignIdType = i64;
 type MountIdType = i64;
 
 #[derive(Clone)]
-struct Inode {
+pub struct Inode {
     pub(crate) uid: u32,
     pub(crate) gid: u32,
     pub(crate) fid: u64,
@@ -172,7 +172,7 @@ struct Event {
 pub struct FS {
     store: StoreT,
     used_size: u32,
-    total_size: u32,
+    total_size: u64,
     events: Option<Vec<Event>>,
     inodes: Vec<Rc<Inode>>,
     mounts: Vec<FSMountInfo>,
@@ -214,6 +214,22 @@ fn get_mut_unchecked<T>(raw: &mut Rc<T>) -> &mut T {
 }
 
 impl FS {
+
+    pub fn new(store: StoreT) -> Self {
+        Self {
+            store: store,
+            used_size: 0,
+            total_size: 256 * 1024 * 1024 * 1024,
+            events: Some(Vec::new()),
+            inodes: Vec::new(),
+            mounts: Vec::new(),
+            qidcounter: Qidcounter {
+                last_qidnumber: 0
+            }, 
+            inodedata: HashMap::new(),
+        }
+    }
+
     #[inline(always)]
     fn is_forwarder(inode: &Inode) -> bool {
         return inode.status == STATUS_FORWARDING; 
@@ -574,7 +590,7 @@ impl FS {
         return count;
     }
 
-    pub fn get_space(&self) -> u32 {
+    pub fn get_space(&self) -> u64 {
         let mut count = self.total_size;
         self.mounts.iter().for_each(|m| {
             count += m.fs.get_space();
