@@ -1067,7 +1067,6 @@ impl VirtIO {
         let mut cap_next: i32 = pci_space[0x34] as _;
         // Current offset.
         let mut cap_ptr = cap_next;
-        println!("capabilities len {}", capabilities.len());
         let mut pci_bars: Vec<PCIBar> = Vec::new(); 
         for cap in capabilities.iter() {
             let cap_len = VIRTIO_PCI_CAP_LENGTH as i32 + cap.extra.len() as i32;
@@ -1138,7 +1137,6 @@ impl VirtIO {
             for field in cap.struct_.iter() {
                 let read = field.read;
                 let write = field.write;
-                println!("{} {} {}", port, cap.port, cap.offset);
                 self.addr_rw.insert(port, AddrRW {
                     read,
                     cap_type: cap.type_,
@@ -1314,7 +1312,6 @@ impl VirtIO {
     }
 
     fn write32(&mut self, addr: u32, val: i32) {
-        println!("111 {} {}",addr, self.addr_rw.contains_key(&addr));
         self.addr_rw.get_mut(&addr).map(|rw|  {
             dbg_log!(LOG::VIRTIO, "Device<{}> cap[{}] write[{}] <= {val}", self.name, rw.cap_type, &rw.field_name);
             (rw.write)(self.store.clone(), val)
