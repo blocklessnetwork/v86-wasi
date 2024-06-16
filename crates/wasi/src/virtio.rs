@@ -448,7 +448,7 @@ impl VirtIO {
     pub fn new(store: StoreT, options: VirtIOptions) -> Self {
         let name = options.name.clone();
         let mut device_feature = [0u32; 4];
-        let mut driver_feature = [0u32; 4];
+        let driver_feature = [0u32; 4];
         for f in options.common.features.iter() {
             assert!(*f >= 0,
                 "VirtIO device<{name}> feature bit numbers must be non-negative");
@@ -457,7 +457,6 @@ impl VirtIO {
     
             // Feature bits are grouped in 32 bits.
             device_feature[(f >> 5) as usize] |= 1 << (f & 0x1F);
-            driver_feature[(f >> 5) as usize] |= 1 << (f & 0x1F);
         }
         assert!(options.common.features.contains(&VIRTIO_F_VERSION_1),
         "VirtIO device<{name}> only non-transitional devices are supported");
@@ -1157,7 +1156,7 @@ impl VirtIO {
                                     Dev::Emulator(self.store.clone()), 
                                     |dev, addr| {
                                         dev.virtio().and_then(|vr| {
-                                            Some(vr.shim_read8_on_16(addr))
+                                            Some(vr.shim_read8_on_32(addr))
                                         }).unwrap_or(0)
                                     }, IO::empty_read16, 
                                     |dev, addr| {
@@ -1298,6 +1297,14 @@ impl VirtIO {
     }
 
     fn shim_read8_on_16(&self, addr: u32) -> u8 {
+        dbg_log!(LOG::VIRTIO, "Warning: 8-bit read from 16-bit virtio port");
+        self.addr_rw.get(&addr).map_or(0, |rw| 
+            ((rw.read)(self.store.clone()) & 0xFF) as u8
+        )
+    }
+
+    fn shim_read8_on_32(&self, addr: u32) -> u8 {
+        dbg_log!(LOG::VIRTIO, "Warning: 8-bit read from 32-bit virtio port");
         self.addr_rw.get(&addr).map_or(0, |rw| 
             ((rw.read)(self.store.clone()) & 0xFF) as u8
         )
@@ -1306,14 +1313,14 @@ impl VirtIO {
     fn read32(&self, addr: u32) -> u32 {
         self.addr_rw.get(&addr).map_or(0, |rw|  {
             let val = (rw.read)(self.store.clone()) as u32;
-            dbg_log!(LOG::VIRTIO, "Device<{}> cap[{}] read[{}] <= {val}", self.name, rw.cap_type, &rw.field_name);
+            dbg_log!(LOG::VIRTIO, "Device<{}:{addr:#x}> cap[{}] read[{}] => {val:#x}", self.name, rw.cap_type, &rw.field_name);
             val
         })
     }
 
     fn write32(&mut self, addr: u32, val: i32) {
         self.addr_rw.get_mut(&addr).map(|rw|  {
-            dbg_log!(LOG::VIRTIO, "Device<{}> cap[{}] write[{}] <= {val}", self.name, rw.cap_type, &rw.field_name);
+            dbg_log!(LOG::VIRTIO, "Device<{}:{addr:#x}> cap[{}] write[{}] <= {val:#x}", self.name, rw.cap_type, &rw.field_name);
             (rw.write)(self.store.clone(), val)
         });
     }
