@@ -97,7 +97,7 @@ impl TunThread {
             Ok(tap) => tap,
             Err(_) => {
                 eprintln!("tap open with configure fail. please check config, \
-                tab mod must be grant the root privileges, if you use macos \
+                tap mod must be grant the root privileges, if you use macos \
                 please install tuntap kext.");
                 return;
             },
