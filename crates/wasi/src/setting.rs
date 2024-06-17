@@ -20,6 +20,7 @@ pub struct Setting {
     pub(crate) tun_netmask: Option<String>,
     pub(crate) tun_ether_addr: Option<String>,
     pub(crate) vga_memory_size: u32,
+    pub(crate) ws_port: u32,
     pub(crate) memory_size: u32,
     pub(crate) log_mask: u32,
     pub(crate) fast_boot: bool,
@@ -42,6 +43,7 @@ impl Setting {
             bzimage_file: None,
             vga_bios_file: None,
             tun_ether_addr: None,
+            ws_port: 8081,
             vga_memory_size: 8 * 1024 * 1024,
             memory_size: 128 * 1024 * 1024,
         }
@@ -55,7 +57,8 @@ impl Setting {
         setting.bios_file = setting_obj["bios_file"].as_str().map(|s| s.into());
         setting.vga_bios_file = setting_obj["vga_bios_file"].as_str().map(|s| s.into());
         setting.wasm_file = setting_obj["wasm_file"].as_str().map(|s| s.into());
-        setting.memory_size = setting_obj["memory_size"].as_u32().unwrap_or(128 * 1024 * 1024);
+        setting.wasm_file = setting_obj["wasm_file"].as_str().map(|s| s.into());
+        setting.ws_port = setting_obj["ws_port"].as_u32().unwrap_or(8081);
         setting.vga_memory_size = setting_obj["vga_memory_size"].as_u32().unwrap_or( 8 * 1024 * 1024);
         if setting_obj["cmdline"].is_array() {
             setting.cmdline = match setting_obj["cmdline"] {
