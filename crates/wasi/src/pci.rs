@@ -407,6 +407,7 @@ impl PCI {
         let bdf = address >> 8 & 0xFFFF;
         let addr = address & 0xFF;
         let index = bdf as usize;
+        dbg_log!(LOG::PCI, "address:{address:#X} written:{written:#X}");
 
         if self.device_spaces[index].is_none() {
             return;
