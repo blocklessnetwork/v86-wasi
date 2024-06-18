@@ -33,6 +33,20 @@ Use the following command to verify whether the interface has started.
 # ping 192.168.0.1
 ```
 
+#### start the telnetd service.
+
+Use follow command start the telnetd service in the web terminal.
+
+```bash
+# /etc/init.d/telnetd start
+```
+
+After starting the telnetd service, please use the following command on the host to login to the VM
+
+```bash
+$ telnet 192.168.0.2
+```
+
 ## How to build.
 
 ### 1. Build wasm
