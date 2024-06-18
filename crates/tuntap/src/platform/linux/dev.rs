@@ -65,7 +65,7 @@ impl Device for Tap {
         let mut req = ifreq::new(name);
         req.ifr_ifru.ifru_flags = match self.model() {
             Model::Tap => super::sys::IFF_TAP,
-            Model::Tun => super::sys::IFF_TUN,
+            Model::Tun => super::sys::IFF_TUN|super::sys::IFF_NO_PI,
         } as _;
         syscall!(siocsifname(*self.fd, &req));
         self.name = req.name();
