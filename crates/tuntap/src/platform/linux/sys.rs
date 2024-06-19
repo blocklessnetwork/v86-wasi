@@ -31,8 +31,10 @@ pub union ifreq_ifru {
     pub ifru_netmask: sockaddr,
     pub ifru_hwaddr: sockaddr,
     pub ifru_flags: ::std::os::raw::c_short,
+    pub ifru_uflags: ::std::os::raw::c_ushort,
     pub ifru_ivalue: ::std::os::raw::c_int,
     pub ifru_mtu: ::std::os::raw::c_int,
+    pub ifru_bool: ::std::os::raw::c_uchar,
     pub ifru_map: ifmap,
     pub ifru_slave: [::std::os::raw::c_char; 16usize],
     pub ifru_newname: [::std::os::raw::c_char; 16usize],
@@ -51,6 +53,13 @@ pub struct ifmap {
     pub irq: ::std::os::raw::c_uchar,
     pub dma: ::std::os::raw::c_uchar,
     pub port: ::std::os::raw::c_uchar,
+}
+
+impl ifreq_ifru {
+    pub fn new() -> Self {
+        let req: ifreq_ifru = unsafe { mem::zeroed() };
+        req
+    }
 }
 
 impl ifreq {
@@ -84,6 +93,8 @@ const IFF_TUN_EXCL: u16       = 0x0800;
 const TUNSETIFF: u64      = 0x400454ca;
 const TUNSETOWNER: u64    = 0x400454cc;
 const TUNSETGROUP: u64    = 0x400454ce;
+const TUNSETPERSIST: u64  = 0x400454cb;
+
 
 const SIOCGIFFLAGS: u64   = libc::SIOCGIFFLAGS;
 const SIOCSIFFLAGS: u64   = libc::SIOCSIFFLAGS;
@@ -123,3 +134,7 @@ ioctl!(bad write siocsifbroadcast with SIOCSIFBRDADDR; ifreq);
 
 ioctl!(bad read siocgifdestaddr with SIOCGIFDSTADDR; ifreq);
 ioctl!(bad write siocsifdestaddr with SIOCSIFDSTADDR; ifreq);
+
+ioctl!(bad write siocsifowner with TUNSETOWNER; ifreq_ifru);
+ioctl!(bad write siocsifgroup with TUNSETGROUP; ifreq_ifru);
+ioctl!(bad write siocsifpersist with TUNSETGROUP; ifreq_ifru);
