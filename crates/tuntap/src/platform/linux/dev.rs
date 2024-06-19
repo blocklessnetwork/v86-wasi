@@ -50,6 +50,27 @@ impl Tap {
         file.map_err(|e: io::Error| Error::Io(e))
     }
 
+    fn set_if_owner(&mut self, owner: u16) -> Result<()> {
+        let mut req = ifreq_ifru::new();
+        req.ifru_uflags = owner;
+        syscall!(siocsifowner(*self.fd, &req));
+        Ok(())
+    }
+
+    fn set_if_group(&mut self, group: u16) -> Result<()> {
+        let mut req = ifreq_ifru::new();
+        req.ifru_uflags = group;
+        syscall!(siocsifgroup(*self.fd, &req));
+        Ok(())
+    }
+
+    fn set_if_persist(&mut self, b: bool) -> Result<()> {
+        let mut req = ifreq_ifru::new();
+        req.ifru_bool = b as _;
+        syscall!(siocsifpersist(*self.fd, &req));
+        Ok(())
+    }
+
 }
 
 impl Device for Tap {
@@ -64,11 +85,14 @@ impl Device for Tap {
     fn set_name(&mut self, name: &str) -> Result<()> {
         let mut req = ifreq::new(name);
         req.ifr_ifru.ifru_flags = match self.model() {
-            Model::Tap => super::sys::IFF_TAP,
-            Model::Tun => super::sys::IFF_TUN,
+            Model::Tap => super::sys::IFF_TAP|super::sys::IFF_NO_PI,
+            Model::Tun => super::sys::IFF_TUN|super::sys::IFF_NO_PI,
         } as _;
         syscall!(siocsifname(*self.fd, &req));
         self.name = req.name();
+        self.set_if_group(1000)?;
+        self.set_if_owner(1000)?;
+        self.set_if_persist(true)?;
         Ok(())
     }
 

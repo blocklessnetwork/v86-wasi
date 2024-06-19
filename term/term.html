@@ -24,7 +24,7 @@ var bus = new BusConnector();
 var screen_elem = document.getElementById("screen_container");
 var screen = new ScreenAdapter(screen_elem, bus);
 var kb = new KeyboardAdapter(bus);
-var ws = new TermWS("ws://localhost:9002", bus);
+var ws = new TermWS("ws://127.0.0.1:9002", bus);
 ws.connect();
 </script>
 </body>
