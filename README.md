@@ -27,7 +27,6 @@ Use follow command start the network interface in the web terminal.
 
 Use the following command to verify whether the interface has started.
 
-
 ```bash
 # ifconfig
 # ping 192.168.0.1
@@ -41,11 +40,23 @@ Use follow command start the telnetd service in the web terminal.
 # /etc/init.d/telnetd start
 ```
 
-After starting the telnetd service, please use the following command on the host to login to the VM
+After starting the telnetd service, please use the following command on the host
+to login to the VM
 
 ```bash
 $ telnet 192.168.0.2
 ```
+
+#### How to build test applet with golang.
+
+Build the applet in host.
+
+```bash
+$ export GOOS=linux
+$ export GOARCH=386
+$ go build svr_applet.go
+```
+
 
 ## How to build.
 
@@ -112,5 +123,5 @@ If you wanna DIY the linux by yourself, please see the document
 cargo build --release
 ```
 
-This will generate a `libv86_lib.dylib` file for your machine arch (which can be packaged in the car format to be run in the runtime)
-
+This will generate a `libv86_lib.dylib` file for your machine arch (which can be
+packaged in the car format to be run in the runtime)
