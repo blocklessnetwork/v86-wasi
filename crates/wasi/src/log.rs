@@ -41,6 +41,7 @@ pub fn set_log_mask(m: u32) {
 pub enum LOG {
     E,
     IO,
+    P9,
     WS,
     CPU,
     PIC,
@@ -53,6 +54,7 @@ pub enum LOG {
     NET,
     DISK,
     BIOS,
+    VIRTIO,
     SERIAL,
     FLOPPY,
 }
@@ -64,6 +66,7 @@ impl LOG {
         match s.to_ascii_uppercase().as_str() {
             "IO" => LOG::IO,
             "WS" => LOG::WS,
+            "P9" => LOG::P9,
             "CPU" => LOG::CPU,
             "PIC" => LOG::PIC,
             "PCI" => LOG::PCI,
@@ -77,6 +80,7 @@ impl LOG {
             "BIOS" => LOG::BIOS,
             "SERIAL" => LOG::SERIAL,
             "FLOPPY" => LOG::FLOPPY,
+            "VIRTIO" => LOG::VIRTIO,
             _ => LOG::E,
         }
     }
@@ -86,6 +90,7 @@ impl LOG {
         match *self {
             Self::E => LOG_E,
             Self::IO => LOG_IO,
+            Self::P9 => LOG_P9,
             Self::CPU => LOG_CPU,
             Self::PIC => LOG_PIC,
             Self::PCI => LOG_PCI,
@@ -100,6 +105,7 @@ impl LOG {
             Self::WS => LOG_WS,
             Self::FLOPPY => LOG_FLOPPY,
             Self::SERIAL => LOG_SERIAL,
+            Self::VIRTIO => LOG_VIRTIO,
         }
     }
 
@@ -114,6 +120,8 @@ impl Display for LOG {
         match *self {
             Self::IO => f.write_str("IO"),
             Self::E => f.write_str("  "),
+            Self::P9 => f.write_str("P9"),
+            Self::WS => f.write_str("WS"),
             Self::CPU => f.write_str("CPU"),
             Self::PIC => f.write_str("PIC"),
             Self::PIT => f.write_str("PIT"),
@@ -123,11 +131,11 @@ impl Display for LOG {
             Self::RTC => f.write_str("RTC"),
             Self::DMA => f.write_str("DMA"),
             Self::PS2 => f.write_str("PS2"),
-            Self::WS => f.write_str("WS"),
             Self::DISK => f.write_str("DISK"),
             Self::BIOS => f.write_str("BIOS"),
             Self::SERIAL => f.write_str("SERIAL"),
             Self::FLOPPY => f.write_str("FLOPPY"),
+            Self::VIRTIO => f.write_str("VIRTIO"),
         }
     }
 }

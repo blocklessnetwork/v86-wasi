@@ -47,6 +47,7 @@ impl DerefMut for ifreq {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
+#[allow(non_camel_case_types)]
 pub struct ifmtu {
     pub ifran: [c_char; IFNAMSIZ],
     pub mtu: [u8;4],
@@ -55,6 +56,7 @@ pub struct ifmtu {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
+#[allow(non_camel_case_types)]
 pub struct ifaliasreq {
     pub ifran: [c_char; IFNAMSIZ],
     pub addr: sockaddr,

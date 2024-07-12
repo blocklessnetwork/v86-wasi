@@ -11,23 +11,7 @@ use std::{
 };
 
 use crate::{
-    bus::BUS,
-    consts::*,
-    debug::Debug,
-    dev::OptionRom,
-    dma::DMA,
-    floppy::FloppyController,
-    io::{MMapFn, MemAccess, MemAccessTrait, IO},
-    kernel::load_kernel,
-    log::LOG,
-    pci::PCI,
-    pic::PIC,
-    pit::PIT,
-    ps2::PS2,
-    rtc::RTC,
-    uart::UART,
-    vga::VGAScreen,
-    ContextTrait, Dev, Emulator, StoreT, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME, ne2k::Ne2k, ide::{self, IDEDevice}, storage::SyncFileBuffer,
+    bus::BUS, consts::*, debug::Debug, dev::OptionRom, dma::DMA, filesystem::FS, floppy::FloppyController, ide::{self, IDEDevice}, io::{MMapFn, MemAccess, MemAccessTrait, IO}, kernel::load_kernel, log::LOG, ne2k::Ne2k, pci::PCI, pic::PIC, pit::PIT, ps2::PS2, rtc::RTC, storage::SyncFileBuffer, uart::UART, vga::VGAScreen, virtio::VirtIO, virtio9p::{self, Virtio9p}, ContextTrait, Dev, Emulator, StoreT, FLAG_INTERRUPT, MMAP_BLOCK_SIZE, TIME_PER_FRAME
 };
 use chrono::Duration;
 use wasmtime::{AsContextMut, Instance, Memory, Store, TypedFunc};
@@ -340,9 +324,11 @@ pub struct CPU {
     pub(crate) fdc: FloppyController,
     pub(crate) ide: Option<IDEDevice>,
     pub(crate) cdrom: Option<IDEDevice>,
+    pub(crate) virtio9p: Option<Virtio9p>,
 }
 
 impl CPU {
+
     #[inline]
     pub(crate) fn store_mut(&self) -> Option<&'static mut Store<Emulator>> {
         if self.store.weak_count() == 0 {
@@ -362,6 +348,7 @@ impl CPU {
         let fdc = FloppyController::new(store.clone());
         let vga_mem_size = store.setting().vga_memory_size;
         let vga = VGAScreen::new(store.clone(), vga_mem_size);
+        let virtio9p = Virtio9p::new(store.clone(), FS::new(store.clone()));
         let uart0 = UART::new(store.clone(), 0x3F8);
         let ne2k = Ne2k::new(store.clone());
         let ide = None;
@@ -380,6 +367,7 @@ impl CPU {
             idle: true,
             a20_byte: 0,
             fw_pointer: 0,
+            virtio9p: Some(virtio9p),
             tick_counter: 0,
             store: store.clone(),
             mmap_fn: MMapFn::new(),
@@ -464,6 +452,18 @@ impl CPU {
     }
 
     #[inline]
+    pub(crate) fn write16(&mut self, addr: u32, value: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.write16(store, addr, value));
+    }
+
+    #[inline]
+    pub(crate) fn write32(&mut self, addr: u32, value: i32) {
+        self.store_mut()
+            .map(|store| self.vm_opers.write32(store, addr, value));
+    }
+
+    #[inline]
     pub(crate) fn read8(&mut self, addr: u32) -> i32 {
         self.store_mut()
             .map_or(0, |store| self.vm_opers.read8(store, addr))
@@ -475,11 +475,13 @@ impl CPU {
             .map_or(0, |store| self.vm_opers.read16(store, addr))
     }
 
+    #[inline]
     pub(crate) fn read32s(&mut self, addr: u32) -> i32 {
         self.store_mut()
             .map_or(0, |store| self.vm_opers.read32s(store, addr))
     }
 
+    #[inline]
     fn read_slice(&mut self, val: &mut [u8], offset: usize) {
         self.store_mut()
             .map(|store| self.memory.read(store, offset, val).unwrap());
@@ -818,6 +820,7 @@ impl CPU {
         self.ne2k.init();
         self.ps2.init();
         self.fdc.init();
+        self.virtio9p.as_mut().map(|virtio9p| virtio9p.init());
         self.cdrom_init();
     }
 
@@ -1002,16 +1005,39 @@ impl CPU {
         }
     }
 
+    #[inline]
+    pub fn virtio9p(&self) -> Option<&Virtio9p> {
+        self.virtio9p.as_ref()
+    }
+
+    #[inline]
+    pub fn virtio9p_mut(&mut self) -> Option<&mut Virtio9p> {
+        self.virtio9p.as_mut()
+    }
+
+    #[inline]
+    pub fn virtio(&self) -> Option<&VirtIO> {
+        self.virtio9p.as_ref().and_then(|v9p| v9p.virtio())
+    }
+
+    #[inline]
+    pub fn virtio_mut(&mut self) -> Option<&mut VirtIO> {
+        self.virtio9p.as_mut().and_then(|v9p| v9p.virtio_mut())
+    }
+
+    #[inline]
     pub fn device_raise_irq(&mut self, i: u8) {
         self.pic.set_irq(i);
         //TODO
     }
 
+    #[inline]
     pub fn device_lower_irq(&mut self, i: u8) {
         self.pic.clear_irq(i);
         //TODO:
     }
 
+    #[inline]
     pub fn reboot_internal(&mut self) {
         self.reset_cpu();
         self.fw_value = Rc::new(Vec::new());

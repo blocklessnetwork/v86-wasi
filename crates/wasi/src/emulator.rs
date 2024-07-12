@@ -30,6 +30,7 @@ use crate::{
     floppy::FloppyController,
     jit::{JitMsg, JitWorker},
     ContextTrait, Setting, StoreT, CPU, WASM_TABLE_OFFSET, 
+    virtio::VirtIO, virtio9p::Virtio9p,
 };
 
 #[cfg(feature = "tap")]
@@ -91,6 +92,7 @@ impl InnerEmulator {
             .map(|store| inst.get_memory(store, "memory"))
             .flatten()
             .unwrap();
+        // spawn the jit thread
         std::thread::spawn(move || {
             let table = table;
             let store: StoreT = unsafe { 
@@ -249,122 +251,122 @@ impl Emulator {
         println!("exit.");
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn vga_mut(&self) -> Option<&mut VGAScreen> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.vga)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn pit_mut(&self) -> Option<&mut PIT> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.pit)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn net_adp_mut(&self) -> Option<&mut NetAdapter> {
         self.inner_mut().net_adapter.as_mut()
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn net_adp(&self) -> Option<&NetAdapter> {
         self.inner().net_adapter.as_ref()
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn pit(&self) -> Option<&PIT> {
         self.inner_mut().cpu.as_mut().map(|cpu| &cpu.pit)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn uart0_mut(&self) -> Option<&mut UART> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.uart0)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn uart0(&self) -> Option<&UART> {
         self.inner_mut().cpu.as_mut().map(|cpu| &cpu.uart0)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn ps2_mut(&self) -> Option<&mut PS2> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.ps2)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn ps2(&self) -> Option<&PS2> {
         self.inner_mut().cpu.as_mut().map(|cpu| &cpu.ps2)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn bios(&self) -> Option<&Vec<u8>> {
         self.inner_mut().bios.as_ref()
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn set_bios(&self, b: Vec<u8>) {
         self.inner_mut().bios = Some(b);
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn vga_bios(&self) -> Option<&Vec<u8>> {
         self.inner_mut().vga_bios.as_ref()
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn set_vga_bios(&self, b: Vec<u8>) {
         self.inner_mut().vga_bios = Some(b);
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn inner_strong_count(&self) -> usize {
         Rc::strong_count(&self.inner)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn cpu_mut(&self) -> Option<&mut CPU> {
         self.inner_mut().cpu.as_mut()
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn bus_mut(&self) -> Option<&mut BUS> {
         self.inner_mut().bus.as_mut()
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn bus(&self) -> Option<&BUS> {
         self.inner_mut().bus.as_ref()
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn pic_mut(&self) -> Option<&mut PIC> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.pic)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn pic(&self) -> Option<&PIC> {
         self.inner_mut().cpu.as_ref().map(|cpu| &cpu.pic)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn io_mut(&self) -> Option<&mut IO> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.io)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn io(&self) -> Option<&IO> {
         self.inner_mut().cpu.as_ref().map(|cpu| &cpu.io)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn dma_mut(&self) -> Option<&mut DMA> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.dma)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn cpu(&self) -> Option<&CPU> {
         self.inner_mut().cpu.as_ref()
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn rtc_mut(&self) -> Option<&mut RTC> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.rtc)
     }
@@ -374,12 +376,32 @@ impl Emulator {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.pci)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn pci(&self) -> Option<&PCI> {
         self.inner_mut().cpu.as_mut().map(|cpu| &cpu.pci)
     }
 
-    #[inline]
+    #[inline(always)]
+    pub(crate) fn virtio_mut(&self) -> Option<&mut VirtIO> {
+        self.inner_mut().cpu.as_mut().and_then(|cpu| cpu.virtio_mut())
+    }
+
+    #[inline(always)]
+    pub(crate) fn virtio(&self) -> Option<&VirtIO> {
+        self.inner().cpu.as_ref().and_then(|cpu| cpu.virtio())
+    }
+    
+    #[inline(always)]
+    pub(crate) fn virtio9p(&self) -> Option<&Virtio9p> {
+        self.inner().cpu.as_ref().and_then(|cpu| cpu.virtio9p())
+    }
+
+    #[inline(always)]
+    pub(crate) fn virtio9p_mut(&self) -> Option<&mut Virtio9p> {
+        self.inner_mut().cpu.as_mut().and_then(|cpu| cpu.virtio9p_mut())
+    }
+
+    #[inline(always)]
     fn inner(&self) -> &InnerEmulator {
         unsafe {
             let rc = &(*self.inner);
@@ -387,7 +409,7 @@ impl Emulator {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn inner_mut(&self) -> &mut InnerEmulator {
         unsafe {
             let rc = &(*self.inner);
@@ -395,32 +417,33 @@ impl Emulator {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn setting(&self) -> &Setting {
         &self.inner().setting
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn fdc_mut(&self) -> Option<&mut FloppyController> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.fdc)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn fdc(&self) -> Option<&FloppyController> {
         self.inner_mut().cpu.as_ref().map(|cpu| &cpu.fdc)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn ne2k_mut(&self) -> Option<&mut Ne2k> {
         self.inner_mut().cpu.as_mut().map(|cpu| &mut cpu.ne2k)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn ne2k(&self) -> Option<&Ne2k> {
         self.inner_mut().cpu.as_ref().map(|cpu| &cpu.ne2k)
     }
 
-    #[inline]
+
+    #[inline(always)]
     pub(crate) fn ide_mut(&self) -> Option<&mut IDEDevice> {
             self.inner_mut().cpu.as_mut().map(|cpu| {
                 if cpu.ide.is_some() {
@@ -431,7 +454,7 @@ impl Emulator {
             }).flatten()
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn ide(&self) -> Option<&IDEDevice> {
         self.inner().cpu.as_ref().map(|cpu| {
             if cpu.ide.is_some() {
@@ -442,29 +465,29 @@ impl Emulator {
         }).flatten()
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn wasm_table(&self) -> &mut Table {
         self.inner_mut().table.as_mut().unwrap()
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn shutdown(&self) {
         self.inner_mut().jit_tx.as_mut().map(|tx| {
             let _ = tx.send(JitMsg::Quit);
         });
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn net_term_adp_mut(&self) -> Option<&mut NetTermAdapter> {
         self.inner_mut().net_term_adapter.as_mut()
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn net_term_adp(&self) -> Option<&NetTermAdapter> {
         self.inner().net_term_adapter.as_ref()
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn wasm_externs(&self, names: Vec<String>) -> Vec<Extern> {
         let mut rs = Vec::new();
         self.inner_mut().externs.as_ref().map(|e| {

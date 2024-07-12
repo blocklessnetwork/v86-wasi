@@ -9,7 +9,7 @@
     "cmdline": ["tsc=reliable mitigations=off random.trust_cpu=on"],
     "logger": {
         "log_file": "debug.log",
-        "log_module": ["NET"]
+        "log_module": ["E", "BIOS", "PCI", "VIRTIO", "P9", "IO"]
     },
     "tun": {
         "address": "192.168.0.1",

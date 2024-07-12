@@ -9,6 +9,8 @@ const ALL_DEBUG: bool = true;
 
 type StoreT = Weak<Store<Emulator>>;
 use adapter::NetAdapter;
+use virtio::VirtIO;
+use virtio9p::Virtio9p;
 use wasmtime::*;
 mod run;
 mod io;
@@ -29,6 +31,7 @@ mod ne2k;
 mod vga;
 mod uart;
 mod debug;
+mod virtio;
 mod ws_thr;
 mod floppy;
 mod kernel;
@@ -36,8 +39,11 @@ mod kernel;
 mod tun_thr;
 mod adapter;
 mod storage;
+mod virtio9p;
+mod filesystem;
 mod setting;
 mod emulator;
+mod utils;
 pub mod consts;
 
 use io::IO;
@@ -53,6 +59,7 @@ use uart::UART;
 pub use cpu::CPU;
 use ide::IDEDevice;
 use vga::VGAScreen;
+pub use utils::*;
 pub use consts::*;
 pub use setting::*;
 pub(crate) use log::LOG;
@@ -66,56 +73,7 @@ pub use run::run_with_setting;
 pub use log::set_log_file_name;
 pub use log::set_log_mask;
 
-macro_rules! copy_impl {
-    ($name: ident, $type: ty) => {
-        pub fn $name(src: &[u8], dst: &mut [$type]) {
-            const SZ: usize = std::mem::size_of::<$type>();
-            let mut bs = [0u8; SZ];
-            for i in 0..dst.len() {
-                let start = i * SZ;
-                let end = start + SZ;
-                bs.copy_from_slice(&src[start..end]);
-                let t: $type = <$type>::from_le_bytes(bs);
-                dst[i] = t;
-            }
-        }
-    };
-}
 
-macro_rules! read_impl {
-    ($name: ident, $type: ty) => {
-        pub fn $name(src: &[u8], idx: usize) -> $type {
-            const SZ: usize = std::mem::size_of::<$type>();
-            let mut bs = [0u8; SZ];
-            bs.copy_from_slice(&src[idx * SZ..(idx * SZ + SZ)]);
-            <$type>::from_le_bytes(bs)
-        }
-    };
-}
-
-macro_rules! write_impl {
-    ($name: ident, $type: ty) => {
-        pub fn $name(src: &mut [u8], idx: usize, v: $type) {
-            const SZ: usize = std::mem::size_of::<$type>();
-            let bs = v.to_le_bytes();
-            let dst = &mut src[idx * SZ..(idx * SZ + SZ)];
-            dst.copy_from_slice(&bs);
-        }
-    };
-}
-
-pub(crate) mod utils {
-    copy_impl!(copy_to_i32s, i32);
-
-    read_impl!(read_i32, i32);
-    read_impl!(read_u32, u32);
-    read_impl!(read_u16, u16);
-    read_impl!(read_i16, i16);
-    write_impl!(write_i32, i32);
-    write_impl!(write_u32, u32);
-    write_impl!(write_u16, u16);
-    write_impl!(write_i16, i16);
-}
 
 trait ContextTrait {
     fn cpu_mut(&self) -> Option<&mut CPU>;
@@ -171,6 +129,12 @@ trait ContextTrait {
 
     fn net_adp_mut(&self) -> Option<&mut NetAdapter>;
     fn net_adp(&self) -> Option<&NetAdapter>;
+
+    fn virtio_mut(&self) -> Option<&mut VirtIO>;
+    fn virtio(&self) -> Option<&VirtIO>;
+
+    fn virtio9p_mut(&self) -> Option<&mut Virtio9p>;
+    fn virtio9p(&self) -> Option<&Virtio9p>;
 }
 
 impl ContextTrait for StoreT {
@@ -363,6 +327,26 @@ impl ContextTrait for StoreT {
     #[inline]
     fn net_term_adp(&self) -> Option<&NetTermAdapter> {
         self.emulator().net_term_adp()
+    }
+
+    #[inline]
+    fn virtio_mut(&self) -> Option<&mut VirtIO> {
+        self.emulator_mut().virtio_mut()
+    }
+
+    #[inline]
+    fn virtio(&self) -> Option<&VirtIO> {
+        self.emulator().virtio()
+    }
+
+    #[inline]
+    fn virtio9p_mut(&self) -> Option<&mut Virtio9p> {
+        self.emulator_mut().virtio9p_mut()
+    }
+
+    #[inline]
+    fn virtio9p(&self) -> Option<&Virtio9p> {
+        self.emulator().virtio9p()
     }
 }
 

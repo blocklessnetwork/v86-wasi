@@ -1,8 +1,14 @@
 use lazy_static::lazy_static;
-use std::{collections::HashMap, marker::PhantomData, ops::Add};
-use wasmtime::{AsContext, AsContextMut, Memory};
+use std::{
+    collections::HashMap, marker::PhantomData, ops::Add
+};
+use wasmtime::{
+    AsContext, AsContextMut, Memory
+};
 
-use crate::{log::LOG, ContextTrait, Dev, StoreT, MMAP_BLOCK_BITS, MMAP_BLOCK_SIZE};
+use crate::{
+    log::LOG, ContextTrait, Dev, StoreT, MMAP_BLOCK_BITS, MMAP_BLOCK_SIZE
+};
 
 const LOG_ALL_IO: bool = false;
 
@@ -92,6 +98,7 @@ type Rd32Fn = fn(&Dev, u32) -> u32;
 type Wr8Fn = fn(&Dev, u32, u8);
 type Wr16Fn = fn(&Dev, u32, u16);
 type Wr32Fn = fn(&Dev, u32, u32);
+type IOBarCallbackFn = fn(&StoreT, u32, u32);
 
 pub(crate) struct MMapFn {
     pub memory_map_read8: HashMap<u32, Rd8Fn>,
@@ -123,6 +130,8 @@ impl MMapFn {
     }
 }
 
+
+
 #[derive(Clone)]
 pub(crate) struct IOps {
     pub read8: Rd8Fn,
@@ -131,6 +140,7 @@ pub(crate) struct IOps {
     pub write8: Wr8Fn,
     pub write16: Wr16Fn,
     pub write32: Wr32Fn,
+    pub io_bar_callback: Option<IOBarCallbackFn>,
     dev: Dev,
 }
 
@@ -149,7 +159,7 @@ pub(crate) struct ConsIOps {
 pub(crate) struct IO {
     pub ports: Vec<IOps>,
     pub cons_ports: Vec<ConsIOps>,
-    store: StoreT,
+    pub store: StoreT,
 }
 
 impl IO {
@@ -200,6 +210,7 @@ impl IO {
             write8: Self::empty_write8,
             write16: Self::empty_write16,
             write32: Self::empty_write32,
+            io_bar_callback: None,
             dev: Dev::Empty,
         }
     }
@@ -255,6 +266,11 @@ impl IO {
         iops.write16 = w16;
         iops.write32 = w32;
         iops.dev = dev;
+    }
+
+    pub fn register_io_bar_callback(&mut self, port: u32, cb: IOBarCallbackFn) {
+        let iops = &mut self.ports[port as usize];
+        iops.io_bar_callback = Some(cb);
     }
 
     pub fn register_write8(&mut self, port: u32, dev: Dev, w8: Wr8Fn) {
