@@ -3,6 +3,7 @@
     "bios_file": "arch/seabios.bin",
     "vga_bios_file": "arch/vgabios.bin",
     "wasm_file": "target/v86.wasm",
+    "ws_port": 9002,
     "memory_size": 134217728, 
     "vga_memory_size": 8388608,
     "cmdline": ["tsc=reliable mitigations=off random.trust_cpu=on"],

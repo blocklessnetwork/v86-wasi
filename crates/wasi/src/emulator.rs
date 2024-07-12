@@ -95,7 +95,9 @@ impl InnerEmulator {
         // spawn the jit thread
         std::thread::spawn(move || {
             let table = table;
-            let store: StoreT = unsafe { Weak::from_raw(store_cl as *const Store<Emulator>) };
+            let store: StoreT = unsafe { 
+                Weak::from_raw(store_cl as *const Store<Emulator>) 
+            };
             let mut jit_worker = JitWorker {
                 sender: rs_tx,
                 recv: rx,
@@ -109,13 +111,13 @@ impl InnerEmulator {
         self.table = Some(table);
         self.jit_result_rx = Some(rs_rx);
         self.bus = Some(BUS::new(store.clone()));
-
+        let ws_port = self.setting.ws_port;
         //tx rx for term adapater
         let (tx, rs) = channel(1);
         std::thread::Builder::new()
             .name("ws thread".to_string())
             .spawn(move || {
-                let ws_thr = WsThread::new(tx);
+                let ws_thr = WsThread::new(tx, ws_port);
                 ws_thr.start();
             });
         

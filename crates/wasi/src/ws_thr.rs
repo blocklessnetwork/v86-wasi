@@ -8,14 +8,21 @@ use std::net::SocketAddr;
 use tokio_tungstenite::{accept_async, tungstenite::{Error, Message}};
 use tokio_tungstenite::WebSocketStream;
 
+type SenderType = Sender<(Receiver<(u16, BusData)>, Sender<(u16, Vec<u8>)>)>;
+
 pub(crate) struct WsThread {
-    sender: Sender<(Receiver<(u16, BusData)>, Sender<(u16, Vec<u8>)>)>,
+    sender: SenderType,
+    port: u32,
 }
 
 impl WsThread {
-    pub fn new(sender: Sender<(Receiver<(u16, BusData)>, Sender<(u16, Vec<u8>)>)>) -> Self {
+    pub fn new(
+        sender: SenderType,
+        port: u32,
+    ) -> Self {
         Self {
             sender,
+            port,
         }
     }
 
@@ -109,7 +116,7 @@ impl WsThread {
             .build()
             .unwrap();
         runtime.block_on(async move {
-            let listener = TcpListener::bind("127.0.0.1:9002").await.unwrap();
+            let listener = TcpListener::bind(format!("0.0.0.0:{}", self.port)).await.unwrap();
             while let Ok((stream, _)) = listener.accept().await {
                 let peer_addr = stream.peer_addr().expect("connected streams should have a peer address");
                 self.accept_connection(peer_addr, stream).await;
