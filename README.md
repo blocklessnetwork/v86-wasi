@@ -47,6 +47,21 @@ to login to the VM
 $ telnet 192.168.0.2
 ```
 
+#### start the ftpd service.
+
+Use follow command start the ftpd service in the web terminal.
+
+```bash
+# /etc/init.d/ftpd start
+```
+
+After starting the ftpd service, please use the following command on the host
+to login to the VM
+
+```bash
+$ ftp 192.168.0.2
+```
+
 #### How to build test applet with golang.
 
 Build the applet in host.
