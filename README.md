@@ -47,6 +47,13 @@ to login to the VM
 $ telnet 192.168.0.2
 ```
 
+Use follow command stop the telnetd service in the web terminal.
+
+```bash
+# /etc/init.d/telnetd stop
+```
+
+
 #### start the ftpd service.
 
 Use follow command start the ftpd service in the web terminal.
@@ -60,6 +67,12 @@ to login to the VM
 
 ```bash
 $ ftp 192.168.0.2
+```
+
+Use follow command stop the ftpd service in the web terminal.
+
+```bash
+# /etc/init.d/ftpd stop
 ```
 
 #### How to build test applet with golang.
