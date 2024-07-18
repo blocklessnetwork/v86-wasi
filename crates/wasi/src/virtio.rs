@@ -483,7 +483,7 @@ impl VirtIO {
                     effective_offset
                 })
                 .collect::<HashSet<_>>();
-            options.notification.handlers.iter().enumerate().for_each(|(i, h)| {
+            options.notification.handlers.iter().enumerate().for_each(|(i, _h)| {
                 assert!(offsets.contains(&i),
                     "VirtIO device<{name}> no defined notify handler should be unused");
             });

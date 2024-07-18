@@ -238,10 +238,10 @@ impl Virtio9p {
                 let mode = req[1].as_u32().unwrap();
                 dbg_log!(LOG::P9, "[open] fid={fid}, mode={mode}");
                 let idx = self.fids[fid].inodeid;
-                let inodeid = idx;
+                let _inodeid = idx;
                 let qid = self.fs.get_inode(idx as _).map(|inode| inode.qid).unwrap();
                 dbg_log!(LOG::P9, "file open {}", self.fids[fid].dbg_name);
-                let ret = self.fs.open_inode(idx, mode);
+                let _ret = self.fs.open_inode(idx, mode);
                 let store = self.store.clone();
                 self.fs.add_event(self.fids[fid].inodeid, move ||  {
                     store.virtio9p_mut().map(|v9p| {
@@ -262,7 +262,7 @@ impl Virtio9p {
                 let Fid {inodeid, ..} = self.fids[dfid as usize];
                 let ret = self.fs.link(inodeid as _, inodeid as _, &name);
                 if ret < 0 {
-                    let mut error_message;
+                    let error_message;
                     if ret == -EPERM {
                         error_message = "Operation not permitted".to_string();
                     } else {
