@@ -10,7 +10,7 @@ license = "MIT/Apache-2.0"
 repository = "https://github.com/blocklessnetwork/v86-wasi"
 
 [dependencies]
-wasmtime = "21.0.0"
+wasmtime = "22.0.0"
 lazy_static = {workspace = true}
 chrono = {workspace = true}
 rand = {workspace = true}
