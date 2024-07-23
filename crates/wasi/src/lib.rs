@@ -1,24 +1,17 @@
 #![allow(dead_code)]
+use std::rc::Weak;
+use std::slice;
+use wasmtime::*;
+
 #[macro_use]
 mod log;
 
-use std::rc::Weak;
-use std::slice;
-
-const ALL_DEBUG: bool = true;
-
-type StoreT = Weak<Store<Emulator>>;
-use adapter::NetAdapter;
-use virtio::VirtIO;
-use virtio9p::Virtio9p;
-use wasmtime::*;
 mod run;
 mod io;
 mod bus;
 mod cpu;
 mod dev;
 mod dma;
-
 mod jit;
 mod mem;
 mod pic;
@@ -44,6 +37,7 @@ mod filesystem;
 mod setting;
 mod emulator;
 mod utils;
+mod nat;
 pub mod consts;
 
 use io::IO;
@@ -72,7 +66,12 @@ pub use run::run_with_setting;
 
 pub use log::set_log_file_name;
 pub use log::set_log_mask;
+use adapter::NetAdapter;
+use virtio::VirtIO;
+use virtio9p::Virtio9p;
 
+type StoreT = Weak<Store<Emulator>>;
+const ALL_DEBUG: bool = true;
 
 
 trait ContextTrait {

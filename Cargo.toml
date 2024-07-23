@@ -23,6 +23,7 @@ anyhow = "1.0.70"
 lazy_static = "1.4.0"
 rand = "0.8"
 chrono = "0.4"
+thiserror = "1.0.63"
 
 [workspace.package]
 version = "0.0.3"

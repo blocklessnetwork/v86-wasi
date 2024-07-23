@@ -8,8 +8,8 @@ use crossbeam_channel::{
 
 use tuntap::{
     Tap,
-    Device, 
     Token,
+    Device, 
     Events,
     Interest,
     EtherAddr,
@@ -18,6 +18,8 @@ use tuntap::{
 
 #[allow(unused_imports)]
 use crate::ContextTrait;
+
+use crate::nat::Nat;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -102,6 +104,11 @@ impl TunThread {
                 return;
             },
         };
+        // after open tap, enable the nat.
+        let nat = Nat::new(tap.name());
+        if nat.enable().is_err() {
+            eprintln!("Nat start fail.");
+        }
         tap.set_nonblock().unwrap();
         let mut tap_poll = tuntap::Poller::new();
         let mut events = Events::with_capacity(10);
