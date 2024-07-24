@@ -1,7 +1,5 @@
 use std::{
-    fs::OpenOptions, 
-    io::{self, Read, Write}, 
-    process::Command
+    fs::OpenOptions, io::{self, Write}, process::{Command, Stdio}
 };
 use thiserror::Error;
 
@@ -33,6 +31,8 @@ impl Nat {
         let mut command = Command::new("sysctl");
         let enable = if enable { 1 } else { 0 };
         command.args(&["-w", &format!("net.inet.ip.forwarding={enable}")]);
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
         let mut child = command.spawn().map_err(|e| NatError::IoError(e))?;
         let exit_code = child.wait().map_err(|e| NatError::IoError(e))?;
         if exit_code.success() {
@@ -44,18 +44,17 @@ impl Nat {
 
     fn pfctl() -> Result<(), NatError> {
         let mut command = Command::new("pfctl");
-        command.args( &["-f", "/etc/pf.anchors/bls-vm-nat", "-e"]);
-        let mut child = command.spawn().map_err(|e| NatError::IoError(e))?;
-        let exit_code = child.wait().map_err(|e| NatError::IoError(e))?;
-        if exit_code.success() {
+        let child = command.args( &["-f", "/etc/pf.anchors/bls-vm-nat", "-e" ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn().map_err(|e| NatError::IoError(e))?;
+        let output = child.wait_with_output().map_err(|e| NatError::IoError(e))?;
+        if output.status.success() {
             return Ok(());
         } else {
-            if let Some(mut output) = child.stdout {
-                let mut out_string = String::new();
-                output.read_to_string(&mut out_string).unwrap();
-                if let Some(_) = out_string.find("pfctl: pf already enabled") {
-                    return Ok(());
-                }
+            let out_string = String::from_utf8(output.stderr).map_err(|_| NatError::Utf8CodeError)?;
+            if let Some(_) = out_string.find("pf already enabled") {
+                return Ok(());
             }
         }
         Err(NatError::CommandError)
