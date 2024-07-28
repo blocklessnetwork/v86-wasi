@@ -1,5 +1,5 @@
 use std::{
-    fs::OpenOptions, io::{self, Write}, process::{Command, Stdio}
+    fs::{self, OpenOptions}, io::{self, Write}, process::{Command, Stdio}
 };
 use thiserror::Error;
 
@@ -11,6 +11,8 @@ pub enum NatError {
     IoError(io::Error),
     #[error("utf8 code error.")]
     Utf8CodeError,
+    #[error("no interface found")]
+    NoInterfaceFound,
 }
 
 pub(crate)struct Nat {
@@ -22,6 +24,76 @@ impl Nat {
         Self {
             tap_name: name.to_string()
         }
+    }
+}
+
+#[cfg(target_os="windows")]
+impl Nat {
+    pub fn enable(&self) ->  Result<(), NatError> {
+        Ok(())
+    }
+}
+
+macro_rules! io_wrap {
+    ($io_op:expr) => {
+        $io_op.map_err(|e| NatError::IoError(e))?
+    };
+}
+
+#[cfg(target_os="linux")]
+impl Nat {
+    fn forward(enable: bool) -> Result<(), NatError> {
+        let mut ip_fwf = io_wrap!(fs::OpenOptions::new()
+            .write(true)
+            .open("/proc/sys/net/ipv4/ip_forward"));
+        let enable = if enable { b"1" } else { b"0" };
+        io_wrap!(ip_fwf.write(enable));
+        Ok(())
+    }
+
+    fn find_active_if() -> Result<String, NatError> {
+        let net_path = std::path::Path::new("/sys/class/net");
+        let read_dir = io_wrap!(fs::read_dir(&net_path));
+        for entry in read_dir {
+            let entry = io_wrap!(entry);
+            let path = entry.path();
+            if path.is_symlink() {
+                let path = io_wrap!(fs::read_link(&path));
+                let path_str = path.to_str();
+                if let Some(s) = path_str {
+                    if s.contains("virtual") {
+                        continue;
+                    }
+                    let split = s.split("/");
+                    if let Some(s) = split.last() {
+                        return Ok(s.into());
+                    }
+                }
+            }
+        }
+        Err(NatError::NoInterfaceFound)
+    }
+
+    fn iptable() -> Result<(), NatError> {
+        let active_if = Self::find_active_if()?;
+        let mut command = Command::new("iptables");
+        command.args(&["-t", "nat", "-A", "POSTROUTING", "-j", "MASQUERADE", "-o", &active_if]);
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+        let child = command.spawn().map_err(|e| NatError::IoError(e))?;
+        let output = child.wait_with_output()
+            .map_err(|e| NatError::IoError(e))?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(NatError::CommandError)
+        }
+    }
+
+    pub fn enable(&self) ->  Result<(), NatError> {
+        Self::forward(true)?;
+        Self::iptable()?;
+        Ok(())
     }
 }
 
