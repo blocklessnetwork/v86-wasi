@@ -80,9 +80,8 @@ impl Nat {
         command.args(&["-t", "nat", "-A", "POSTROUTING", "-j", "MASQUERADE", "-o", &active_if]);
         command.stdout(Stdio::piped());
         command.stderr(Stdio::piped());
-        let child = command.spawn().map_err(|e| NatError::IoError(e))?;
-        let output = child.wait_with_output()
-            .map_err(|e| NatError::IoError(e))?;
+        let child = io_wrap!(command.spawn());
+        let output = io_wrap!(child.wait_with_output());
         if output.status.success() {
             Ok(())
         } else {
@@ -105,8 +104,8 @@ impl Nat {
         command.args(&["-w", &format!("net.inet.ip.forwarding={enable}")]);
         command.stdout(Stdio::piped());
         command.stderr(Stdio::piped());
-        let mut child = command.spawn().map_err(|e| NatError::IoError(e))?;
-        let exit_code = child.wait().map_err(|e| NatError::IoError(e))?;
+        let mut child = io_wrap!(command.spawn());
+        let exit_code = io_wrap!(child.wait());
         if exit_code.success() {
             Ok(())
         } else {
@@ -116,11 +115,11 @@ impl Nat {
 
     fn pfctl() -> Result<(), NatError> {
         let mut command = Command::new("pfctl");
-        let child = command.args( &["-f", "/etc/pf.anchors/bls-vm-nat", "-e" ])
+        let child = io_wrap!(command.args(&["-f", "/etc/pf.anchors/bls-vm-nat", "-e" ])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn().map_err(|e| NatError::IoError(e))?;
-        let output = child.wait_with_output().map_err(|e| NatError::IoError(e))?;
+            .spawn());
+        let output = io_wrap!(child.wait_with_output());
         if output.status.success() {
             return Ok(());
         } else {
