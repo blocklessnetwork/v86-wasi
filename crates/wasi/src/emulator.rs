@@ -1,15 +1,16 @@
 #![allow(unused)]
 use std::{
-    cell::Cell,
-    collections::HashMap,
-    rc::{Rc, Weak},
-    sync::mpsc::{self, Receiver, Sender},
-    thread::{JoinHandle, Thread},
     time,
+    cell::Cell,
+    rc::{Rc, Weak},
+    collections::HashMap,
+    thread::{JoinHandle, Thread},
+    sync::mpsc::{self, Receiver, Sender},
 };
-
 use tokio::sync::mpsc::channel;
-use wasmtime::{Extern, Instance, Linker, Store, Table};
+use wasmtime::{
+    Extern, Instance, Linker, Store, Table
+};
 
 use crate::{
     io::IO,
@@ -26,24 +27,24 @@ use crate::{
     vga::VGAScreen,
     log::{self, LOG},
     ws_thr::WsThread,
-    adapter::{NetAdapter, NetTermAdapter},
     floppy::FloppyController,
     jit::{JitMsg, JitWorker},
-    ContextTrait, Setting, StoreT, CPU, WASM_TABLE_OFFSET, 
     virtio::VirtIO, virtio9p::Virtio9p,
+    adapter::{NetAdapter, NetTermAdapter},
+    ContextTrait, Setting, StoreT, CPU, WASM_TABLE_OFFSET, 
 };
 
 #[cfg(feature = "tap")]
 use crate::tun_thr::TunThread;
 
 pub(crate) struct InnerEmulator {
-    start_time: time::Instant,
     setting: Setting,
     cpu: Option<CPU>,
     bus: Option<BUS>,
     table: Option<Table>,
     bios: Option<Vec<u8>>,
     vga_bios: Option<Vec<u8>>,
+    start_time: time::Instant,
     jit_tx: Option<Sender<JitMsg>>,
     tick_trigger: Vec<fn(&StoreT)>,
     net_adapter: Option<NetAdapter>,
