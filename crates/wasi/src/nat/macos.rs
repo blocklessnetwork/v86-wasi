@@ -38,10 +38,11 @@ pub(crate) fn pfctl() -> Result<(), NatError> {
 
 /// write the archors file
 pub(crate) fn write_anchors(name: &str) -> Result<(), NatError> {
-    let mut pfctl = OpenOptions::new()
+    let mut pfctl = io_wrap!(OpenOptions::new()
         .write(true)
         .create(true)
-        .open("/etc/pf.anchors/bls-vm-nat")?;
+        .open("/etc/pf.anchors/bls-vm-nat"));
     let cmd = format!("nat on en0 from {name}:network to any -> (en0)\n");
-    pfctl.write_all(cmd.as_bytes())?;
+    io_wrap!(pfctl.write_all(cmd.as_bytes()));
+    Ok(())
 }
