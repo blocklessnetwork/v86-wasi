@@ -3,7 +3,7 @@ use std::{
 };
 use super::NatError;
 
-fn sysctl(enable: bool) -> Result<(), NatError> {
+pub(crate) fn sysctl(enable: bool) -> Result<(), NatError> {
     let mut command = Command::new("sysctl");
     let enable = if enable { 1 } else { 0 };
     command.args(&["-w", &format!("net.inet.ip.forwarding={enable}")]);
@@ -18,7 +18,7 @@ fn sysctl(enable: bool) -> Result<(), NatError> {
     }
 }
 
-fn pfctl() -> Result<(), NatError> {
+pub(crate) fn pfctl() -> Result<(), NatError> {
     let mut command = Command::new("pfctl");
     let child = io_wrap!(command.args(&["-f", "/etc/pf.anchors/bls-vm-nat", "-e" ])
         .stdout(Stdio::piped())
@@ -37,7 +37,7 @@ fn pfctl() -> Result<(), NatError> {
 }
 
 /// write the archors file
-fn write_anchors(name: &str) {
+pub(crate) fn write_anchors(name: &str) {
     let mut pfctl = OpenOptions::new()
         .write(true)
         .create(true)
