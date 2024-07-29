@@ -1,6 +1,7 @@
 use std::{
     fs::OpenOptions, io::Write, process::{Command, Stdio}
 };
+use super::NatError;
 
 fn sysctl(enable: bool) -> Result<(), NatError> {
     let mut command = Command::new("sysctl");
