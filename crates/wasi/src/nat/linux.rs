@@ -8,15 +8,15 @@ use std::mem;
 
 use super::NatError;
 
-
 const ETHTOOL_FWVERS_LEN: usize = 32; 
 const ETHTOOL_BUSINFO_LEN: usize = 32; 
 const ETHTOOL_EROMVERS_LEN: usize = 32; 
 const SIOCETHTOOL: usize = 0x8946;
 const ETHTOOL_GDRVINFO: usize = 0x00000003;
 const ETH_GSTRING_LEN: usize = 32;
-const ETHTOOL_GSTRINGS: usize = 32;
-const ETH_SS_STATS: usize = 32;
+const ETHTOOL_GSTRINGS: usize = 0x0000001b;
+const ETH_SS_STATS: usize = 1;
+const ETHTOOL_GSTATS: usize = 0x0000001d;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -24,6 +24,13 @@ struct ethtool_gstrings {
     cmd: u32,
     string_set: u32,
     len: u32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct ethtool_stats {
+    cmd: u32,
+    n_stats: u32,
 }
 
 #[repr(C)]
@@ -99,7 +106,64 @@ pub(crate)fn forward(enable: bool) -> Result<(), NatError> {
     Ok(())
 }
 
-fn eth_info(devn: &str) -> Result<(), NatError> {
+/// get the interface's string sets of the ethtool 
+fn eth_stringset(
+    sock: i32, 
+    ifreq: &mut MaybeUninit<ifreq>, 
+    n_stats: u32
+) -> Result<Vec<String>, NatError>  {
+    let size: usize = mem::size_of::<ethtool_gstrings>() + n_stats as usize* ETH_GSTRING_LEN;
+    let mut gstrings_data = vec![0u8; size] ;
+
+    unsafe {
+        let gstr = &mut *(gstrings_data.as_mut_ptr() as *mut ethtool_gstrings);
+        gstr.cmd = ETHTOOL_GSTRINGS as _;
+        gstr.string_set = ETH_SS_STATS as _;
+        gstr.len = n_stats as _;
+        let ifreq = ifreq.assume_init_mut();
+        ifreq.ifr_ifru.ifru_data = gstrings_data.as_mut_ptr() as _;
+    }
+    syscall!(libc::ioctl(sock, SIOCETHTOOL as _, ifreq.as_mut_ptr()));
+    let data = gstrings_data.as_ptr();
+    let mut ret = Vec::new();
+    for i in 0..n_stats {
+        let name = unsafe {
+            let ptr_from = data.add(mem::size_of::<ethtool_gstrings>() + ETH_GSTRING_LEN*i as usize);
+            let name = std::slice::from_raw_parts(ptr_from, ETH_GSTRING_LEN);
+            if let Some(n) = name.iter().position(|i| *i == 0) {
+                std::str::from_utf8_unchecked(&name[0..n])
+            } else {
+                //keep the same index with stats, always size equals n_stats
+                ""
+            }
+        };
+        ret.push(name.into());
+    }
+    Ok(ret)
+}
+
+/// ethtool get stats of interface
+fn eth_stats(sock: i32, ifreq: &mut MaybeUninit<ifreq>, n_stats: u32) -> Result<Vec<u64>, NatError> {
+    let msize: usize = mem::size_of::<ethtool_stats>() + (n_stats as usize) * mem::size_of::<u64>();
+    let mut stats_data = vec![0u8; msize] ;
+    unsafe {
+        let e_stats = &mut *(stats_data.as_mut_ptr() as *mut ethtool_stats);
+        e_stats.cmd = ETHTOOL_GSTATS as _;
+        e_stats.n_stats = n_stats;
+        let ifreq = ifreq.assume_init_mut();
+        ifreq.ifr_ifru.ifru_data = stats_data.as_mut_ptr() as _;
+    }
+    syscall!(libc::ioctl(sock, SIOCETHTOOL as _, ifreq.as_mut_ptr()));
+    let data = stats_data.as_ptr();
+    let ret = unsafe {
+        let d_ptr = data.add(mem::size_of::<ethtool_stats>());
+        std::slice::from_raw_parts(d_ptr as *const u64, n_stats as _)
+    };
+    let ret = ret.to_vec();
+    Ok(ret)
+}
+
+fn eth_info(devn: &str) -> Result<Vec<(String, u64)>, NatError> {
     let sock: i32 = syscall!(libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0)) as _;
     let mut ifreq = MaybeUninit::<ifreq>::zeroed();
     let mut drv_info = MaybeUninit::<ethtool_drvinfo>::zeroed();
@@ -116,20 +180,10 @@ fn eth_info(devn: &str) -> Result<(), NatError> {
     if n_stats <= 0 {
         return Err(NatError::NoStatError)
     }
-    let size: usize = mem::size_of::<ethtool_gstrings>() + n_stats as usize* ETH_GSTRING_LEN;
-    let mut gstrings_data = vec![0u8; size] ;
-
-    unsafe {
-        let gstr = &mut *(gstrings_data.as_mut_ptr() as *mut ethtool_gstrings);
-        gstr.cmd = ETHTOOL_GSTRINGS as _;
-        gstr.string_set = ETH_SS_STATS as _;
-        gstr.len = n_stats as _;
-        let ifreq = ifreq.assume_init_mut();
-        ifreq.ifr_ifru.ifru_data = gstrings_data.as_mut_ptr() as _;
-    }
-    syscall!(libc::ioctl(sock, SIOCETHTOOL as _, ifreq.as_mut_ptr()));
-    let data = gstrings_data.as_ptr();
-    Ok(())
+    let sets: Vec<String> = eth_stringset(sock, &mut ifreq, n_stats)?;
+    let stats: Vec<u64> = eth_stats(sock, &mut ifreq, n_stats)?;
+    let stats = sets.into_iter().zip(stats.into_iter()).collect::<Vec<(_, _)>>();
+    Ok(stats)
 }
 
 pub(crate)fn iptable() -> Result<(), NatError> {
@@ -162,7 +216,20 @@ fn find_active_eth() -> Result<String, NatError> {
                 }
                 let split = s.split("/");
                 if let Some(s) = split.last() {
-                    return Ok(s.into());
+                    let stats = eth_info(s)?;
+                    // find the active interface which have packages transport.
+                    let rx = stats.iter().position(|(n, stat)| {
+                        if n == "rx_packets" || *stat > 0 {
+                            true
+                        } else if n == "tx_packets" || *stat > 0 {
+                            true
+                        } else {
+                            false
+                        }
+                    });
+                    if let Some(_) = rx {
+                        return Ok(s.into());
+                    }
                 }
             }
         }
