@@ -37,7 +37,7 @@ pub(crate) fn pfctl() -> Result<(), NatError> {
 }
 
 /// write the archors file
-pub(crate) fn write_anchors(name: &str) {
+pub(crate) fn write_anchors(name: &str) -> Result<(), NatError> {
     let mut pfctl = OpenOptions::new()
         .write(true)
         .create(true)
