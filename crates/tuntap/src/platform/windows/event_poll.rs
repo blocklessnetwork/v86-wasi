@@ -1,22 +1,23 @@
+use std::os::windows::raw::HANDLE;
 use std::time::Duration;
 
 use crate::{Device, Interest, Token};
 use crate::{Result, Error};
 use super::event::Events;
 
-pub struct FakePoller {
-    
+pub struct EventPoller {
+    events: Vec<HANDLE>
 }
 
-impl FakePoller {
+impl EventPoller {
     pub fn new() -> Self {
         Self{
-
+            events: Vec::new()
         }
     }
 }
 
-impl FakePoller {
+impl EventPoller {
     pub fn register(
         &mut self, 
         tap: &impl Device, 

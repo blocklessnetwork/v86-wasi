@@ -4,7 +4,7 @@ mod dev;
 mod ffi;
 mod event;
 mod netsh;
-mod fake_poll;
+mod event_poll;
 
 pub const HARDWARE_ID: &str = "tap0901";
 
@@ -22,5 +22,5 @@ fn decode_utf16(string: &[u16]) -> String {
 
 pub use fd::Fd;
 pub use dev::Tap;
-pub use event::*;
-pub use fake_poll::FakePoller;
+pub use event::{Event, Events};
+pub use event_poll::EventPoller;

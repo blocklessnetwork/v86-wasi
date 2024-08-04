@@ -11,7 +11,7 @@ pub struct Poller {
     #[cfg(target_os="linux")]
     inner: platform::Epoll,
     #[cfg(target_os="windows")]
-    inner: platform::FakePoller,
+    inner: platform::EventPoller,
 }
 
 impl Poller {
@@ -21,7 +21,7 @@ impl Poller {
         #[cfg(target_os="linux")]
         let inner =  platform::Epoll::new();
         #[cfg(target_os="windows")]
-        let inner =  platform::FakePoller::new();
+        let inner =  platform::EventPoller::new();
         Self {
             inner
         }

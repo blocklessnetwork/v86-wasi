@@ -1,6 +1,7 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(dead_code)]
+use std::mem::MaybeUninit;
 use std::{io, ptr, mem};
 
 use winapi::shared::basetsd::ULONG_PTR;
@@ -24,6 +25,7 @@ use winapi::um::ioapiset::DeviceIoControl;
 use winapi::um::minwinbase::OVERLAPPED;
 use winapi::um::setupapi::*;
 use winapi::um::synchapi::*;
+use winapi::um::winbase::FILE_FLAG_OVERLAPPED;
 use winapi::um::winreg::*;
 
 use winapi::shared::ifdef::NET_LUID;
@@ -562,7 +564,7 @@ pub fn open_interface(luid: &NET_LUID) -> Result<HANDLE> {
         GENERIC_READ | GENERIC_WRITE,
         FILE_SHARE_READ | FILE_SHARE_WRITE,
         OPEN_EXISTING,
-        FILE_ATTRIBUTE_SYSTEM,
+        FILE_ATTRIBUTE_SYSTEM|FILE_FLAG_OVERLAPPED,
     )
 }
 
