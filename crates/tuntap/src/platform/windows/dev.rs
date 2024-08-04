@@ -1,4 +1,5 @@
 use std::io::{Read, Write};
+use std::mem::MaybeUninit;
 use std::{io, ptr, time};
 
 use winapi::shared::ifdef::NET_LUID;
@@ -24,8 +25,8 @@ pub struct Tap {
     fd: Fd,
     dev_index: u32,
     is_open: bool,
-    read_overlapped: Option<OVERLAPPED>,
-    write_overlapped: Option<OVERLAPPED>,
+    read_overlapped: Box<MaybeUninit<OVERLAPPED>>,
+    write_overlapped: Box<MaybeUninit<OVERLAPPED>>,
     name: String,
     luid: NET_LUID,
 }
@@ -41,20 +42,31 @@ impl Tap {
 
         let handle = ffi::open_interface(&luid)?;
         let dev_index = ffi::luid_to_index(&luid).unwrap() as _;
-        Ok(Self { 
-            luid, 
+        let mut read_overlapped: Box<MaybeUninit<OVERLAPPED>> = Box::new(MaybeUninit::zeroed());
+        let mut write_overlapped: Box<MaybeUninit<OVERLAPPED>> = Box::new(MaybeUninit::zeroed());
+        unsafe {
+            read_overlapped.assume_init_mut().hEvent = ffi::create_event()?;
+            write_overlapped.assume_init_mut().hEvent = ffi::create_event()?;
+        }
+        let fd = Fd::new(
+            handle,
+            write_overlapped.as_mut_ptr(),
+            read_overlapped.as_mut_ptr()
+        );
+        Ok(Self {
+            luid,
             dev_index,
             is_open: true,
-            fd: Fd::new(handle),
+            fd,
             name: name_string,
-            read_overlapped: None,
-            write_overlapped: None,
+            read_overlapped,
+            write_overlapped,
         })
     }
 
     pub fn new(_config: Configuration) -> Result<Self> {
         let luid = ffi::create_interface()?;
-        
+
         // Even after retrieving the luid, we might need to wait
         let start = time::Instant::now();
         let handle = loop {
@@ -79,15 +91,25 @@ impl Tap {
         let name = ffi::luid_to_alias(&luid)
             .map(|name| decode_utf16(&name))?;
         let dev_index = ffi::luid_to_index(&luid).unwrap() as _;
-
-        Ok(Self { 
+        let mut read_overlapped: Box<MaybeUninit<OVERLAPPED>> = Box::new(MaybeUninit::zeroed());
+        let mut write_overlapped: Box<MaybeUninit<OVERLAPPED>> = Box::new(MaybeUninit::zeroed());
+        unsafe {
+            read_overlapped.assume_init_mut().hEvent = ffi::create_event()?;
+            write_overlapped.assume_init_mut().hEvent = ffi::create_event()?;
+        }
+        let fd = Fd::new(
+            handle,
+            write_overlapped.as_mut_ptr(),
+            read_overlapped.as_mut_ptr()
+        );
+        Ok(Self {
             luid,
             name,
             dev_index,
             is_open: false,
-            read_overlapped: None,
-            write_overlapped: None,
-            fd: Fd::new(handle),
+            read_overlapped,
+            write_overlapped,
+            fd,
         })
     }
 }
@@ -135,7 +157,7 @@ impl Device for Tap {
                         .iter()
                         .filter_map(|i| if *i == 0 {None} else {Some(*i as _)})
                         .collect::<Vec<u8>>();
-                
+
             }
         }).unwrap();
         let ip: String = String::from_utf8(ip).unwrap();
@@ -204,6 +226,10 @@ impl Write for Tap {
 
 impl Drop for Tap {
     fn drop(&mut self) {
+        unsafe {
+            ffi::close_handle(self.read_overlapped.assume_init_mut().hEvent);
+            ffi::close_handle(self.write_overlapped.assume_init_mut().hEvent);
+        }
         if !self.is_open {
             ffi::delete_interface(&self.luid).unwrap();
         }

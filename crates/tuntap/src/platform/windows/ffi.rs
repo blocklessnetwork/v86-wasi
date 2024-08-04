@@ -265,6 +265,12 @@ fn open_dev_reg_key(
     }
 }
 
+pub fn create_event() -> Result<HANDLE> {
+    unsafe {
+        Ok(CreateEventW(ptr::null_mut(), 0, 0, ptr::null_mut()))
+    }
+}
+
 fn notify_change_key_value(
     key: HKEY,
     watch_subtree: BOOL,

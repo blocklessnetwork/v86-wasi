@@ -1,6 +1,5 @@
 use std::{
-    io::{Read, Write}, 
-    mem::MaybeUninit, 
+    io::{Read, Write},
     ops::Deref, ptr
 };
 
@@ -10,20 +9,23 @@ use super::ffi;
 
 pub struct Fd {
     handle: HANDLE,
-    overlapped: Option<OVERLAPPED>,
+    read_overlapped: *mut OVERLAPPED,
+    write_overlapped: *mut OVERLAPPED,
 }
 
 impl Fd {
-    pub fn new(handle: HANDLE) -> Self {
+    pub fn new(
+        handle: HANDLE,
+        read_overlapped: *mut OVERLAPPED,
+        write_overlapped: *mut OVERLAPPED,
+    ) -> Self {
         Fd {
             handle,
-            overlapped: None,
+            read_overlapped,
+            write_overlapped,
         }
     }
 
-    pub fn overlapped(&mut self, overlapped: OVERLAPPED) {
-        self.overlapped = Some(overlapped);
-    }
 }
 
 impl Deref for Fd {
@@ -36,19 +38,13 @@ impl Deref for Fd {
 
 impl Read for Fd {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let overlapped = self.overlapped.as_mut()
-            .map(ptr::from_mut)
-            .unwrap_or(ptr::null_mut());
-        ffi::read_file(self.handle, buf, overlapped)
+        ffi::read_file(self.handle, buf, self.read_overlapped)
     }
 }
 
 impl Write for Fd {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let overlapped = self.overlapped.as_mut()
-            .map(ptr::from_mut)
-            .unwrap_or(ptr::null_mut());
-        ffi::write_file(self.handle, buf, overlapped)
+        ffi::write_file(self.handle, buf, self.write_overlapped)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
