@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 use std::mem::MaybeUninit;
-use std::{io, ptr, time};
+use std::{io, time};
 
 use winapi::shared::ifdef::NET_LUID;
 use winapi::um::minwinbase::OVERLAPPED;
@@ -13,7 +13,6 @@ use crate::{Result, Error};
 use super::fd::Fd;
 use super::{encode_utf16, netsh};
 use super::{decode_utf16, ffi};
-
 
 winapi::DEFINE_GUID! {
     GUID_NETWORK_ADAPTER,
@@ -227,8 +226,8 @@ impl Write for Tap {
 impl Drop for Tap {
     fn drop(&mut self) {
         unsafe {
-            ffi::close_handle(self.read_overlapped.assume_init_mut().hEvent);
-            ffi::close_handle(self.write_overlapped.assume_init_mut().hEvent);
+            let _ = ffi::close_handle(self.read_overlapped.assume_init_mut().hEvent);
+            let _ = ffi::close_handle(self.write_overlapped.assume_init_mut().hEvent);
         }
         if !self.is_open {
             ffi::delete_interface(&self.luid).unwrap();

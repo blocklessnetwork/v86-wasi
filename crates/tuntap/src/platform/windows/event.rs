@@ -1,12 +1,13 @@
-
-use std::os::windows::raw::HANDLE;
-
 use crate::{interest::Interest, token::Token};
 
+use super::event_poll::InnerHandle;
+
+#[derive(Clone)]
 pub struct Event {
     pub(crate) token: Token,
     pub(crate) interest: Interest,
-    pub(crate) raw_event: HANDLE,
+    pub(crate) read_event: InnerHandle,
+    pub(crate) write_event: InnerHandle,
 }
 
 impl Event {

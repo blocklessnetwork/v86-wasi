@@ -26,6 +26,20 @@ impl Fd {
         }
     }
 
+    #[inline]
+    pub(crate) fn read_event(&self) -> HANDLE {
+        unsafe {
+            (*self.read_overlapped).hEvent
+        }
+    
+    }
+    #[inline]
+    pub(crate) fn write_event(&self) -> HANDLE {
+        unsafe {
+            (*self.write_overlapped).hEvent
+        }
+    }
+
 }
 
 impl Deref for Fd {

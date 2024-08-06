@@ -2,6 +2,7 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 use std::mem::MaybeUninit;
+use std::time::Duration;
 use std::{io, ptr, mem};
 
 use winapi::shared::basetsd::ULONG_PTR;
@@ -269,6 +270,13 @@ pub fn create_event() -> Result<HANDLE> {
     unsafe {
         Ok(CreateEventW(ptr::null_mut(), 0, 0, ptr::null_mut()))
     }
+}
+
+pub fn wait_for_multi_objects(events: &Vec<HANDLE>, t: u32) -> Result<u32> {
+    let dw = unsafe{
+        WaitForMultipleObjects(events.len() as _, events.as_ptr(), 0, t)
+    };
+    Ok(dw)
 }
 
 fn notify_change_key_value(
