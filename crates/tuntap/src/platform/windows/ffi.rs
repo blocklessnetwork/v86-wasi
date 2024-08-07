@@ -713,7 +713,6 @@ pub fn delete_interface(luid: &NET_LUID) -> Result<()> {
 
         luid2.set_IfType(if_type as _);
         luid2.set_NetLuidIndex(luid_index as _);
-
         if luid.Value != luid2.Value {
             continue;
         }

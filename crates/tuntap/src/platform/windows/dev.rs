@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 use std::mem::MaybeUninit;
-use std::{io, time};
+use std::{io, ptr, time};
 
 use winapi::shared::ifdef::NET_LUID;
 use winapi::um::minwinbase::OVERLAPPED;
@@ -8,11 +8,13 @@ use winapi::um::winioctl::{
     CTL_CODE, FILE_ANY_ACCESS, FILE_DEVICE_UNKNOWN, METHOD_BUFFERED
 };
 
-use crate::{Configuration, Device};
+use crate::{Configuration, Device, IntoAddress, Token};
 use crate::{Result, Error};
 use super::fd::Fd;
 use super::{encode_utf16, netsh};
 use super::{decode_utf16, ffi};
+
+/// driver download page:https://build.openvpn.net/downloads/releases/tap-windows-9.21.0.exe
 
 winapi::DEFINE_GUID! {
     GUID_NETWORK_ADAPTER,
@@ -22,6 +24,7 @@ winapi::DEFINE_GUID! {
 
 pub struct Tap {
     fd: Fd,
+    token: Option<Token>,
     dev_index: u32,
     is_open: bool,
     read_overlapped: Box<MaybeUninit<OVERLAPPED>>,
@@ -57,13 +60,14 @@ impl Tap {
             dev_index,
             is_open: true,
             fd,
+            token: None,
             name: name_string,
             read_overlapped,
             write_overlapped,
         })
     }
 
-    pub fn new(_config: Configuration) -> Result<Self> {
+    pub fn new(config: Configuration) -> Result<Self> {
         let luid = ffi::create_interface()?;
 
         // Even after retrieving the luid, we might need to wait
@@ -101,7 +105,7 @@ impl Tap {
             write_overlapped.as_mut_ptr(),
             read_overlapped.as_mut_ptr()
         );
-        Ok(Self {
+        let mut tap = Self {
             luid,
             name,
             dev_index,
@@ -109,14 +113,18 @@ impl Tap {
             read_overlapped,
             write_overlapped,
             fd,
-        })
+            token: None
+        };
+        tap.configure(&config)?;
+        Ok(tap)
     }
 }
 
 impl Device for Tap {
     fn token(&self) -> crate::Token {
-        todo!()
+        self.token.unwrap()
     }
+
     fn set_nonblock(&mut self) -> Result<()> {
         Ok(())
     }
@@ -168,11 +176,11 @@ impl Device for Tap {
     }
 
     fn broadcast(&self) -> Result<std::net::Ipv4Addr> {
-        todo!()
+        "0.0.0.0".into_address()
     }
 
-    fn set_broadcast(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
-        todo!()
+    fn set_broadcast(&mut self, _value: std::net::Ipv4Addr) -> Result<()> {
+        Ok(())
     }
 
     fn netmask(&self) -> Result<std::net::Ipv4Addr> {
@@ -226,8 +234,16 @@ impl Write for Tap {
 impl Drop for Tap {
     fn drop(&mut self) {
         unsafe {
-            let _ = ffi::close_handle(self.read_overlapped.assume_init_mut().hEvent);
-            let _ = ffi::close_handle(self.write_overlapped.assume_init_mut().hEvent);
+            let read_overlapped = self.read_overlapped.assume_init_mut();
+            let write_overlapped = self.write_overlapped.assume_init_mut();
+            if !read_overlapped.hEvent.is_null() {
+                let _ = ffi::close_handle(read_overlapped.hEvent);
+            }
+            if !write_overlapped.hEvent.is_null() {
+                let _ = ffi::close_handle(write_overlapped.hEvent);
+            }
+            read_overlapped.hEvent = ptr::null_mut();
+            write_overlapped.hEvent = ptr::null_mut();
         }
         if !self.is_open {
             ffi::delete_interface(&self.luid).unwrap();
