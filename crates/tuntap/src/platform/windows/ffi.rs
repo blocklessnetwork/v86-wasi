@@ -1,8 +1,6 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(dead_code)]
-use std::mem::MaybeUninit;
-use std::time::Duration;
 use std::{io, ptr, mem};
 
 use winapi::shared::basetsd::ULONG_PTR;
@@ -27,6 +25,10 @@ use winapi::um::minwinbase::OVERLAPPED;
 use winapi::um::setupapi::*;
 use winapi::um::synchapi::*;
 use winapi::um::winbase::FILE_FLAG_OVERLAPPED;
+use winapi::um::winioctl::CTL_CODE;
+use winapi::um::winioctl::FILE_ANY_ACCESS;
+use winapi::um::winioctl::FILE_DEVICE_UNKNOWN;
+use winapi::um::winioctl::METHOD_BUFFERED;
 use winapi::um::winreg::*;
 
 use winapi::shared::ifdef::NET_LUID;
@@ -440,6 +442,30 @@ pub fn create_interface() -> Result<NET_LUID> {
     luid.set_NetLuidIndex(luid_index as _);
 
     Ok(luid)
+}
+
+pub fn tap_set_status(
+    handle: HANDLE,
+    status: &mut u32,
+) -> Result<()> {
+    let io_control_code = CTL_CODE(FILE_DEVICE_UNKNOWN, 6, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    let mut junk = 0;
+    match unsafe {
+        DeviceIoControl(
+            handle,
+            io_control_code,
+            status as *const _ as _,
+            mem::size_of::<u32>() as _,
+            status as *mut _ as _,
+            mem::size_of::<u32>() as _,
+            &mut junk,
+            ptr::null_mut(),
+        )
+    } {
+        0 => Err(Error::Io(io::Error::last_os_error())),
+        _ => Ok(()),
+    }
+
 }
 
 pub fn device_io_control(

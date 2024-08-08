@@ -1,3 +1,4 @@
+/// driver download page:https://build.openvpn.net/downloads/releases/tap-windows-9.21.0.exe
 use std::io::{Read, Write};
 use std::mem::MaybeUninit;
 use std::{io, ptr, time};
@@ -14,7 +15,6 @@ use super::fd::Fd;
 use super::{encode_utf16, netsh};
 use super::{decode_utf16, ffi};
 
-/// driver download page:https://build.openvpn.net/downloads/releases/tap-windows-9.21.0.exe
 
 winapi::DEFINE_GUID! {
     GUID_NETWORK_ADAPTER,
@@ -31,6 +31,7 @@ pub struct Tap {
     write_overlapped: Box<MaybeUninit<OVERLAPPED>>,
     name: String,
     luid: NET_LUID,
+    config: Option<Configuration>,
 }
 
 impl Tap {
@@ -64,10 +65,11 @@ impl Tap {
             name: name_string,
             read_overlapped,
             write_overlapped,
+            config: None,
         })
     }
 
-    pub fn new(config: Configuration) -> Result<Self> {
+    pub fn new(mut config: Configuration) -> Result<Self> {
         let luid = ffi::create_interface()?;
 
         // Even after retrieving the luid, we might need to wait
@@ -93,6 +95,7 @@ impl Tap {
 
         let name = ffi::luid_to_alias(&luid)
             .map(|name| decode_utf16(&name))?;
+        config.name = Some(name.clone());
         let dev_index = ffi::luid_to_index(&luid).unwrap() as _;
         let mut read_overlapped: Box<MaybeUninit<OVERLAPPED>> = Box::new(MaybeUninit::zeroed());
         let mut write_overlapped: Box<MaybeUninit<OVERLAPPED>> = Box::new(MaybeUninit::zeroed());
@@ -113,6 +116,7 @@ impl Tap {
             read_overlapped,
             write_overlapped,
             fd,
+            config: Some(config.clone()),
             token: None
         };
         tap.configure(&config)?;
@@ -134,22 +138,32 @@ impl Device for Tap {
     }
 
     fn set_name(&mut self, name: &str) -> Result<()> {
-        let ret = netsh::set_interface_name(&self.name, name);
-        if ret.is_ok() {
-            self.name = name.to_string();
+        if name != "" && name != self.name {
+            let ret = netsh::set_interface_name(&self.name, name);
+            if ret.is_ok() {
+                self.name = name.to_string();
+            }
+            ret
+        } else {
+            Ok(())
         }
-        ret
     }
 
     fn enabled(&mut self, value: bool) -> Result<()> {
-        let status: u32 = if value { 1 } else { 0 };
-
-        ffi::device_io_control(
+        let mut status: u32 = if value { 1 } else { 0 };
+        ffi::tap_set_status(
             *self.fd,
-            CTL_CODE(FILE_DEVICE_UNKNOWN, 6, METHOD_BUFFERED, FILE_ANY_ACCESS),
-            &status,
-            &mut (),
-        )
+            &mut status,
+        )?;
+        if value {
+            self.config
+                .as_ref()
+                .and_then(|c| c.address.as_ref().zip(c.netmask.as_ref()))
+                .map(|(addr, mask)|  {
+                    netsh::set_ip(&self.name, &addr.to_string(), &mask.to_string()).expect("set the ip address error.");
+                });
+        }
+        Ok(())
     }
 
     fn address(&self) -> Result<std::net::Ipv4Addr> {
@@ -172,11 +186,18 @@ impl Device for Tap {
     }
 
     fn set_address(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
-        netsh::set_ip(&self.name, &value.to_string())
+        //netsh::set_ip(&self.name, &value.to_string())
+        Ok(())
     }
 
     fn broadcast(&self) -> Result<std::net::Ipv4Addr> {
-        "0.0.0.0".into_address()
+        if let Some(b) = self.config
+            .as_ref()
+            .and_then(|c| c.broadcast.clone()) {
+            Ok(b)
+        } else {
+            "0.0.0.0".into_address()
+        }
     }
 
     fn set_broadcast(&mut self, _value: std::net::Ipv4Addr) -> Result<()> {
@@ -184,11 +205,17 @@ impl Device for Tap {
     }
 
     fn netmask(&self) -> Result<std::net::Ipv4Addr> {
-        todo!()
+        if let Some(b) = self.config
+            .as_ref()
+            .and_then(|c: &Configuration| c.netmask.clone()) {
+            Ok(b)
+        } else {
+            "0.0.0.0".into_address()
+        }
     }
 
-    fn set_netmask(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
-        netsh::set_mask(&self.name, &value.to_string())
+    fn set_netmask(&mut self, _value: std::net::Ipv4Addr) -> Result<()> {
+        Ok(())
     }
 
     fn mtu(&self) -> Result<i32> {
@@ -202,7 +229,7 @@ impl Device for Tap {
         .map(|_| mtu)
     }
 
-    fn set_mtu(&mut self, value: i32) -> Result<()> {
+    fn set_mtu(&mut self, _value: i32) -> Result<()> {
         Ok(())
     }
 
@@ -253,8 +280,6 @@ impl Drop for Tap {
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
-
     use crate::{platform::windows::netsh, Configuration, Device};
 
     use super::Tap;
@@ -265,7 +290,7 @@ mod test {
         config.address(ip);
         let tap = Tap::new(config).unwrap();
         println!("{}", tap.name());
-        netsh::set_ip(tap.name(), ip).unwrap();
+        netsh::set_ip(tap.name(), ip, "255.255.255.0").unwrap();
         assert_eq!(tap.address().unwrap().to_string(), ip);
     }
 }

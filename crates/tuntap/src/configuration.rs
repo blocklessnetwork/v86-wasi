@@ -25,7 +25,6 @@ impl Configuration {
             enabled: true,
             ..Default::default()
         }
-
     }
 
     pub fn model(&mut self, model: Model) -> &mut Self {
