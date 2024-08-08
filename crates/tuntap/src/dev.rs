@@ -80,6 +80,12 @@ pub struct Tap {
 }
 
 impl Tap {
+    
+    #[cfg(windows)]
+    pub fn drop_tap(name: &str) -> Result<()> {
+        platform::Tap::drop_tap(name)
+    }
+
     pub fn new(cfg: Configuration) -> Result<Self> {
         platform::Tap::new(cfg).map(|inner| Self {inner})
     }

@@ -1,6 +1,6 @@
 use std::{
     io::{Read, Write},
-    ops::Deref, ptr
+    ops::Deref
 };
 
 use winapi::um::{minwinbase::OVERLAPPED, winnt::HANDLE};

@@ -36,6 +36,13 @@ pub struct Tap {
 
 impl Tap {
 
+    pub fn drop_tap(name: &str) -> Result<()> {
+        let name = encode_utf16(name);
+        let luid = ffi::alias_to_luid(&name)?;
+        ffi::check_interface(&luid)?;
+        ffi::delete_interface(&luid)
+    }
+
     pub fn open(name: &str) -> Result<Self> {
         let name_string = name.to_string();
         let name = encode_utf16(name);
@@ -185,8 +192,7 @@ impl Device for Tap {
         ip.parse().map_err(|_| Error::InvalidAddress)
     }
 
-    fn set_address(&mut self, value: std::net::Ipv4Addr) -> Result<()> {
-        //netsh::set_ip(&self.name, &value.to_string())
+    fn set_address(&mut self, _value: std::net::Ipv4Addr) -> Result<()> {
         Ok(())
     }
 
@@ -233,7 +239,7 @@ impl Device for Tap {
         Ok(())
     }
 
-    fn set_ether_address(&mut self, eth: crate::EtherAddr) -> Result<()> {
+    fn set_ether_address(&mut self, _eth: crate::EtherAddr) -> Result<()> {
         Ok(())
     }
 
@@ -273,7 +279,8 @@ impl Drop for Tap {
             write_overlapped.hEvent = ptr::null_mut();
         }
         if !self.is_open {
-            ffi::delete_interface(&self.luid).unwrap();
+            let _ = ffi::delete_interface(&self.luid);
+            self.is_open = true;
         }
     }
 }
